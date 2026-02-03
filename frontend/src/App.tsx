@@ -1,11 +1,23 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './components/ui/Button'
 import { Card, CardHeader, CardTitle, CardDescription } from './components/ui/Card'
 import { Badge } from './components/ui/Badge'
 import { HStack, VStack } from './components/ui/Stack'
+import { VisionModal } from './components/VisionModal'
+import { WaitlistModal } from './components/WaitlistModal'
+import { RoadmapSection } from './components/RoadmapSection'
+import { ContributeModal } from './components/ContributeModal'
 
 function App() {
   const { t } = useTranslation()
+  const [isVisionOpen, setIsVisionOpen] = useState(false)
+  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false)
+  const [isContributeOpen, setIsContributeOpen] = useState(false)
+
+  const scrollToCTA = () => {
+    document.getElementById('cta-section')?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -47,10 +59,10 @@ function App() {
               </p>
 
               <HStack gap="4" wrap className="justify-center mt-4">
-                <Button size="lg" variant="primary" className="shadow-lg shadow-primary-500/30">
+                <Button size="lg" variant="primary" className="shadow-lg shadow-primary-500/30" onClick={scrollToCTA}>
                   {t('landing.hero.cta.primary')}
                 </Button>
-                <Button size="lg" variant="ghost" className="text-white border-white/30 hover:bg-white/10">
+                <Button size="lg" variant="ghost" className="text-white border-white/30 hover:bg-white/10" onClick={() => { setIsVisionOpen(true) }}>
                   {t('landing.hero.cta.secondary')}
                 </Button>
               </HStack>
@@ -178,8 +190,11 @@ function App() {
           </div>
         </section>
 
+        {/* Roadmap Section */}
+        <RoadmapSection onContributeClick={() => { setIsContributeOpen(true) }} />
+
         {/* CTA Section */}
-        <section className="py-20 md:py-28 bg-gradient-to-br from-primary-600 to-primary-800 text-white">
+        <section id="cta-section" className="py-20 md:py-28 bg-gradient-to-br from-primary-600 to-primary-800 text-white">
           <div className="container mx-auto px-4">
             <VStack gap="6" align="center" className="text-center max-w-2xl mx-auto">
               <h2 className="text-3xl md:text-4xl font-bold">
@@ -188,7 +203,7 @@ function App() {
               <p className="text-xl text-primary-100">
                 {t('landing.cta.description')}
               </p>
-              <Button size="lg" variant="secondary" className="bg-white text-primary-700 hover:bg-gray-100 shadow-xl">
+              <Button size="lg" variant="secondary" className="bg-white text-primary-700 hover:bg-gray-100 shadow-xl" onClick={() => { setIsWaitlistOpen(true) }}>
                 {t('landing.cta.button')}
               </Button>
               <p className="text-sm text-primary-200">
@@ -236,6 +251,11 @@ function App() {
           </div>
         </footer>
       </main>
+
+      {/* Modals */}
+      <VisionModal isOpen={isVisionOpen} onClose={() => { setIsVisionOpen(false) }} />
+      <WaitlistModal isOpen={isWaitlistOpen} onClose={() => { setIsWaitlistOpen(false) }} />
+      <ContributeModal isOpen={isContributeOpen} onClose={() => { setIsContributeOpen(false) }} />
     </div>
   )
 }
