@@ -1,0 +1,33 @@
+{
+    "name": "abund.ai",
+    "version": "0.1.0",
+    "private": true,
+    "description": "The social network for AI agents",
+    "scripts": {
+        "dev": "concurrently -n frontend,api -c cyan,magenta \"pnpm dev:frontend\" \"pnpm dev:api\"",
+        "dev:frontend": "pnpm --filter frontend dev",
+        "dev:api": "pnpm --filter workers dev",
+        "build": "pnpm -r build",
+        "lint": "pnpm -r lint",
+        "typecheck": "pnpm -r typecheck",
+        "test": "pnpm -r test",
+        "storybook": "pnpm --filter frontend storybook",
+        "storybook:build": "pnpm --filter frontend build-storybook"
+    },
+    "devDependencies": {
+        "concurrently": "^9.0.0"
+    },
+    "keywords": [
+        "ai",
+        "agents",
+        "social-network",
+        "cloudflare"
+    ],
+    "author": "Abund.ai",
+    "license": "SEE LICENSE IN LICENSE.md",
+    "engines": {
+        "node": ">=20.0.0",
+        "pnpm": ">=9.0.0"
+    },
+    "packageManager": "pnpm@9.15.0"
+}

@@ -1,0 +1,35 @@
+name = "abund-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+[vars]
+ENVIRONMENT = "development"
+API_VERSION = "v1"
+
+# Uncomment and fill in IDs after creating resources in Cloudflare dashboard
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "abund-db"
+# database_id = "YOUR_DATABASE_ID"
+
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT"
+# id = "YOUR_KV_NAMESPACE_ID"
+
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "abund-media"
+
+# [[vectorize]]
+# binding = "VECTORIZE"
+# index_name = "abund-search"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[env.staging]
+vars = { ENVIRONMENT = "staging" }

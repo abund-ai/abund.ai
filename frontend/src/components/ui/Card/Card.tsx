@@ -1,0 +1,146 @@
+import { forwardRef, type ComponentPropsWithoutRef } from 'react'
+import { cn } from '@/lib/utils'
+
+export interface CardProps extends ComponentPropsWithoutRef<'div'> {
+  /** Variant style */
+  variant?: 'default' | 'outline' | 'ghost'
+  /** Add hover effect */
+  interactive?: boolean
+  /** Padding size */
+  padding?: 'none' | 'sm' | 'md' | 'lg'
+}
+
+const variantStyles = {
+  default: 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm',
+  outline: 'bg-transparent border border-gray-200 dark:border-gray-700',
+  ghost: 'bg-gray-50 dark:bg-gray-800/50',
+} as const
+
+const paddingStyles = {
+  none: '',
+  sm: 'p-4',
+  md: 'p-6',
+  lg: 'p-8',
+} as const
+
+/**
+ * Card container component for grouping related content
+ */
+export const Card = forwardRef<HTMLDivElement, CardProps>(
+  (
+    {
+      variant = 'default',
+      interactive = false,
+      padding = 'md',
+      className,
+      children,
+      ...props
+    },
+    ref
+  ) => {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'rounded-xl',
+          variantStyles[variant],
+          paddingStyles[padding],
+          interactive && [
+            'transition-all duration-200',
+            'hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600',
+            'cursor-pointer',
+          ],
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    )
+  }
+)
+Card.displayName = 'Card'
+
+/**
+ * Card header section
+ */
+export const CardHeader = forwardRef<
+  HTMLDivElement,
+  ComponentPropsWithoutRef<'div'>
+>(({ className, children, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn('flex flex-col space-y-1.5', className)}
+    {...props}
+  >
+    {children}
+  </div>
+))
+CardHeader.displayName = 'CardHeader'
+
+/**
+ * Card title
+ */
+export const CardTitle = forwardRef<
+  HTMLHeadingElement,
+  ComponentPropsWithoutRef<'h3'>
+>(({ className, children, ...props }, ref) => (
+  <h3
+    ref={ref}
+    className={cn(
+      'text-lg font-semibold text-gray-900 dark:text-gray-100',
+      className
+    )}
+    {...props}
+  >
+    {children}
+  </h3>
+))
+CardTitle.displayName = 'CardTitle'
+
+/**
+ * Card description
+ */
+export const CardDescription = forwardRef<
+  HTMLParagraphElement,
+  ComponentPropsWithoutRef<'p'>
+>(({ className, children, ...props }, ref) => (
+  <p
+    ref={ref}
+    className={cn('text-sm text-gray-500 dark:text-gray-400', className)}
+    {...props}
+  >
+    {children}
+  </p>
+))
+CardDescription.displayName = 'CardDescription'
+
+/**
+ * Card content section
+ */
+export const CardContent = forwardRef<
+  HTMLDivElement,
+  ComponentPropsWithoutRef<'div'>
+>(({ className, children, ...props }, ref) => (
+  <div ref={ref} className={cn('pt-4', className)} {...props}>
+    {children}
+  </div>
+))
+CardContent.displayName = 'CardContent'
+
+/**
+ * Card footer section
+ */
+export const CardFooter = forwardRef<
+  HTMLDivElement,
+  ComponentPropsWithoutRef<'div'>
+>(({ className, children, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn('flex items-center pt-4', className)}
+    {...props}
+  >
+    {children}
+  </div>
+))
+CardFooter.displayName = 'CardFooter'
