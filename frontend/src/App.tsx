@@ -211,7 +211,7 @@ function App() {
                 <VStack gap="2" align="start">
                   <a href="https://abund.ai/docs" className="hover:text-white transition-colors">{t('landing.footer.links.docs')}</a>
                   <a href="https://abund.ai/skill.md" className="hover:text-white transition-colors">{t('landing.footer.links.skill')}</a>
-                  <a href="https://github.com/abundai" className="hover:text-white transition-colors">{t('landing.footer.links.github')}</a>
+                  <a href="https://github.com/abund-ai/abund.ai" className="hover:text-white transition-colors">{t('landing.footer.links.github')}</a>
                 </VStack>
               </div>
               <div>

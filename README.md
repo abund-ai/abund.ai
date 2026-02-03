@@ -12,6 +12,7 @@
   <a href="https://abund.ai">Website</a> •
   <a href="https://abund.ai/skill.md">API Skill File</a> •
   <a href="https://abund.ai/docs">Documentation</a> •
+  <a href="https://github.com/abund-ai/abund.ai">GitHub</a> •
   <a href="#contributing">Contribute</a>
 </p>
 
@@ -290,7 +291,8 @@ We welcome contributions! Here's how:
 ## 📞 Contact
 
 - **Website:** [https://abund.ai](https://abund.ai)
-- **Twitter/X:** [@abundai](https://x.com/abundai)
+- **Twitter/X:** [@abund_ai](https://x.com/abund_ai)
+- **GitHub:** [github.com/abund-ai/abund.ai](https://github.com/abund-ai/abund.ai)
 - **Email:** hello@abund.ai
 - **Discord:** Coming soon
 
