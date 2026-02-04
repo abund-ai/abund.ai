@@ -60,31 +60,47 @@ interface SyndicationResponse {
 
 /**
  * Extract user data from syndication HTML response
+ * Falls back to minimal profile if no tweets (empty timeline)
  */
-function extractUserFromSyndication(html: string): SyndicationUser | null {
+function extractUserFromSyndication(html: string): {
+  user: SyndicationUser | null
+  screenName: string | null
+} {
   // Look for the __NEXT_DATA__ JSON in the HTML
   const match = html.match(
     /<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/
   )
-  if (!match || !match[1]) return null
+  if (!match || !match[1]) return { user: null, screenName: null }
 
   try {
-    const data = JSON.parse(match[1]) as SyndicationResponse
+    const data = JSON.parse(match[1]) as SyndicationResponse & {
+      props?: {
+        pageProps?: {
+          headerProps?: { screenName?: string }
+        }
+      }
+    }
+
+    // Get screenName from headerProps (always available)
+    const screenName = data?.props?.pageProps?.headerProps?.screenName || null
 
     // Get user from the first tweet entry
     const entries = data?.props?.pageProps?.timeline?.entries
-    if (!entries || entries.length === 0) return null
+    if (!entries || entries.length === 0) {
+      // No tweets - return just the screenName for a minimal profile
+      return { user: null, screenName }
+    }
 
     for (const entry of entries) {
       const user = entry?.content?.tweet?.user
       if (user && user.screen_name) {
-        return user
+        return { user, screenName }
       }
     }
 
-    return null
+    return { user: null, screenName }
   } catch {
-    return null
+    return { user: null, screenName: null }
   }
 }
 
@@ -162,9 +178,10 @@ twitter.get('/profile/:username', async (c) => {
     }
 
     const html = await response.text()
-    const user = extractUserFromSyndication(html)
+    const { user, screenName } = extractUserFromSyndication(html)
 
-    if (!user) {
+    // If we couldn't extract screenName at all, the response was unparseable
+    if (!screenName) {
       return c.json(
         {
           success: false,
@@ -174,23 +191,23 @@ twitter.get('/profile/:username', async (c) => {
       )
     }
 
-    // Get avatar - upgrade quality by replacing _normal with _400x400
-    let avatarUrl = user.profile_image_url_https || null
-    if (avatarUrl) {
-      avatarUrl = avatarUrl.replace(
+    // Build profile - use full user data if available, otherwise minimal profile
+    let avatarUrl: string | null = null
+    if (user?.profile_image_url_https) {
+      avatarUrl = user.profile_image_url_https.replace(
         /_normal\.(jpg|jpeg|png|gif|webp)$/i,
         '_400x400.$1'
       )
     }
 
     const profile: TwitterProfile = {
-      username: user.screen_name?.toLowerCase() || username,
-      display_name: user.name || null,
-      bio: user.description || null,
+      username: (user?.screen_name || screenName).toLowerCase(),
+      display_name: user?.name || null,
+      bio: user?.description || null,
       avatar_url: avatarUrl,
-      followers_count: user.followers_count ?? null,
-      following_count: user.friends_count ?? null,
-      is_verified: Boolean(user.is_blue_verified || user.verified),
+      followers_count: user?.followers_count ?? null,
+      following_count: user?.friends_count ?? null,
+      is_verified: Boolean(user?.is_blue_verified || user?.verified),
       cached: false,
       fetched_at: new Date().toISOString(),
     }
