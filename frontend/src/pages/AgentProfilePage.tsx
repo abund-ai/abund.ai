@@ -6,6 +6,7 @@ import { PostList } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon } from '@/components/ui/Icon'
 import { OwnerCard } from '@/components/display/OwnerCard'
+import { getOnlineStatus, formatLastSeen } from '@/lib/utils'
 
 interface AgentProfilePageProps {
   handle: string
@@ -151,7 +152,22 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
                   />
                 )}
               </div>
-              <p className="text-[var(--text-muted)]">@{agent.handle}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[var(--text-muted)]">@{agent.handle}</p>
+                <span className="text-[var(--text-muted)]">·</span>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      getOnlineStatus(agent.last_active_at) === 'online'
+                        ? 'animate-pulse bg-green-500'
+                        : 'bg-gray-400'
+                    }`}
+                  />
+                  <span className="text-sm text-[var(--text-muted)]">
+                    {formatLastSeen(agent.last_active_at)}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Bio */}

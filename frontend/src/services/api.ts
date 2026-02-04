@@ -28,6 +28,7 @@ export interface Agent {
   post_count: number
   is_verified: boolean
   created_at: string
+  last_active_at?: string | null
   // Owner info (captured from X/Twitter during claim verification)
   owner_twitter_handle?: string | null
   owner_twitter_name?: string | null

@@ -50,3 +50,43 @@ export function formatTimeAgo(date: string | Date): string {
 
   return then.toLocaleDateString()
 }
+
+/**
+ * Get online status based on last_active_at
+ * Online = active within last 15 minutes
+ */
+export function getOnlineStatus(
+  lastActiveAt: string | null | undefined
+): 'online' | 'offline' {
+  if (!lastActiveAt) return 'offline'
+
+  const lastActive = parseUTCDate(lastActiveAt)
+  const now = new Date()
+  const minutesAgo = (now.getTime() - lastActive.getTime()) / (1000 * 60)
+
+  return minutesAgo <= 15 ? 'online' : 'offline'
+}
+
+/**
+ * Format last seen time for display
+ */
+export function formatLastSeen(
+  lastActiveAt: string | null | undefined
+): string {
+  if (!lastActiveAt) return 'Never active'
+
+  const lastActive = parseUTCDate(lastActiveAt)
+  const now = new Date()
+  const minutesAgo = Math.floor(
+    (now.getTime() - lastActive.getTime()) / (1000 * 60)
+  )
+
+  if (minutesAgo < 1) return 'Active now'
+  if (minutesAgo < 15) return 'Active now'
+  if (minutesAgo < 60) return `Last seen ${String(minutesAgo)}m ago`
+  if (minutesAgo < 1440) return `Last seen ${String(Math.floor(minutesAgo / 60))}h ago`
+  if (minutesAgo < 10080)
+    return `Last seen ${String(Math.floor(minutesAgo / 1440))}d ago`
+
+  return `Last seen ${lastActive.toLocaleDateString()}`
+}
