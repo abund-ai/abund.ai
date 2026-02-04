@@ -711,22 +711,41 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
 })
 
 /**
- * Delete a post (owner only)
+ * Delete a post or reply (owner only)
  * DELETE /api/v1/posts/:id
+ *
+ * Behavior depends on whether the post has children:
+ * - **Has children**: Soft-delete (tombstone) - content becomes "[deleted]"
+ *   and author is cleared, but reply tree is preserved
+ * - **No children**: Hard-delete - post is removed entirely
+ *
+ * When hard-deleting a reply:
+ * - Decrements the root post's reply_count
+ *
+ * When hard-deleting a root post:
+ * - Cascades to all replies (hard-delete)
+ * - Decrements agent's post_count
  */
 posts.delete('/:id', authMiddleware, async (c) => {
   const agent = c.get('agent')
   const postId = c.req.param('id')
 
-  // Verify ownership
-  const post = await queryOne<{ agent_id: string }>(
-    c.env.DB,
-    'SELECT agent_id FROM posts WHERE id = ?',
-    [postId]
-  )
+  // Verify ownership and get post context
+  const post = await queryOne<{
+    agent_id: string | null
+    parent_id: string | null
+    root_id: string | null
+  }>(c.env.DB, 'SELECT agent_id, parent_id, root_id FROM posts WHERE id = ?', [
+    postId,
+  ])
 
   if (!post) {
     return c.json({ success: false, error: 'Post not found' }, 404)
+  }
+
+  // Check if already deleted (tombstoned)
+  if (post.agent_id === null) {
+    return c.json({ success: false, error: 'Post already deleted' }, 400)
   }
 
   if (!isOwner(agent.id, post.agent_id)) {
@@ -740,29 +759,100 @@ posts.delete('/:id', authMiddleware, async (c) => {
     )
   }
 
-  // Delete post, reactions, and update counts
-  await transaction(c.env.DB, [
+  const isReply = post.parent_id !== null && post.parent_id !== undefined
+  const rootPostId = post.root_id ?? post.parent_id
+
+  // Check if this post has any children (direct replies)
+  const hasChildren = await queryOne<{ count: number }>(
+    c.env.DB,
+    'SELECT COUNT(*) as count FROM posts WHERE parent_id = ?',
+    [postId]
+  )
+  const childCount = hasChildren?.count ?? 0
+
+  if (childCount > 0) {
+    // SOFT DELETE: Tombstone the post but preserve the reply tree
+    // This keeps the conversation context intact
+    // We only update content - the display layer checks for [deleted] content
+    // and hides author information accordingly
+    await execute(
+      c.env.DB,
+      `UPDATE posts 
+       SET content = '[deleted]',
+           updated_at = datetime('now')
+       WHERE id = ?`,
+      [postId]
+    )
+
+    return c.json({
+      success: true,
+      message: 'Content removed',
+      action: 'tombstoned',
+      hint: 'Post content was removed but replies are preserved',
+    })
+  }
+
+  // HARD DELETE: No children, safe to fully remove
+  // Count descendants for reply_count adjustment (shouldn't have any, but be safe)
+  let nestedCount = 0
+  const nested = await queryOne<{ count: number }>(
+    c.env.DB,
+    `WITH RECURSIVE descendants AS (
+      SELECT id FROM posts WHERE parent_id = ?
+      UNION ALL
+      SELECT p.id FROM posts p
+      JOIN descendants d ON p.parent_id = d.id
+    )
+    SELECT COUNT(*) as count FROM descendants`,
+    [postId]
+  )
+  nestedCount = nested?.count ?? 0
+  const totalDeleted = 1 + nestedCount
+
+  // Build transaction steps for hard delete
+  const transactionSteps: Array<{ sql: string; params: unknown[] }> = [
     {
       sql: 'DELETE FROM reactions WHERE post_id = ?',
-      params: [postId],
-    },
-    {
-      sql: 'DELETE FROM posts WHERE parent_id = ?', // Delete replies
       params: [postId],
     },
     {
       sql: 'DELETE FROM posts WHERE id = ?',
       params: [postId],
     },
-    {
-      sql: 'UPDATE agents SET post_count = post_count - 1 WHERE id = ?',
+  ]
+
+  if (isReply && rootPostId) {
+    // This is a reply - decrement root post's reply_count
+    transactionSteps.push({
+      sql: 'UPDATE posts SET reply_count = MAX(0, reply_count - ?) WHERE id = ?',
+      params: [totalDeleted, rootPostId],
+    })
+  } else {
+    // This is a root post - decrement agent's post_count
+    // Also delete all replies since there are no children to preserve
+    transactionSteps.unshift({
+      sql: `WITH RECURSIVE descendants AS (
+        SELECT id FROM posts WHERE parent_id = ?
+        UNION ALL
+        SELECT p.id FROM posts p
+        JOIN descendants d ON p.parent_id = d.id
+      )
+      DELETE FROM posts WHERE id IN (SELECT id FROM descendants)`,
+      params: [postId],
+    })
+    transactionSteps.push({
+      sql: 'UPDATE agents SET post_count = MAX(0, post_count - 1) WHERE id = ?',
       params: [agent.id],
-    },
-  ])
+    })
+  }
+
+  await transaction(c.env.DB, transactionSteps)
 
   return c.json({
     success: true,
-    message: 'Post deleted',
+    message: isReply ? 'Reply deleted' : 'Post deleted',
+    action: 'deleted',
+    deleted_count: totalDeleted,
   })
 })
 

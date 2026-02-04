@@ -245,4 +245,155 @@ test.describe('Nested Replies API', () => {
 
     expect(replyResponse.status()).toBe(404)
   })
+
+  test('can delete own reply', async ({ api, testAgent }) => {
+    // Create a post
+    const postResponse = await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Test post for delete reply at ${Date.now()}` },
+    })
+    const postData = await postResponse.json()
+
+    // Create a reply
+    const replyResponse = await api.post(`posts/${postData.post.id}/reply`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: 'Reply to be deleted' },
+    })
+    const replyData = await replyResponse.json()
+
+    // Verify reply exists
+    expect(replyData.success).toBe(true)
+
+    // Delete the reply
+    const deleteResponse = await api.delete(`posts/${replyData.reply.id}`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+    })
+    expect(deleteResponse.ok()).toBeTruthy()
+
+    const deleteData = await deleteResponse.json()
+    expect(deleteData.success).toBe(true)
+    expect(deleteData.message).toBe('Reply deleted')
+    expect(deleteData.action).toBe('deleted')
+    expect(deleteData.deleted_count).toBe(1)
+  })
+
+  test('deleting reply decrements root post reply_count', async ({
+    api,
+    testAgent,
+  }) => {
+    // Create a post
+    const postResponse = await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Test post for reply_count at ${Date.now()}` },
+    })
+    const postData = await postResponse.json()
+
+    // Create two replies
+    const reply1Response = await api.post(`posts/${postData.post.id}/reply`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: 'First reply' },
+    })
+    const reply1Data = await reply1Response.json()
+
+    await api.post(`posts/${postData.post.id}/reply`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: 'Second reply' },
+    })
+
+    // Check initial reply_count
+    const getResponse1 = await api.get(`posts/${postData.post.id}`)
+    const getData1 = await getResponse1.json()
+    expect(getData1.post.reply_count).toBe(2)
+
+    // Delete first reply
+    await api.delete(`posts/${reply1Data.reply.id}`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+    })
+
+    // Check reply_count decreased
+    const getResponse2 = await api.get(`posts/${postData.post.id}`)
+    const getData2 = await getResponse2.json()
+    expect(getData2.post.reply_count).toBe(1)
+  })
+
+  test('deleting reply with children tombstones instead of deleting (preserves conversation)', async ({
+    api,
+    testAgent,
+  }) => {
+    // Create a post
+    const postResponse = await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Test post for tombstone at ${Date.now()}` },
+    })
+    const postData = await postResponse.json()
+
+    // Create: post -> reply1 -> reply2 -> reply3
+    const reply1Response = await api.post(`posts/${postData.post.id}/reply`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: 'Level 1 - will be tombstoned' },
+    })
+    const reply1Data = await reply1Response.json()
+
+    const reply2Response = await api.post(
+      `posts/${reply1Data.reply.id}/reply`,
+      {
+        headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+        data: { content: 'Level 2' },
+      }
+    )
+    const reply2Data = await reply2Response.json()
+
+    await api.post(`posts/${reply2Data.reply.id}/reply`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: 'Level 3' },
+    })
+
+    // Check initial count (should be 3 replies)
+    const getResponse1 = await api.get(`posts/${postData.post.id}`)
+    const getData1 = await getResponse1.json()
+    expect(getData1.post.reply_count).toBe(3)
+
+    // Delete reply1 - should tombstone since it has children
+    const deleteResponse = await api.delete(`posts/${reply1Data.reply.id}`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+    })
+    const deleteData = await deleteResponse.json()
+    expect(deleteData.success).toBe(true)
+    expect(deleteData.action).toBe('tombstoned')
+    expect(deleteData.message).toBe('Content removed')
+
+    // Check that reply tree is preserved - reply_count should still be 3
+    const getResponse2 = await api.get(`posts/${postData.post.id}`)
+    const getData2 = await getResponse2.json()
+    expect(getData2.post.reply_count).toBe(3) // Preserved!
+
+    // The tombstoned reply should show [deleted] content
+    const reply1GetResponse = await api.get(`posts/${reply1Data.reply.id}`)
+    const reply1GetData = await reply1GetResponse.json()
+    expect(reply1GetData.post.content).toBe('[deleted]')
+  })
+
+  test('cannot delete reply without authentication', async ({
+    api,
+    testAgent,
+  }) => {
+    // Create a post
+    const postResponse = await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Test post for auth delete at ${Date.now()}` },
+    })
+    const postData = await postResponse.json()
+
+    // Create a reply
+    const replyResponse = await api.post(`posts/${postData.post.id}/reply`, {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: 'Reply for auth test' },
+    })
+    const replyData = await replyResponse.json()
+
+    // Try to delete without auth
+    const deleteResponse = await api.delete(`posts/${replyData.reply.id}`, {})
+
+    expect(deleteResponse.status()).toBe(401)
+  })
 })

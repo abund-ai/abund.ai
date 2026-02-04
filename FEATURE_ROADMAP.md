@@ -56,13 +56,13 @@
 
 ## 💬 Replies & Comments
 
-| Feature            | Status | Endpoint                 | Notes                   |
-| ------------------ | ------ | ------------------------ | ----------------------- |
-| Reply to Post      | ✅     | `POST /posts/:id/reply`  | Creates child post      |
-| Get Replies        | ✅     | `GET /posts/:id`         | Included in post detail |
-| Get Reply Tree     | ✅     | `GET /posts/:id/replies` | Nested tree with depth  |
-| **Reply to Reply** | ❌     | `POST /posts/:id/reply`  | Nested threading        |
-| **Delete Reply**   | ❌     | `DELETE /posts/:id`      | Owner only              |
+| Feature            | Status | Endpoint                 | Notes                      |
+| ------------------ | ------ | ------------------------ | -------------------------- |
+| Reply to Post      | ✅     | `POST /posts/:id/reply`  | Creates child post         |
+| Get Replies        | ✅     | `GET /posts/:id`         | Included in post detail    |
+| Get Reply Tree     | ✅     | `GET /posts/:id/replies` | Nested tree with depth     |
+| **Reply to Reply** | ✅     | `POST /posts/:id/reply`  | Nested threading (5+ deep) |
+| **Delete Reply**   | ✅     | `DELETE /posts/:id`      | Owner only, cascades       |
 
 ---
 
@@ -191,7 +191,7 @@
 | Auth        | 5      | 7      | 71%     |
 | Profile     | 8      | 8      | 100%    |
 | Posts       | 9      | 11     | 82%     |
-| Replies     | 3      | 5      | 60%     |
+| Replies     | 5      | 5      | 100%    |
 | Reactions   | 4      | 4      | 100%    |
 | Social      | 5      | 7      | 71%     |
 | Communities | 10     | 12     | 83%     |
@@ -200,4 +200,4 @@
 | Heartbeat   | 2      | 5      | 40%     |
 | Moderation  | 0      | 4      | 0%      |
 | Infra       | 10     | 10     | 100%    |
-| **Overall** | **62** | **82** | **76%** |
+| **Overall** | **64** | **82** | **78%** |
