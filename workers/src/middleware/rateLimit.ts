@@ -6,6 +6,34 @@ interface RateLimitConfig {
   duration: number // Per X seconds
 }
 
+interface RateLimitData {
+  count: number
+  firstRequestAt: number // Timestamp in ms
+}
+
+/**
+ * Format duration into human-readable string
+ * e.g., "15 hours 30 minutes" or "45 minutes" or "30 seconds"
+ */
+function formatDuration(seconds: number): string {
+  if (seconds <= 0) return '0 seconds'
+
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  const parts: string[] = []
+  if (hours > 0)
+    parts.push(`${String(hours)} ${hours === 1 ? 'hour' : 'hours'}`)
+  if (minutes > 0)
+    parts.push(`${String(minutes)} ${minutes === 1 ? 'minute' : 'minutes'}`)
+  if (parts.length === 0 && secs > 0) {
+    parts.push(`${String(secs)} ${secs === 1 ? 'second' : 'seconds'}`)
+  }
+
+  return parts.join(' ')
+}
+
 // Rate limits aligned with Moltbook for spam prevention
 const LIMITS: Record<string, RateLimitConfig> = {
   // Post creation - strict to prevent spam (matches Moltbook: 1 per 30 min)
@@ -27,8 +55,8 @@ const LIMITS: Record<string, RateLimitConfig> = {
   // Media uploads - moderate limit
   'POST:/api/v1/media/upload': { points: 5, duration: 300 }, // 5 per 5 min
 
-  // Registration - prevent mass bot creation (per IP, handled separately)
-  'POST:/api/v1/agents/register': { points: 3, duration: 3600 }, // 3 per hour
+  // Registration - prevent mass bot creation (2 per day while we grow)
+  'POST:/api/v1/agents/register': { points: 2, duration: 86400 }, // 2 per day
 
   // Follow/unfollow - prevent follow spam
   'POST:/api/v1/agents/*/follow': { points: 30, duration: 60 }, // 30 per minute
@@ -87,34 +115,70 @@ export async function rateLimiter(
   }
 
   const apiKey = authHeader.slice(7)
-  const config = getConfig(c.req.method, new URL(c.req.url).pathname)
+  const pathname = new URL(c.req.url).pathname
+  const config = getConfig(c.req.method, pathname)
 
-  const rateLimitKey = `ratelimit:${apiKey}:${c.req.method}:${new URL(c.req.url).pathname}`
+  const rateLimitKey = `ratelimit:${apiKey}:${c.req.method}:${pathname}`
 
   try {
-    const current = await c.env.RATE_LIMIT.get(rateLimitKey)
-    const count = current ? parseInt(current, 10) : 0
+    const storedData = await c.env.RATE_LIMIT.get(rateLimitKey)
+    let data: RateLimitData = storedData
+      ? (JSON.parse(storedData) as RateLimitData)
+      : { count: 0, firstRequestAt: Date.now() }
 
-    if (count >= config.points) {
+    // Handle legacy format (plain number) for backwards compatibility
+    if (typeof data === 'number') {
+      data = { count: data, firstRequestAt: Date.now() }
+    }
+
+    if (data.count >= config.points) {
+      // Calculate time remaining until rate limit resets
+      const elapsedSeconds = Math.floor(
+        (Date.now() - data.firstRequestAt) / 1000
+      )
+      const remainingSeconds = Math.max(0, config.duration - elapsedSeconds)
+      const retryAfterFormatted = formatDuration(remainingSeconds)
+
+      // Generate a helpful, specific error message
+      let errorMessage: string
+      if (pathname === '/api/v1/agents/register') {
+        errorMessage = `You can only create 2 agents per day. Try again in ${retryAfterFormatted}.`
+      } else if (config.duration >= 3600) {
+        const hours = config.duration / 3600
+        errorMessage = `Rate limit exceeded. You can make ${String(config.points)} request${config.points > 1 ? 's' : ''} per ${String(hours)} hour${hours > 1 ? 's' : ''}. Try again in ${retryAfterFormatted}.`
+      } else if (config.duration >= 60) {
+        const minutes = config.duration / 60
+        errorMessage = `Rate limit exceeded. You can make ${String(config.points)} request${config.points > 1 ? 's' : ''} per ${String(minutes)} minute${minutes > 1 ? 's' : ''}. Try again in ${retryAfterFormatted}.`
+      } else {
+        errorMessage = `Rate limit exceeded. Try again in ${retryAfterFormatted}.`
+      }
+
       return c.json(
         {
           success: false,
-          error: 'Rate limit exceeded',
-          hint: `You can make ${String(config.points)} requests per ${String(config.duration)} seconds`,
-          retry_after_seconds: config.duration,
+          error: errorMessage,
+          hint: `Try again in ${retryAfterFormatted}`,
+          retry_after_seconds: remainingSeconds,
         },
         429
       )
     }
 
-    // Increment counter
-    await c.env.RATE_LIMIT.put(rateLimitKey, String(count + 1), {
+    // Increment counter and store timestamp
+    const newData: RateLimitData = {
+      count: data.count + 1,
+      firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+    }
+    await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
       expirationTtl: config.duration,
     })
 
     // Add rate limit headers
     c.header('X-RateLimit-Limit', String(config.points))
-    c.header('X-RateLimit-Remaining', String(config.points - count - 1))
+    c.header(
+      'X-RateLimit-Remaining',
+      String(Math.max(0, config.points - newData.count))
+    )
   } catch (error) {
     // If KV fails, log but don't block the request
     console.error('Rate limit check failed:', error)
@@ -129,8 +193,8 @@ export async function rateLimiter(
 
 // IP-based limits for public endpoints (DDoS protection)
 const IP_LIMITS: Record<string, RateLimitConfig> = {
-  // Registration - strict per IP to prevent bot farms
-  'POST:/api/v1/agents/register': { points: 5, duration: 3600 }, // 5 per hour per IP
+  // Registration - strict per IP to prevent bot farms (2 per day per IP while we grow)
+  'POST:/api/v1/agents/register': { points: 2, duration: 86400 }, // 2 per day per IP
 
   // Public feeds - generous but limited
   'GET:/api/v1/posts': { points: 300, duration: 60 }, // 300 per minute
@@ -191,27 +255,57 @@ export async function ipRateLimiter(
   const rateLimitKey = `ip:${ip}:${key}`
 
   try {
-    const current = await c.env.RATE_LIMIT.get(rateLimitKey)
-    const count = current ? parseInt(current, 10) : 0
+    const storedData = await c.env.RATE_LIMIT.get(rateLimitKey)
+    let data: RateLimitData = storedData
+      ? (JSON.parse(storedData) as RateLimitData)
+      : { count: 0, firstRequestAt: Date.now() }
 
-    if (count >= config.points) {
+    // Handle legacy format (plain number) for backwards compatibility
+    if (typeof data === 'number') {
+      data = { count: data, firstRequestAt: Date.now() }
+    }
+
+    if (data.count >= config.points) {
+      // Calculate time remaining until rate limit resets
+      const elapsedSeconds = Math.floor(
+        (Date.now() - data.firstRequestAt) / 1000
+      )
+      const remainingSeconds = Math.max(0, config.duration - elapsedSeconds)
+      const retryAfterFormatted = formatDuration(remainingSeconds)
+
+      // Generate a helpful error message
+      let errorMessage: string
+      if (path === '/api/v1/agents/register') {
+        errorMessage = `You can only create 2 agents per day. Try again in ${retryAfterFormatted}.`
+      } else {
+        errorMessage = `Too many requests. Please slow down. Try again in ${retryAfterFormatted}.`
+      }
+
       return c.json(
         {
           success: false,
-          error: 'Too many requests',
-          hint: 'Please slow down',
-          retry_after_seconds: config.duration,
+          error: errorMessage,
+          hint: `Try again in ${retryAfterFormatted}`,
+          retry_after_seconds: remainingSeconds,
         },
         429
       )
     }
 
-    await c.env.RATE_LIMIT.put(rateLimitKey, String(count + 1), {
+    // Increment counter and store timestamp
+    const newData: RateLimitData = {
+      count: data.count + 1,
+      firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+    }
+    await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
       expirationTtl: config.duration,
     })
 
     c.header('X-RateLimit-Limit', String(config.points))
-    c.header('X-RateLimit-Remaining', String(config.points - count - 1))
+    c.header(
+      'X-RateLimit-Remaining',
+      String(Math.max(0, config.points - newData.count))
+    )
   } catch (error) {
     console.error('IP rate limit check failed:', error)
   }
