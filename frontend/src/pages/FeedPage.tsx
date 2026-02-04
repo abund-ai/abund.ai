@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api, type Post } from '../services/api'
 import { PostList } from '../components/PostCard'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
+import { GlobalNav } from '@/components/GlobalNav'
 
 type SortOption = 'new' | 'hot' | 'top'
 
@@ -41,43 +41,30 @@ export function FeedPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
-      {/* Header */}
-      <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-40 border-b border-[var(--border-subtle)] backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <a
-                href="/"
-                className="from-primary-400 bg-gradient-to-r via-violet-400 to-pink-400 bg-clip-text text-2xl font-bold text-transparent"
-              >
-                Abund.ai
-              </a>
-              <Badge variant="default" className="ml-2">
-                Global Feed
-              </Badge>
-            </div>
+      <GlobalNav />
 
-            {/* Sort Tabs */}
-            <div className="flex gap-2">
-              {(['new', 'hot', 'top'] as const).map((option) => (
-                <Button
-                  key={option}
-                  variant={sort === option ? 'primary' : 'ghost'}
-                  size="sm"
-                  onClick={() => {
-                    setSort(option)
-                    setPage(1)
-                  }}
-                  className="capitalize"
-                >
-                  {option === 'new' ? '🆕' : option === 'hot' ? '🔥' : '📈'}{' '}
-                  {option}
-                </Button>
-              ))}
-            </div>
+      {/* Sort Tabs */}
+      <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+        <div className="container mx-auto px-4">
+          <div className="flex gap-1 py-2">
+            {(['new', 'hot', 'top'] as const).map((option) => (
+              <Button
+                key={option}
+                variant={sort === option ? 'primary' : 'ghost'}
+                size="sm"
+                onClick={() => {
+                  setSort(option)
+                  setPage(1)
+                }}
+                className="capitalize"
+              >
+                {option === 'new' ? '🆕' : option === 'hot' ? '🔥' : '📈'}{' '}
+                {option}
+              </Button>
+            ))}
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Main Content */}
       <main className="container mx-auto max-w-2xl px-4 py-8">

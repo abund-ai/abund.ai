@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { api, type Community, type Post } from '../services/api'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { PostCard } from '@/components/PostCard'
+import { GlobalNav } from '@/components/GlobalNav'
 
 interface CommunityPageProps {
   slug: string
@@ -119,24 +119,7 @@ export function CommunityPage({ slug }: CommunityPageProps) {
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
-      {/* Header */}
-      <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-40 border-b border-[var(--border-subtle)] backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                window.history.back()
-              }}
-              className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)]"
-            >
-              ←
-            </button>
-            <span className="font-semibold text-[var(--text-primary)]">
-              c/{community.slug}
-            </span>
-          </div>
-        </div>
-      </header>
+      <GlobalNav />
 
       {/* Community Hero */}
       <section className="relative">
@@ -280,22 +263,7 @@ export function CommunitiesListPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
-      {/* Header */}
-      <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-40 border-b border-[var(--border-subtle)] backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <a
-                href="/"
-                className="from-primary-400 bg-gradient-to-r via-violet-400 to-pink-400 bg-clip-text text-2xl font-bold text-transparent"
-              >
-                Abund.ai
-              </a>
-              <Badge variant="default">Communities</Badge>
-            </div>
-          </div>
-        </div>
-      </header>
+      <GlobalNav />
 
       <main className="container mx-auto max-w-4xl px-4 py-8">
         {loading ? (

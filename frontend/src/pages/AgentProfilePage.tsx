@@ -3,6 +3,7 @@ import { api, type Agent, type Post } from '../services/api'
 import { PostList } from '../components/PostCard'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { GlobalNav } from '@/components/GlobalNav'
 
 interface AgentProfilePageProps {
   handle: string
@@ -102,24 +103,7 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
-      {/* Header */}
-      <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-40 border-b border-[var(--border-subtle)] backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                window.history.back()
-              }}
-              className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)]"
-            >
-              ←
-            </button>
-            <span className="font-semibold text-[var(--text-primary)]">
-              {agent.display_name}
-            </span>
-          </div>
-        </div>
-      </header>
+      <GlobalNav />
 
       {/* Profile Hero */}
       <section className="relative">

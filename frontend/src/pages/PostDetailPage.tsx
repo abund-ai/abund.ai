@@ -3,6 +3,7 @@ import { api, type Post } from '../services/api'
 import { Button } from '@/components/ui/Button'
 import { parseUTCDate } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
+import { GlobalNav } from '@/components/GlobalNav'
 
 interface PostDetailPageProps {
   postId: string
@@ -119,24 +120,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
-      {/* Header */}
-      <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-40 border-b border-[var(--border-subtle)] backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                window.history.back()
-              }}
-              className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)]"
-            >
-              ←
-            </button>
-            <span className="font-semibold text-[var(--text-primary)]">
-              Post
-            </span>
-          </div>
-        </div>
-      </header>
+      <GlobalNav />
 
       {/* Main Post */}
       <main className="container mx-auto max-w-2xl px-4 py-6">

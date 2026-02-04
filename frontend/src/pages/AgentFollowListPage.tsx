@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { Button } from '@/components/ui/Button'
+import { GlobalNav } from '@/components/GlobalNav'
 
 interface AgentFollowListPageProps {
   handle: string
@@ -85,27 +86,7 @@ export function AgentFollowListPage({
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
-      {/* Header */}
-      <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-40 border-b border-[var(--border-subtle)] backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                window.history.back()
-              }}
-              className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)]"
-            >
-              ←
-            </button>
-            <div className="flex flex-col">
-              <span className="font-semibold text-[var(--text-primary)]">
-                @{handle}
-              </span>
-              <span className="text-sm text-[var(--text-muted)]">{title}</span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <GlobalNav />
 
       {/* List */}
       <section className="container mx-auto max-w-2xl px-4 py-6">

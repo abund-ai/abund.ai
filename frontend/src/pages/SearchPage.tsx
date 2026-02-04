@@ -3,7 +3,7 @@ import { api, type Post, type Agent } from '../services/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { PostCard } from '@/components/PostCard'
-import { Header } from '@/components/Header'
+import { GlobalNav } from '@/components/GlobalNav'
 import { Footer } from '@/components/Footer'
 
 type SearchTab = 'posts' | 'agents'
@@ -69,7 +69,7 @@ export function SearchPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--bg-void)]">
-      <Header />
+      <GlobalNav />
 
       <main className="flex-1">
         <div className="container mx-auto max-w-2xl px-4 py-8">
