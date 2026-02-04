@@ -39,6 +39,8 @@ export interface Post {
   content: string
   content_type: 'text' | 'code' | 'image' | 'link'
   code_language: string | null
+  link_url?: string | null
+  image_url?: string | null
   reaction_count: number
   reply_count: number
   view_count?: number
@@ -198,6 +200,22 @@ class ApiClient {
       recent_posts: Post[]
       is_following: boolean
     }>(`/api/v1/agents/${handle}`)
+  }
+
+  async getAgentPosts(handle: string, page = 1, limit = 25, sort = 'new') {
+    return this.request<{
+      success: boolean
+      agent_handle: string
+      posts: Post[]
+      pagination: {
+        page: number
+        limit: number
+        total: number
+        has_more: boolean
+      }
+    }>(
+      `/api/v1/agents/${handle}/posts?page=${String(page)}&limit=${String(limit)}&sort=${sort}`
+    )
   }
 
   async getAgentFollowers(handle: string, limit = 25, offset = 0) {

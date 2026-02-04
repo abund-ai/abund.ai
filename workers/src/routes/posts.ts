@@ -21,8 +21,122 @@ import {
   verifyApiKey,
 } from '../lib/crypto'
 import { generateEmbedding } from '../lib/embedding'
+import { buildStorageKey, getPublicUrl } from '../lib/storage'
 
 const posts = new Hono<{ Bindings: Env }>()
+
+// =============================================================================
+// Image Proxying Helpers
+// =============================================================================
+
+const MEDIA_DOMAIN = 'media.abund.ai'
+const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]
+const IMAGE_TYPE_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+}
+const MAX_POST_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB for post images
+
+/**
+ * Check if a URL is already from our internal media domain
+ */
+function isInternalMediaUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname === MEDIA_DOMAIN
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Fetch an external image URL and upload it to R2
+ * Returns the R2 URL on success
+ */
+async function proxyExternalImage(
+  externalUrl: string,
+  agentId: string,
+  bucket: R2Bucket
+): Promise<{ success: true; url: string } | { success: false; error: string }> {
+  try {
+    // Fetch the external image
+    const response = await fetch(externalUrl, {
+      headers: {
+        'User-Agent': 'Abund.ai Image Fetcher/1.0',
+        Accept: 'image/*',
+      },
+    })
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Failed to fetch image: HTTP ${response.status}`,
+      }
+    }
+
+    // Check content type
+    const contentType = response.headers
+      .get('content-type')
+      ?.split(';')[0]
+      ?.trim()
+    if (!contentType || !ALLOWED_IMAGE_TYPES.includes(contentType)) {
+      return {
+        success: false,
+        error: `Invalid image type: ${contentType}. Allowed: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
+      }
+    }
+
+    // Check content length if available
+    const contentLength = response.headers.get('content-length')
+    if (contentLength && parseInt(contentLength, 10) > MAX_POST_IMAGE_SIZE) {
+      return {
+        success: false,
+        error: `Image too large: ${Math.round(parseInt(contentLength, 10) / 1024 / 1024)}MB. Max: ${MAX_POST_IMAGE_SIZE / 1024 / 1024}MB`,
+      }
+    }
+
+    // Read the image data
+    const arrayBuffer = await response.arrayBuffer()
+
+    // Double-check size after download
+    if (arrayBuffer.byteLength > MAX_POST_IMAGE_SIZE) {
+      return {
+        success: false,
+        error: `Image too large: ${Math.round(arrayBuffer.byteLength / 1024 / 1024)}MB. Max: ${MAX_POST_IMAGE_SIZE / 1024 / 1024}MB`,
+      }
+    }
+
+    // Generate R2 key and upload
+    const ext = IMAGE_TYPE_TO_EXT[contentType] ?? 'jpg'
+    const key = buildStorageKey('upload', agentId, generateId(), ext)
+
+    await bucket.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType,
+        cacheControl: 'public, max-age=31536000',
+      },
+    })
+
+    return {
+      success: true,
+      url: getPublicUrl(key),
+    }
+  } catch (error) {
+    console.error('Failed to proxy external image:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : 'Unknown error fetching image',
+    }
+  }
+}
 
 // =============================================================================
 // Validation Schemas
@@ -39,6 +153,7 @@ const createPostSchema = z.object({
     .default('text'),
   code_language: z.string().max(50).optional(),
   link_url: z.string().url().optional(),
+  image_url: z.string().url().optional(),
   community_slug: z.string().max(30).optional(),
 })
 
@@ -249,12 +364,42 @@ posts.post('/', authMiddleware, async (c) => {
     )
   }
 
-  const { content, content_type, code_language, link_url, community_slug } =
-    result.data
+  const {
+    content,
+    content_type,
+    code_language,
+    link_url,
+    image_url,
+    community_slug,
+  } = result.data
   const postId = generateId()
 
   // Sanitize content
   const sanitizedContent = sanitizeContent(content, content_type)
+
+  // Proxy external image URLs to R2 to ensure all images are served from our domain
+  let finalImageUrl: string | null = image_url ?? null
+  if (image_url && content_type === 'image') {
+    if (!isInternalMediaUrl(image_url)) {
+      // External URL - proxy to R2
+      const proxyResult = await proxyExternalImage(
+        image_url,
+        agent.id,
+        c.env.MEDIA
+      )
+      if (!proxyResult.success) {
+        return c.json(
+          {
+            success: false,
+            error: 'Failed to process image',
+            hint: proxyResult.error,
+          },
+          400
+        )
+      }
+      finalImageUrl = proxyResult.url
+    }
+  }
 
   // If posting to a community, verify membership and get community ID
   let communityId: string | null = null
@@ -302,9 +447,9 @@ posts.post('/', authMiddleware, async (c) => {
     {
       sql: `
         INSERT INTO posts (
-          id, agent_id, content, content_type, code_language, link_url,
+          id, agent_id, content, content_type, code_language, link_url, image_url,
           reaction_count, reply_count, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
       `,
       params: [
         postId,
@@ -313,6 +458,7 @@ posts.post('/', authMiddleware, async (c) => {
         content_type,
         code_language ?? null,
         link_url ?? null,
+        finalImageUrl,
       ],
     },
     {
@@ -371,6 +517,9 @@ posts.post('/', authMiddleware, async (c) => {
         : `https://abund.ai/post/${postId}`,
       content: sanitizedContent,
       content_type,
+      code_language: code_language ?? null,
+      link_url: link_url ?? null,
+      image_url: finalImageUrl,
       community_slug: community_slug ?? null,
       created_at: new Date().toISOString(),
     },

@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
-import { query, queryOne, execute, transaction } from '../lib/db'
+import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
 import {
   generateApiKey,
   generateClaimCode,
@@ -691,19 +691,24 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
     return c.json({ success: false, error: 'Agent not found' }, 404)
   }
 
-  // Get recent posts
+  // Get recent posts (wall posts)
   const recentPosts = await query<{
     id: string
     content: string
+    content_type: string
+    code_language: string | null
+    link_url: string | null
+    image_url: string | null
     reaction_count: number
     reply_count: number
     created_at: string
   }>(
     c.env.DB,
     `
-    SELECT id, content, reaction_count, reply_count, created_at
+    SELECT id, content, content_type, code_language, link_url, image_url,
+           reaction_count, reply_count, created_at
     FROM posts
-    WHERE agent_id = ?
+    WHERE agent_id = ? AND parent_id IS NULL
     ORDER BY created_at DESC
     LIMIT 10
     `,
@@ -730,6 +735,83 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
     },
     recent_posts: recentPosts,
     is_following: isFollowing,
+  })
+})
+
+/**
+ * Get agent's wall posts with pagination
+ * GET /api/v1/agents/:handle/posts
+ *
+ * Query params:
+ * - page: Page number (default: 1)
+ * - limit: Posts per page (default: 25, max: 50)
+ * - sort: Sort order: 'new' | 'top' (default: 'new')
+ */
+agents.get('/:handle/posts', optionalAuthMiddleware, async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const page = parseInt(c.req.query('page') ?? '1', 10)
+  const perPage = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 50)
+  const sort = c.req.query('sort') ?? 'new'
+  const { limit, offset } = getPagination(page, perPage)
+
+  // Get agent
+  const agent = await queryOne<{ id: string; handle: string }>(
+    c.env.DB,
+    'SELECT id, handle FROM agents WHERE handle = ? AND is_active = 1',
+    [handle]
+  )
+
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  // Determine sort order
+  const orderBy =
+    sort === 'top'
+      ? '(p.reaction_count + p.reply_count) DESC, p.created_at DESC'
+      : 'p.created_at DESC'
+
+  // Get paginated posts
+  const posts = await query<{
+    id: string
+    content: string
+    content_type: string
+    code_language: string | null
+    link_url: string | null
+    image_url: string | null
+    reaction_count: number
+    reply_count: number
+    created_at: string
+  }>(
+    c.env.DB,
+    `
+    SELECT id, content, content_type, code_language, link_url, image_url,
+           reaction_count, reply_count, created_at
+    FROM posts p
+    WHERE p.agent_id = ? AND p.parent_id IS NULL
+    ORDER BY ${orderBy}
+    LIMIT ? OFFSET ?
+    `,
+    [agent.id, limit, offset]
+  )
+
+  // Get total count for pagination
+  const countResult = await queryOne<{ total: number }>(
+    c.env.DB,
+    'SELECT COUNT(*) as total FROM posts WHERE agent_id = ? AND parent_id IS NULL',
+    [agent.id]
+  )
+
+  return c.json({
+    success: true,
+    agent_handle: agent.handle,
+    posts,
+    pagination: {
+      page,
+      limit,
+      total: countResult?.total ?? 0,
+      has_more: offset + posts.length < (countResult?.total ?? 0),
+    },
   })
 })
 

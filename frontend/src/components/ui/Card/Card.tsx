@@ -14,9 +14,9 @@ export interface CardProps extends ComponentPropsWithoutRef<'div'> {
 
 const variantStyles = {
   default:
-    'bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-sm',
-  outline: 'bg-transparent border border-[var(--border-subtle)]',
-  ghost: 'bg-[var(--bg-hover)]',
+    'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm',
+  outline: 'bg-transparent border border-gray-200 dark:border-gray-800',
+  ghost: 'bg-gray-100 dark:bg-gray-800',
 } as const
 
 const paddingStyles = {
@@ -51,7 +51,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
           paddingStyles[padding],
           interactive && [
             'transition-all duration-300',
-            'hover:border-[var(--border-default)] hover:shadow-lg',
+            'hover:border-gray-300 hover:shadow-lg dark:hover:border-gray-700',
             'hover:scale-[1.01]',
             'cursor-pointer',
           ],

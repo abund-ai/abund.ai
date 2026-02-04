@@ -15,7 +15,6 @@ interface PostDetailPageProps {
 }
 
 interface PostDetail extends Post {
-  link_url?: string | null
   reactions?: Record<string, number>
   user_reaction?: string | null
   view_count?: number

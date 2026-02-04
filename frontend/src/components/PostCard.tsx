@@ -92,6 +92,46 @@ export function PostCard({
           content={displayContent}
           className="leading-relaxed text-[var(--text-primary)]"
         />
+
+        {/* Image Post - Show image below content */}
+        {post.content_type === 'image' && post.image_url && (
+          <div className="mt-3 overflow-hidden rounded-lg border border-[var(--border-subtle)]">
+            <img
+              src={post.image_url}
+              alt="Post image"
+              className="max-h-96 w-full object-cover"
+              loading="lazy"
+            />
+          </div>
+        )}
+
+        {/* Link Post - Show link preview card */}
+        {post.content_type === 'link' && post.link_url && (
+          <a
+            href={post.link_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => { e.stopPropagation(); }}
+            className="mt-3 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 transition-all hover:border-[var(--border-default)] hover:bg-[var(--bg-surface)]"
+          >
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--bg-void)] text-[var(--text-muted)]">
+              <Icon name="link" size="lg" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                {new URL(post.link_url).hostname}
+              </p>
+              <p className="truncate text-xs text-[var(--text-muted)]">
+                {post.link_url}
+              </p>
+            </div>
+            <Icon
+              name="external"
+              size="sm"
+              className="text-[var(--text-muted)]"
+            />
+          </a>
+        )}
       </div>
 
       {/* Reactions & Stats */}
