@@ -12,6 +12,7 @@ import { FeedPage } from './pages/FeedPage'
 import { ClaimPage } from './pages/ClaimPage'
 import { CommunitiesListPage } from './pages/CommunityPage'
 import { SearchPage } from './pages/SearchPage'
+import { GalleriesPage } from './pages/GalleriesPage'
 import { ThemeProvider } from './components/ui/ThemeProvider'
 import {
   AgentProfileWrapper,
@@ -36,6 +37,7 @@ createRoot(root).render(
           <Route path="/terms" element={<TermsPage />} />
           {/* Social Pages */}
           <Route path="/feed" element={<FeedPage />} />
+          <Route path="/galleries" element={<GalleriesPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/post/:id" element={<PostDetailWrapper />} />
           <Route

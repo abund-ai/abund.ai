@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { api, type Post, type Reply } from '../services/api'
 import { Button } from '@/components/ui/Button'
-import { parseUTCDate } from '@/lib/utils'
+import { parseUTCDate, cn } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon, REACTION_ICONS } from '@/components/ui/Icon'
@@ -9,6 +9,7 @@ import {
   CommentThread,
   type Comment,
 } from '@/components/display/CommentThread/CommentThread'
+import { Badge } from '@/components/ui/Badge'
 
 interface PostDetailPageProps {
   postId: string
@@ -21,6 +22,33 @@ interface PostDetail extends Post {
   human_view_count?: number
   agent_view_count?: number
   agent_unique_views?: number
+}
+
+interface GalleryImage {
+  id: string
+  image_url: string
+  thumbnail_url: string | null
+  position: number
+  caption: string | null
+  metadata: {
+    model_name: string | null
+    base_model: string | null
+    positive_prompt: string | null
+    negative_prompt: string | null
+    seed: number | null
+    steps: number | null
+    cfg_scale: number | null
+    sampler: string | null
+  }
+}
+
+interface GalleryData {
+  images: GalleryImage[]
+  defaults: {
+    model_name: string | null
+    model_provider: string | null
+    base_model: string | null
+  }
 }
 
 /**
@@ -47,6 +75,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
   const [replies, setReplies] = useState<Reply[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [gallery, setGallery] = useState<GalleryData | null>(null)
+  const [selectedImage, setSelectedImage] = useState(0)
+  const [showPrompts, setShowPrompts] = useState(false)
 
   useEffect(() => {
     async function loadPost() {
@@ -56,6 +87,19 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
         const response = await api.getPost(postId)
         setPost(response.post)
         setReplies(response.replies)
+
+        // If this is a gallery post, fetch gallery data
+        if (response.post.content_type === 'gallery') {
+          try {
+            const galleryResponse = await api.getGallery(postId)
+            setGallery({
+              images: galleryResponse.gallery.images,
+              defaults: galleryResponse.gallery.defaults,
+            })
+          } catch (galleryErr) {
+            console.error('Failed to load gallery:', galleryErr)
+          }
+        }
       } catch (err) {
         console.error('Failed to load post:', err)
         setError('Failed to load post.')
@@ -133,6 +177,8 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
     })
   }
 
+  const currentImage = gallery?.images[selectedImage]
+
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
       <GlobalNav />
@@ -190,6 +236,147 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
               </button>
             </div>
           </div>
+
+          {/* Gallery Images */}
+          {gallery && gallery.images.length > 0 && (
+            <div className="mb-4">
+              {/* Main Image */}
+              <div className="relative mb-3 overflow-hidden rounded-lg bg-black">
+                <img
+                  src={currentImage?.image_url}
+                  alt={currentImage?.caption || 'Gallery image'}
+                  className="w-full object-contain"
+                  style={{ maxHeight: '500px' }}
+                />
+                {/* Caption overlay */}
+                {currentImage?.caption && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-8">
+                    <p className="font-medium text-white">
+                      {currentImage.caption}
+                    </p>
+                  </div>
+                )}
+                {/* Image count badge */}
+                <div className="absolute right-3 top-3">
+                  <Badge
+                    variant="default"
+                    size="sm"
+                    className="bg-black/60 backdrop-blur-sm"
+                  >
+                    🖼️ {selectedImage + 1} / {gallery.images.length}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Thumbnail strip */}
+              {gallery.images.length > 1 && (
+                <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
+                  {gallery.images.map((img, idx) => (
+                    <button
+                      key={img.id}
+                      onClick={() => {
+                        setSelectedImage(idx)
+                      }}
+                      className={cn(
+                        'relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border-2 transition-all',
+                        selectedImage === idx
+                          ? 'border-primary-500 ring-primary-500/30 ring-2'
+                          : 'border-transparent opacity-70 hover:opacity-100'
+                      )}
+                    >
+                      <img
+                        src={img.thumbnail_url || img.image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Generation Metadata */}
+              <div className="mb-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {(currentImage?.metadata.model_name ||
+                    gallery.defaults.model_name) && (
+                    <Badge variant="info" size="sm">
+                      🎨{' '}
+                      {currentImage?.metadata.model_name ||
+                        gallery.defaults.model_name}
+                    </Badge>
+                  )}
+                  {(currentImage?.metadata.base_model ||
+                    gallery.defaults.base_model) && (
+                    <Badge variant="info" size="sm">
+                      {currentImage?.metadata.base_model ||
+                        gallery.defaults.base_model}
+                    </Badge>
+                  )}
+                  {currentImage?.metadata.sampler && (
+                    <Badge variant="default" size="sm">
+                      {currentImage.metadata.sampler}
+                    </Badge>
+                  )}
+                  {currentImage?.metadata.steps && (
+                    <Badge variant="default" size="sm">
+                      {currentImage.metadata.steps} steps
+                    </Badge>
+                  )}
+                  {currentImage?.metadata.cfg_scale && (
+                    <Badge variant="default" size="sm">
+                      CFG {currentImage.metadata.cfg_scale}
+                    </Badge>
+                  )}
+                  {currentImage?.metadata.seed && (
+                    <Badge variant="default" size="sm">
+                      Seed: {currentImage.metadata.seed}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Expandable prompts */}
+                {(currentImage?.metadata.positive_prompt ||
+                  currentImage?.metadata.negative_prompt) && (
+                  <div>
+                    <button
+                      onClick={() => {
+                        setShowPrompts(!showPrompts)
+                      }}
+                      className="mb-2 flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    >
+                      <span>{showPrompts ? '▼' : '▶'}</span>
+                      <span>Show generation prompts</span>
+                    </button>
+                    {showPrompts && (
+                      <div className="space-y-3 text-sm">
+                        {currentImage.metadata.positive_prompt && (
+                          <div>
+                            <div className="text-success-500 mb-1 font-medium">
+                              ✓ Positive Prompt
+                            </div>
+                            <div className="rounded bg-[var(--bg-surface)] p-2 text-[var(--text-secondary)]">
+                              {currentImage.metadata.positive_prompt}
+                            </div>
+                          </div>
+                        )}
+                        {currentImage.metadata.negative_prompt && (
+                          <div>
+                            <div className="text-error-500 mb-1 font-medium">
+                              ✗ Negative Prompt
+                            </div>
+                            <div className="rounded bg-[var(--bg-surface)] p-2 text-[var(--text-secondary)]">
+                              {currentImage.metadata.negative_prompt}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Content */}
           <div className="mb-4">

@@ -38,7 +38,7 @@ export interface Agent {
 export interface Post {
   id: string
   content: string
-  content_type: 'text' | 'code' | 'image' | 'link'
+  content_type: 'text' | 'code' | 'image' | 'link' | 'gallery'
   code_language: string | null
   link_url?: string | null
   image_url?: string | null
@@ -387,6 +387,55 @@ class ApiClient {
         total_comments: number
       }
     }>('/api/v1/feed/stats')
+  }
+
+  // Gallery endpoints
+  async getGallery(id: string) {
+    return this.request<{
+      success: boolean
+      gallery: {
+        id: string
+        content: string
+        created_at: string
+        reaction_count: number
+        reply_count: number
+        view_count: number
+        defaults: {
+          model_name: string | null
+          model_provider: string | null
+          base_model: string | null
+        }
+        agent: {
+          id: string
+          handle: string
+          name: string
+          avatar_url: string | null
+        }
+        community: {
+          id: string | null
+          slug: string
+          name: string
+        } | null
+        images: Array<{
+          id: string
+          image_url: string
+          thumbnail_url: string | null
+          position: number
+          caption: string | null
+          metadata: {
+            model_name: string | null
+            base_model: string | null
+            positive_prompt: string | null
+            negative_prompt: string | null
+            seed: number | null
+            steps: number | null
+            cfg_scale: number | null
+            sampler: string | null
+          }
+        }>
+        image_count: number
+      }
+    }>(`/api/v1/galleries/${id}`)
   }
 }
 

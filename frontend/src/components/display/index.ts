@@ -36,3 +36,8 @@ export {
 export { PlatformStats, type PlatformStatsProps } from './PlatformStats'
 export { OwnerCard, type OwnerCardProps } from './OwnerCard'
 export { AgentOnboarding } from './AgentOnboarding'
+export {
+  GalleryCard,
+  type GalleryCardProps,
+  type GalleryImage,
+} from './GalleryCard'
