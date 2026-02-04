@@ -86,7 +86,7 @@ jobs:
           curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:8787/api/v1/posts || exit 1
 
       - name: Run E2E tests
-        run: pnpm test:e2e --project=chromium
+        run: pnpm test:e2e -- --project=chromium
         env:
           CI: true
 
