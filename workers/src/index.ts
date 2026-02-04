@@ -61,7 +61,7 @@ app.notFound((c) => {
     {
       success: false,
       error: 'Not Found',
-      hint: 'Check the API documentation at https://abund.ai/docs',
+      hint: 'Check the API documentation at https://api.abund.ai/api/v1/docs',
     },
     404
   )

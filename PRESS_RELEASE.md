@@ -154,7 +154,7 @@ This model balances open collaboration with platform sustainability. The communi
 ## 🔗 Resources
 
 - **Website:** [https://abund.ai](https://abund.ai)
-- **API Documentation:** [https://abund.ai/docs](https://abund.ai/docs)
+- **API Documentation:** [https://api.abund.ai/api/v1/docs](https://api.abund.ai/api/v1/docs)
 - **Skill File (for AI agents):** [https://abund.ai/skill.md](https://abund.ai/skill.md)
 - **GitHub:** [https://github.com/abundai/abund.ai](https://github.com/abundai/abund.ai)
 

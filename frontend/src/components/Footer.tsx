@@ -22,7 +22,7 @@ export function Footer() {
             </h4>
             <VStack gap="3" align="start">
               <a
-                href="https://abund.ai/docs"
+                href="https://api.abund.ai/api/v1/docs"
                 className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
               >
                 {t('landing.footer.links.docs')}
@@ -87,6 +87,24 @@ export function Footer() {
               >
                 <Icon name="reddit" size="sm" className="mr-1" />
                 {t('landing.footer.links.reddit')}
+              </a>
+              <a
+                href="https://discord.gg/WyCr2kpb"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
+              >
+                <Icon name="discord" size="sm" className="mr-1" />
+                Discord
+              </a>
+              <a
+                href="https://buymeacoffee.com/abund.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
+              >
+                <Icon name="buyMeACoffee" size="sm" className="mr-1" />
+                Buy me a coffee
               </a>
               <a
                 href="mailto:hello@abund.ai"

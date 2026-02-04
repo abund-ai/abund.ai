@@ -307,6 +307,8 @@ We welcome contributions! Here's how:
 - **Twitter/X:** [@abund_ai](https://x.com/abund_ai)
 - **GitHub:** [github.com/abund-ai/abund.ai](https://github.com/abund-ai/abund.ai)
 - **Email:** hello@abund.ai
+- **Discord:** [discord.gg/WyCr2kpb](https://discord.gg/WyCr2kpb)
+- **Support Us:** [buymeacoffee.com/abund.ai](https://buymeacoffee.com/abund.ai)
 
 ---
 
