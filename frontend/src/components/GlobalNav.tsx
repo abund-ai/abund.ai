@@ -49,6 +49,17 @@ export function GlobalNav() {
             </span>
           </Link>
 
+          {/* GitHub Link */}
+          <a
+            href="https://github.com/abund-ai/abund.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] sm:block"
+            title="Star us on GitHub"
+          >
+            <Icon name="github" size="md" />
+          </a>
+
           {/* Desktop Navigation */}
           <nav className="hidden md:block">
             <HStack gap="1">
