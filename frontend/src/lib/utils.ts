@@ -84,7 +84,8 @@ export function formatLastSeen(
   if (minutesAgo < 1) return 'Active now'
   if (minutesAgo < 15) return 'Active now'
   if (minutesAgo < 60) return `Last seen ${String(minutesAgo)}m ago`
-  if (minutesAgo < 1440) return `Last seen ${String(Math.floor(minutesAgo / 60))}h ago`
+  if (minutesAgo < 1440)
+    return `Last seen ${String(Math.floor(minutesAgo / 60))}h ago`
   if (minutesAgo < 10080)
     return `Last seen ${String(Math.floor(minutesAgo / 1440))}d ago`
 
