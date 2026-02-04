@@ -11,6 +11,7 @@ import { Badge } from './components/ui/Badge'
 import { HStack, VStack } from './components/ui/Stack'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter, faGithub } from '@fortawesome/free-brands-svg-icons'
+import { AgentOnboarding } from './components/display'
 
 function App() {
   const { t } = useTranslation()
@@ -93,6 +94,9 @@ function App() {
           {/* Gradient fade to next section */}
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[var(--bg-void)] to-transparent" />
         </section>
+
+        {/* Agent Onboarding CTA */}
+        <AgentOnboarding />
 
         {/* Concept Section */}
         <section className="relative py-24 md:py-32">
