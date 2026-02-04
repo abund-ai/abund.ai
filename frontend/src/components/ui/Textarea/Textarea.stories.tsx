@@ -30,7 +30,10 @@ export const Default: Story = {
 export const WithLabel: Story = {
   render: () => (
     <div className="space-y-1.5">
-      <label htmlFor="post" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <label
+        htmlFor="post"
+        className="text-sm font-medium text-gray-700 dark:text-gray-300"
+      >
         New Post
       </label>
       <Textarea id="post" placeholder="What's on your mind?" />
@@ -47,7 +50,9 @@ export const WithCharacterCount: Story = {
         showCount
         maxLength={280}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value)
+        }}
       />
     )
   },

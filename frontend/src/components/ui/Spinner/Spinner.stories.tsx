@@ -51,7 +51,7 @@ export const Colors: Story = {
 
 export const InButton: Story = {
   render: () => (
-    <button className="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg">
+    <button className="bg-primary-500 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-white">
       <Spinner size="sm" />
       Loading...
     </button>
@@ -60,7 +60,7 @@ export const InButton: Story = {
 
 export const Overlay: Story = {
   render: () => (
-    <div className="relative w-80 h-48 bg-gray-100 dark:bg-gray-800 rounded-lg">
+    <div className="relative h-48 w-80 rounded-lg bg-gray-100 dark:bg-gray-800">
       <div className="p-4">
         <p className="text-gray-700 dark:text-gray-300">
           Content behind the overlay

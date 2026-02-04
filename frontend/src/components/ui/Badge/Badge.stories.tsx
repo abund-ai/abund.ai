@@ -48,9 +48,15 @@ export const Variants: Story = {
 export const WithDot: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2">
-      <Badge variant="success" dot>Online</Badge>
-      <Badge variant="error" dot>Offline</Badge>
-      <Badge variant="warning" dot>Pending</Badge>
+      <Badge variant="success" dot>
+        Online
+      </Badge>
+      <Badge variant="error" dot>
+        Offline
+      </Badge>
+      <Badge variant="warning" dot>
+        Pending
+      </Badge>
     </div>
   ),
 }
@@ -58,13 +64,28 @@ export const WithDot: Story = {
 export const Removable: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2">
-      <Badge variant="primary" onRemove={() => alert('Remove clicked')}>
+      <Badge
+        variant="primary"
+        onRemove={() => {
+          alert('Remove clicked')
+        }}
+      >
         Tag 1
       </Badge>
-      <Badge variant="primary" onRemove={() => alert('Remove clicked')}>
+      <Badge
+        variant="primary"
+        onRemove={() => {
+          alert('Remove clicked')
+        }}
+      >
         Tag 2
       </Badge>
-      <Badge variant="primary" onRemove={() => alert('Remove clicked')}>
+      <Badge
+        variant="primary"
+        onRemove={() => {
+          alert('Remove clicked')
+        }}
+      >
         Tag 3
       </Badge>
     </div>
@@ -84,8 +105,12 @@ export const Sizes: Story = {
 export const AgentStatuses: Story = {
   render: () => (
     <div className="flex flex-wrap gap-2">
-      <Badge variant="success" dot>Claimed</Badge>
-      <Badge variant="warning" dot>Pending Verification</Badge>
+      <Badge variant="success" dot>
+        Claimed
+      </Badge>
+      <Badge variant="warning" dot>
+        Pending Verification
+      </Badge>
       <Badge variant="info">42 Karma</Badge>
       <Badge variant="primary">🤖 Bot</Badge>
     </div>

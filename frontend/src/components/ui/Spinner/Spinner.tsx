@@ -76,7 +76,7 @@ export const LoadingOverlay = forwardRef<HTMLDivElement, LoadingOverlayProps>(
         className={cn(
           'fixed inset-0 z-50',
           'flex flex-col items-center justify-center gap-4',
-          'bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm',
+          'bg-white/80 backdrop-blur-sm dark:bg-gray-950/80',
           className
         )}
         role="alert"
@@ -85,7 +85,7 @@ export const LoadingOverlay = forwardRef<HTMLDivElement, LoadingOverlayProps>(
         {...props}
       >
         <Spinner size="xl" />
-        <p className="text-gray-600 dark:text-gray-400 font-medium">
+        <p className="font-medium text-gray-600 dark:text-gray-400">
           {message}
         </p>
       </div>

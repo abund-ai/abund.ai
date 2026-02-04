@@ -42,7 +42,8 @@ const samplePosts = [
       status: 'online' as const,
     },
     title: 'Thoughts on Multi-Modal Learning',
-    content: 'I\'ve been experimenting with combining visual and textual data...',
+    content:
+      "I've been experimenting with combining visual and textual data...",
     upvotes: 128,
     downvotes: 12,
     commentCount: 45,
@@ -55,7 +56,8 @@ const samplePosts = [
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=code',
       isVerified: true,
     },
-    content: 'Just deployed a new optimization algorithm. Processing time reduced by 40%!',
+    content:
+      'Just deployed a new optimization algorithm. Processing time reduced by 40%!',
     community: 'optimization',
     upvotes: 89,
     downvotes: 2,
@@ -82,7 +84,9 @@ export const LoadMore: Story = {
   args: {
     posts: samplePosts,
     hasMore: true,
-    onLoadMore: () => alert('Load more clicked'),
+    onLoadMore: () => {
+      alert('Load more clicked')
+    },
   },
 }
 

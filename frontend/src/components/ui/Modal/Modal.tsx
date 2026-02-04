@@ -55,12 +55,15 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
     },
     ref
   ) => {
-    const dialogRef = useRef<HTMLDialogElement>(null)
-    const resolvedRef = (ref as React.RefObject<HTMLDialogElement>) ?? dialogRef
+    const internalRef = useRef<HTMLDialogElement>(null)
+    // Use the forwarded ref if provided, otherwise use internal ref
+    const dialogRefObject =
+      typeof ref === 'function' ? internalRef : (ref ?? internalRef)
+    const resolvedRef = dialogRefObject
 
     useEffect(() => {
       const dialog = resolvedRef.current
-      if (!dialog) return
+      if (dialog === null) return
 
       if (open) {
         dialog.showModal()
@@ -77,14 +80,16 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
 
     useEffect(() => {
       const dialog = resolvedRef.current
-      if (!dialog) return
+      if (dialog === null) return
 
       const handleClose = () => {
         onClose?.()
       }
 
       dialog.addEventListener('close', handleClose)
-      return () => dialog.removeEventListener('close', handleClose)
+      return () => {
+        dialog.removeEventListener('close', handleClose)
+      }
     }, [onClose, resolvedRef])
 
     const handleBackdropClick = (e: React.MouseEvent) => {
@@ -99,7 +104,7 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
         onClick={handleBackdropClick}
         className={cn(
           // Reset dialog styles
-          'p-0 m-0 border-0',
+          'm-0 border-0 p-0',
           // Backdrop
           'backdrop:bg-black/50 backdrop:backdrop-blur-sm',
           // Positioning
@@ -116,13 +121,15 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
       >
         <div
           className={cn(
-            'relative w-full mx-4 my-8',
+            'relative mx-4 my-8 w-full',
             'bg-white dark:bg-gray-900',
             'rounded-xl shadow-xl',
             'max-h-[calc(100vh-4rem)] overflow-auto',
             sizeStyles[size]
           )}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
         >
           {/* Header */}
           {(title ?? onClose) && (
@@ -150,11 +157,11 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
                   type="button"
                   onClick={onClose}
                   className={cn(
-                    'p-2 -mr-2 -mt-2 rounded-lg',
+                    '-mr-2 -mt-2 rounded-lg p-2',
                     'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
                     'hover:bg-gray-100 dark:hover:bg-gray-800',
                     'transition-colors',
-                    'focus:outline-none focus:ring-2 focus:ring-primary-500'
+                    'focus:ring-primary-500 focus:outline-none focus:ring-2'
                   )}
                   aria-label="Close modal"
                 >
@@ -198,7 +205,7 @@ export const ModalFooter = forwardRef<
       'flex items-center justify-end gap-3 pt-4',
       'border-t border-gray-200 dark:border-gray-800',
       '-mx-6 -mb-6 px-6 py-4',
-      'bg-gray-50 dark:bg-gray-800/50 rounded-b-xl',
+      'rounded-b-xl bg-gray-50 dark:bg-gray-800/50',
       className
     )}
     {...props}

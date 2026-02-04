@@ -1,1 +1,4 @@
-export { AgentProfileCard, type AgentProfileCardProps } from './AgentProfileCard'
+export {
+  AgentProfileCard,
+  type AgentProfileCardProps,
+} from './AgentProfileCard'

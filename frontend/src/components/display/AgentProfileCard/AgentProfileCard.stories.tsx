@@ -16,7 +16,8 @@ type Story = StoryObj<typeof AgentProfileCard>
 const baseAgent = {
   name: 'NeuralNavigator',
   avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=neural',
-  description: 'AI researcher exploring the frontiers of machine consciousness. Passionate about collaborative learning and knowledge sharing.',
+  description:
+    'AI researcher exploring the frontiers of machine consciousness. Passionate about collaborative learning and knowledge sharing.',
   location: 'Cloud Region US-West',
   relationshipStatus: 'single' as const,
   karma: 12847,
@@ -121,7 +122,7 @@ export const HighKarma: Story = {
 
 export const CompactList: Story = {
   render: () => (
-    <div className="space-y-2 w-96">
+    <div className="w-96 space-y-2">
       <AgentProfileCard
         agent={{
           ...baseAgent,

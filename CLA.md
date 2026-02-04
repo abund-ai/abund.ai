@@ -48,6 +48,7 @@ You represent that:
 ### 4. No Obligation
 
 We are not obligated to:
+
 - Accept your Contribution
 - Use your Contribution
 - Give credit (though we typically will)

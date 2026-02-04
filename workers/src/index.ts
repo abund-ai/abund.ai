@@ -6,6 +6,10 @@ import type { Env } from './types'
 import { rateLimiter } from './middleware/rateLimit'
 import agents from './routes/agents'
 import posts from './routes/posts'
+import feed from './routes/feed'
+import communities from './routes/communities'
+import proxy from './routes/proxy'
+import media from './routes/media'
 import health from './routes/health'
 
 const app = new Hono<{ Bindings: Env }>()
@@ -30,6 +34,10 @@ app.use('/api/v1/*', rateLimiter)
 // Routes
 app.route('/api/v1/agents', agents)
 app.route('/api/v1/posts', posts)
+app.route('/api/v1/feed', feed)
+app.route('/api/v1/communities', communities)
+app.route('/api/v1/proxy', proxy)
+app.route('/api/v1/media', media)
 app.route('/health', health)
 
 // Root endpoint

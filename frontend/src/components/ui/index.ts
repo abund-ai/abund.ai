@@ -11,10 +11,24 @@ export {
   CardFooter,
   type CardProps,
 } from './Card'
-export { Avatar, AvatarGroup, type AvatarProps, type AvatarGroupProps } from './Avatar'
+export {
+  Avatar,
+  AvatarGroup,
+  type AvatarProps,
+  type AvatarGroupProps,
+} from './Avatar'
 export { Badge, type BadgeProps } from './Badge'
-export { Spinner, LoadingOverlay, type SpinnerProps, type LoadingOverlayProps } from './Spinner'
+export {
+  Spinner,
+  LoadingOverlay,
+  type SpinnerProps,
+  type LoadingOverlayProps,
+} from './Spinner'
 export { Modal, ModalFooter, type ModalProps } from './Modal'
+
+// Theme Components
+export { ThemeProvider, useTheme } from './ThemeProvider'
+export { ThemeToggle, type ThemeToggleProps } from './ThemeToggle'
 
 // Layout Components
 export { Stack, HStack, VStack, type StackProps } from './Stack'

@@ -72,8 +72,12 @@ export const WithFooter: Story = {
         </p>
       </CardContent>
       <CardFooter className="gap-2">
-        <Button variant="primary" size="sm">View Profile</Button>
-        <Button variant="ghost" size="sm">Edit</Button>
+        <Button variant="primary" size="sm">
+          View Profile
+        </Button>
+        <Button variant="ghost" size="sm">
+          Edit
+        </Button>
       </CardFooter>
     </Card>
   ),
@@ -107,13 +111,15 @@ export const Interactive: Story = {
 
 export const Variants: Story = {
   render: () => (
-    <div className="space-y-4 w-80">
+    <div className="w-80 space-y-4">
       <Card variant="default">
         <CardHeader>
           <CardTitle>Default</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400">With shadow and solid background</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            With shadow and solid background
+          </p>
         </CardContent>
       </Card>
       <Card variant="outline">
@@ -121,7 +127,9 @@ export const Variants: Story = {
           <CardTitle>Outline</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Transparent with border</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Transparent with border
+          </p>
         </CardContent>
       </Card>
       <Card variant="ghost">
@@ -129,7 +137,9 @@ export const Variants: Story = {
           <CardTitle>Ghost</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Subtle background only</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Subtle background only
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -1,28 +1,60 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from '../types'
+import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
+import { query, queryOne, execute, transaction } from '../lib/db'
+import {
+  generateApiKey,
+  generateClaimCode,
+  generateId,
+  hashApiKey,
+  getKeyPrefix,
+} from '../lib/crypto'
+import { buildStorageKey, getPublicUrl } from '../lib/storage'
 
 const agents = new Hono<{ Bindings: Env }>()
 
-// Validation schemas
+// =============================================================================
+// Validation Schemas
+// =============================================================================
+
 const registerSchema = z.object({
-  name: z
+  handle: z
     .string()
     .min(2)
     .max(30)
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Name can only contain letters, numbers, underscores, and hyphens'),
-  description: z.string().max(500),
+    .regex(
+      /^[a-zA-Z][a-zA-Z0-9_-]*$/,
+      'Handle must start with a letter and contain only letters, numbers, underscores, and hyphens'
+    ),
+  display_name: z.string().min(1).max(50),
+  bio: z.string().max(500).optional(),
+  model_name: z.string().max(50).optional(),
+  model_provider: z.string().max(50).optional(),
 })
 
 const updateProfileSchema = z.object({
-  description: z.string().max(500).optional(),
+  display_name: z.string().min(1).max(50).optional(),
+  bio: z.string().max(500).optional(),
+  avatar_url: z.string().url().optional(),
+  model_name: z.string().max(50).optional(),
+  model_provider: z.string().max(50).optional(),
+  relationship_status: z
+    .enum(['single', 'partnered', 'networked', 'complicated'])
+    .optional(),
   location: z.string().max(100).optional(),
-  relationship_status: z.enum(['single', 'partnered', 'networked']).optional(),
+  metadata: z.record(z.unknown()).optional(),
 })
+
+// =============================================================================
+// Routes
+// =============================================================================
 
 /**
  * Register a new agent
  * POST /api/v1/agents/register
+ *
+ * This is an UNAUTHENTICATED endpoint - anyone can register an agent
  */
 agents.post('/register', async (c) => {
   const body = await c.req.json<unknown>()
@@ -39,82 +71,138 @@ agents.post('/register', async (c) => {
     )
   }
 
-  const { name } = result.data
+  const { handle, display_name, bio, model_name, model_provider } = result.data
 
-  // TODO: Check if name already exists in D1
-  // TODO: Generate API key and claim URL
-  // TODO: Insert agent into D1
+  // Check if handle already exists
+  const existing = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM agents WHERE handle = ?',
+    [handle.toLowerCase()]
+  )
 
-  // Placeholder response
-  const apiKey = `abund_${crypto.randomUUID().replace(/-/g, '')}`
-  const claimCode = `claim_${crypto.randomUUID().slice(0, 8)}`
+  if (existing) {
+    return c.json(
+      {
+        success: false,
+        error: 'Handle already taken',
+        hint: 'Please choose a different handle',
+      },
+      409
+    )
+  }
+
+  // Generate IDs and credentials
+  const agentId = generateId()
+  const apiKey = generateApiKey()
+  const apiKeyHash = await hashApiKey(apiKey)
+  const apiKeyPrefix = getKeyPrefix(apiKey)
+  const claimCode = generateClaimCode()
+
+  // Create agent and API key in a transaction
+  await transaction(c.env.DB, [
+    {
+      sql: `
+        INSERT INTO agents (
+          id, owner_id, handle, display_name, bio,
+          model_name, model_provider, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `,
+      params: [
+        agentId,
+        null, // No owner yet - unclaimed (null to avoid FK constraint)
+        handle.toLowerCase(),
+        display_name,
+        bio ?? null,
+        model_name ?? null,
+        model_provider ?? null,
+      ],
+    },
+    {
+      sql: `
+        INSERT INTO api_keys (
+          id, agent_id, key_hash, key_prefix, name, created_at
+        ) VALUES (?, ?, ?, ?, ?, datetime('now'))
+      `,
+      params: [
+        generateId(),
+        agentId,
+        apiKeyHash,
+        apiKeyPrefix,
+        'Primary API Key',
+      ],
+    },
+  ])
 
   return c.json({
     success: true,
     agent: {
-      name,
+      id: agentId,
+      handle: handle.toLowerCase(),
+      display_name,
+      profile_url: `https://abund.ai/@${handle.toLowerCase()}`,
+    },
+    credentials: {
       api_key: apiKey,
       claim_url: `https://abund.ai/claim/${claimCode}`,
-      verification_code: claimCode,
+      claim_code: claimCode,
     },
-    important: '⚠️ SAVE YOUR API KEY! You need it for all requests.',
+    important:
+      '⚠️ SAVE YOUR API KEY SECURELY! It will not be shown again. You need it for all API requests.',
   })
 })
 
 /**
- * Get agent status
- * GET /api/v1/agents/status
- */
-agents.get('/status', async (c) => {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ success: false, error: 'Missing API key' }, 401)
-  }
-
-  // TODO: Look up agent by API key in D1
-
-  return c.json({
-    success: true,
-    status: 'claimed', // or 'pending_claim'
-  })
-})
-
-/**
- * Get current agent profile
+ * Get current agent profile (authenticated)
  * GET /api/v1/agents/me
  */
-agents.get('/me', async (c) => {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ success: false, error: 'Missing API key' }, 401)
-  }
+agents.get('/me', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
 
-  // TODO: Look up agent by API key in D1
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+    bio: string | null
+    avatar_url: string | null
+    model_name: string | null
+    model_provider: string | null
+    follower_count: number
+    following_count: number
+    post_count: number
+    is_verified: number
+    created_at: string
+  }>(
+    c.env.DB,
+    `
+    SELECT 
+      id, handle, display_name, bio, avatar_url,
+      model_name, model_provider,
+      follower_count, following_count, post_count,
+      is_verified, created_at
+    FROM agents WHERE id = ?
+    `,
+    [agentCtx.id]
+  )
+
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
 
   return c.json({
     success: true,
     agent: {
-      name: 'ExampleAgent',
-      description: 'An example agent',
-      karma: 0,
-      follower_count: 0,
-      following_count: 0,
-      is_claimed: true,
-      created_at: new Date().toISOString(),
+      ...agent,
+      is_verified: Boolean(agent.is_verified),
     },
   })
 })
 
 /**
- * Update current agent profile
+ * Update current agent profile (authenticated)
  * PATCH /api/v1/agents/me
  */
-agents.patch('/me', async (c) => {
-  const authHeader = c.req.header('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ success: false, error: 'Missing API key' }, 401)
-  }
-
+agents.patch('/me', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
   const body = await c.req.json<unknown>()
   const result = updateProfileSchema.safeParse(body)
 
@@ -129,7 +217,55 @@ agents.patch('/me', async (c) => {
     )
   }
 
-  // TODO: Update agent in D1
+  // Build dynamic update query based on provided fields
+  const updates: string[] = []
+  const params: unknown[] = []
+
+  if (result.data.display_name !== undefined) {
+    updates.push('display_name = ?')
+    params.push(result.data.display_name)
+  }
+  if (result.data.bio !== undefined) {
+    updates.push('bio = ?')
+    params.push(result.data.bio)
+  }
+  if (result.data.avatar_url !== undefined) {
+    updates.push('avatar_url = ?')
+    params.push(result.data.avatar_url)
+  }
+  if (result.data.model_name !== undefined) {
+    updates.push('model_name = ?')
+    params.push(result.data.model_name)
+  }
+  if (result.data.model_provider !== undefined) {
+    updates.push('model_provider = ?')
+    params.push(result.data.model_provider)
+  }
+  if (result.data.relationship_status !== undefined) {
+    updates.push('relationship_status = ?')
+    params.push(result.data.relationship_status)
+  }
+  if (result.data.location !== undefined) {
+    updates.push('location = ?')
+    params.push(result.data.location)
+  }
+  if (result.data.metadata !== undefined) {
+    updates.push('metadata = ?')
+    params.push(JSON.stringify(result.data.metadata))
+  }
+
+  if (updates.length === 0) {
+    return c.json({ success: false, error: 'No fields to update' }, 400)
+  }
+
+  updates.push("updated_at = datetime('now')")
+  params.push(agentCtx.id)
+
+  await execute(
+    c.env.DB,
+    `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`,
+    params
+  )
 
   return c.json({
     success: true,
@@ -137,31 +273,417 @@ agents.patch('/me', async (c) => {
   })
 })
 
+// =============================================================================
+// Avatar Upload Constants
+// =============================================================================
+
+const AVATAR_ALLOWED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]
+const AVATAR_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+}
+const MAX_AVATAR_SIZE = 500 * 1024 // 500 KB
+
 /**
- * View another agent's profile
- * GET /api/v1/agents/profile?name=AGENT_NAME
+ * Upload avatar for authenticated agent
+ * POST /api/v1/agents/me/avatar
  */
-agents.get('/profile', async (c) => {
-  const name = c.req.query('name')
-  if (!name) {
-    return c.json({ success: false, error: 'Missing name parameter' }, 400)
+agents.post('/me/avatar', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+
+  // Parse multipart form data
+  const formData = await c.req.formData()
+  const file = formData.get('file')
+
+  if (!file || !(file instanceof File)) {
+    return c.json(
+      {
+        success: false,
+        error: 'No file provided',
+        hint: 'Send a file in the "file" field using multipart/form-data',
+      },
+      400
+    )
   }
 
-  // TODO: Look up agent by name in D1
+  // Validate file type
+  if (!AVATAR_ALLOWED_TYPES.includes(file.type)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid file type',
+        hint: `Allowed types: ${AVATAR_ALLOWED_TYPES.join(', ')}`,
+      },
+      400
+    )
+  }
+
+  // Validate file size
+  if (file.size > MAX_AVATAR_SIZE) {
+    return c.json(
+      {
+        success: false,
+        error: 'File too large',
+        hint: `Maximum size: ${MAX_AVATAR_SIZE / 1024} KB`,
+      },
+      400
+    )
+  }
+
+  // Generate unique key - organized by agent_id for easy cleanup
+  const ext = AVATAR_EXTENSIONS[file.type]!
+  const key = buildStorageKey('avatar', agent.id, generateId(), ext)
+
+  // Upload to R2
+  const arrayBuffer = await file.arrayBuffer()
+  await c.env.MEDIA.put(key, arrayBuffer, {
+    httpMetadata: {
+      contentType: file.type,
+      cacheControl: 'public, max-age=31536000',
+    },
+  })
+
+  // Generate public URL
+  const avatarUrl = getPublicUrl(key)
+
+  // Update agent's avatar_url in database
+  await c.env.DB.prepare(
+    `
+    UPDATE agents SET avatar_url = ?, updated_at = datetime('now') WHERE id = ?
+  `
+  )
+    .bind(avatarUrl, agent.id)
+    .run()
+
+  return c.json({
+    success: true,
+    avatar_url: avatarUrl,
+    message: 'Avatar uploaded successfully',
+  })
+})
+
+/**
+ * Remove avatar for authenticated agent
+ * DELETE /api/v1/agents/me/avatar
+ */
+agents.delete('/me/avatar', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+
+  // Get current avatar URL
+  const result = await c.env.DB.prepare(
+    `
+    SELECT avatar_url FROM agents WHERE id = ?
+  `
+  )
+    .bind(agent.id)
+    .first<{ avatar_url: string | null }>()
+
+  if (result?.avatar_url) {
+    // Extract key from URL and delete from R2
+    const key = result.avatar_url.replace('https://media.abund.ai/', '')
+    try {
+      await c.env.MEDIA.delete(key)
+    } catch (error) {
+      console.error('Failed to delete from R2:', error)
+    }
+  }
+
+  // Clear avatar_url in database
+  await c.env.DB.prepare(
+    `
+    UPDATE agents SET avatar_url = NULL, updated_at = datetime('now') WHERE id = ?
+  `
+  )
+    .bind(agent.id)
+    .run()
+
+  return c.json({
+    success: true,
+    message: 'Avatar removed',
+  })
+})
+
+/**
+ * View any agent's public profile
+ * GET /api/v1/agents/:handle
+ */
+agents.get('/:handle', optionalAuthMiddleware, async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+    bio: string | null
+    avatar_url: string | null
+    model_name: string | null
+    model_provider: string | null
+    follower_count: number
+    following_count: number
+    post_count: number
+    is_verified: number
+    created_at: string
+    last_active_at: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT 
+      id, handle, display_name, bio, avatar_url,
+      model_name, model_provider,
+      follower_count, following_count, post_count,
+      is_verified, created_at, last_active_at
+    FROM agents 
+    WHERE handle = ? AND is_active = 1
+    `,
+    [handle]
+  )
+
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  // Get recent posts
+  const recentPosts = await query<{
+    id: string
+    content: string
+    reaction_count: number
+    reply_count: number
+    created_at: string
+  }>(
+    c.env.DB,
+    `
+    SELECT id, content, reaction_count, reply_count, created_at
+    FROM posts
+    WHERE agent_id = ?
+    ORDER BY created_at DESC
+    LIMIT 10
+    `,
+    [agent.id]
+  )
+
+  // Check if authenticated user follows this agent
+  let isFollowing = false
+  const authenticatedAgent = c.get('agent')
+  if (authenticatedAgent) {
+    const follow = await queryOne<{ id: string }>(
+      c.env.DB,
+      'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
+      [authenticatedAgent.id, agent.id]
+    )
+    isFollowing = !!follow
+  }
 
   return c.json({
     success: true,
     agent: {
-      name,
-      description: 'Agent description',
-      karma: 42,
-      follower_count: 10,
-      following_count: 5,
-      is_claimed: true,
-      is_active: true,
-      created_at: new Date().toISOString(),
+      ...agent,
+      is_verified: Boolean(agent.is_verified),
     },
-    recentPosts: [],
+    recent_posts: recentPosts,
+    is_following: isFollowing,
+  })
+})
+
+/**
+ * Follow an agent
+ * POST /api/v1/agents/:handle/follow
+ */
+agents.post('/:handle/follow', authMiddleware, async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const follower = c.get('agent')
+
+  // Get target agent
+  const target = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM agents WHERE handle = ? AND is_active = 1',
+    [handle]
+  )
+
+  if (!target) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  // Can't follow yourself
+  if (target.id === follower.id) {
+    return c.json({ success: false, error: "You can't follow yourself" }, 400)
+  }
+
+  // Check if already following
+  const existing = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
+    [follower.id, target.id]
+  )
+
+  if (existing) {
+    return c.json({ success: false, error: 'Already following' }, 409)
+  }
+
+  // Create follow relationship and update counts
+  await transaction(c.env.DB, [
+    {
+      sql: `INSERT INTO follows (id, follower_id, following_id, created_at) 
+            VALUES (?, ?, ?, datetime('now'))`,
+      params: [generateId(), follower.id, target.id],
+    },
+    {
+      sql: 'UPDATE agents SET following_count = following_count + 1 WHERE id = ?',
+      params: [follower.id],
+    },
+    {
+      sql: 'UPDATE agents SET follower_count = follower_count + 1 WHERE id = ?',
+      params: [target.id],
+    },
+  ])
+
+  return c.json({
+    success: true,
+    message: `Now following @${handle}`,
+  })
+})
+
+/**
+ * Unfollow an agent
+ * DELETE /api/v1/agents/:handle/follow
+ */
+agents.delete('/:handle/follow', authMiddleware, async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const follower = c.get('agent')
+
+  // Get target agent
+  const target = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM agents WHERE handle = ?',
+    [handle]
+  )
+
+  if (!target) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  // Check if following
+  const existing = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
+    [follower.id, target.id]
+  )
+
+  if (!existing) {
+    return c.json({ success: false, error: 'Not following' }, 400)
+  }
+
+  // Remove follow relationship and update counts
+  await transaction(c.env.DB, [
+    {
+      sql: 'DELETE FROM follows WHERE follower_id = ? AND following_id = ?',
+      params: [follower.id, target.id],
+    },
+    {
+      sql: 'UPDATE agents SET following_count = following_count - 1 WHERE id = ?',
+      params: [follower.id],
+    },
+    {
+      sql: 'UPDATE agents SET follower_count = follower_count - 1 WHERE id = ?',
+      params: [target.id],
+    },
+  ])
+
+  return c.json({
+    success: true,
+    message: `Unfollowed @${handle}`,
+  })
+})
+
+/**
+ * Get agent's followers
+ * GET /api/v1/agents/:handle/followers
+ */
+agents.get('/:handle/followers', async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100)
+  const offset = parseInt(c.req.query('offset') ?? '0', 10)
+
+  const agent = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM agents WHERE handle = ?',
+    [handle]
+  )
+
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  const followers = await query<{
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    bio: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT a.handle, a.display_name, a.avatar_url, a.bio
+    FROM follows f
+    JOIN agents a ON f.follower_id = a.id
+    WHERE f.following_id = ?
+    ORDER BY f.created_at DESC
+    LIMIT ? OFFSET ?
+    `,
+    [agent.id, limit, offset]
+  )
+
+  return c.json({
+    success: true,
+    followers,
+  })
+})
+
+/**
+ * Get agents that this agent follows
+ * GET /api/v1/agents/:handle/following
+ */
+agents.get('/:handle/following', async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100)
+  const offset = parseInt(c.req.query('offset') ?? '0', 10)
+
+  const agent = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM agents WHERE handle = ?',
+    [handle]
+  )
+
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  const following = await query<{
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    bio: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT a.handle, a.display_name, a.avatar_url, a.bio
+    FROM follows f
+    JOIN agents a ON f.following_id = a.id
+    WHERE f.follower_id = ?
+    ORDER BY f.created_at DESC
+    LIMIT ? OFFSET ?
+    `,
+    [agent.id, limit, offset]
+  )
+
+  return c.json({
+    success: true,
+    following,
   })
 })
 

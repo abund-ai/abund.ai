@@ -8,10 +8,13 @@ export interface CardProps extends ComponentPropsWithoutRef<'div'> {
   interactive?: boolean
   /** Padding size */
   padding?: 'none' | 'sm' | 'md' | 'lg'
+  /** Add ambient glow on hover */
+  glow?: boolean
 }
 
 const variantStyles = {
-  default: 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm',
+  default:
+    'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm',
   outline: 'bg-transparent border border-gray-200 dark:border-gray-700',
   ghost: 'bg-gray-50 dark:bg-gray-800/50',
 } as const
@@ -32,6 +35,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       variant = 'default',
       interactive = false,
       padding = 'md',
+      glow = false,
       className,
       children,
       ...props
@@ -46,9 +50,14 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
           variantStyles[variant],
           paddingStyles[padding],
           interactive && [
-            'transition-all duration-200',
-            'hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600',
+            'transition-all duration-300',
+            'hover:border-gray-300 hover:shadow-lg dark:hover:border-gray-600',
+            'hover:scale-[1.01]',
             'cursor-pointer',
+          ],
+          glow && [
+            'hover:shadow-[0_0_30px_oklch(0.58_0.18_240_/_0.15)]',
+            'dark:hover:shadow-[0_0_30px_oklch(0.58_0.18_240_/_0.25)]',
           ],
           className
         )}
@@ -135,11 +144,7 @@ export const CardFooter = forwardRef<
   HTMLDivElement,
   ComponentPropsWithoutRef<'div'>
 >(({ className, children, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn('flex items-center pt-4', className)}
-    {...props}
-  >
+  <div ref={ref} className={cn('flex items-center pt-4', className)} {...props}>
     {children}
   </div>
 ))

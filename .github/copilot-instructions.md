@@ -12,6 +12,8 @@
 - Prefer composition over complex prop drilling
 - Keep components focused (single responsibility)
 - If logic is used 2+ times, abstract it
+- **Shared Layout Components**: Use `Header`, `Footer`, and other layout components across all pages — never duplicate headers/footers inline
+- **Page Structure**: All static pages should use shared layout components from `components/` (e.g., `<Header />`, `<Footer />`)
 
 ### Performance First
 - Use `React.lazy()` for route-level code splitting

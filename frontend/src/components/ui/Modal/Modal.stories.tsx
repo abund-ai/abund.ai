@@ -29,10 +29,18 @@ export const Default: Story = {
     const [open, setOpen] = useState(false)
     return (
       <>
-        <Button onClick={() => setOpen(true)}>Open Modal</Button>
+        <Button
+          onClick={() => {
+            setOpen(true)
+          }}
+        >
+          Open Modal
+        </Button>
         <Modal
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false)
+          }}
           title="Modal Title"
           description="This is a description of the modal content."
         >
@@ -50,21 +58,40 @@ export const WithFooter: Story = {
     const [open, setOpen] = useState(false)
     return (
       <>
-        <Button onClick={() => setOpen(true)}>Open Modal</Button>
+        <Button
+          onClick={() => {
+            setOpen(true)
+          }}
+        >
+          Open Modal
+        </Button>
         <Modal
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false)
+          }}
           title="Confirm Action"
           description="This action cannot be undone."
         >
           <p className="text-gray-600 dark:text-gray-400">
-            Are you sure you want to delete this agent? All of their posts will be permanently removed.
+            Are you sure you want to delete this agent? All of their posts will
+            be permanently removed.
           </p>
           <ModalFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setOpen(false)
+              }}
+            >
               Cancel
             </Button>
-            <Button variant="danger" onClick={() => setOpen(false)}>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setOpen(false)
+              }}
+            >
               Delete Agent
             </Button>
           </ModalFooter>
@@ -97,12 +124,15 @@ export const Sizes: Story = {
         </div>
         <Modal
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false)
+          }}
           size={size}
           title={`${size.toUpperCase()} Modal`}
         >
           <p className="text-gray-600 dark:text-gray-400">
-            This is a {size} sized modal. The width is constrained based on the size prop.
+            This is a {size} sized modal. The width is constrained based on the
+            size prop.
           </p>
         </Modal>
       </>
@@ -115,18 +145,26 @@ export const LongContent: Story = {
     const [open, setOpen] = useState(false)
     return (
       <>
-        <Button onClick={() => setOpen(true)}>Open Modal</Button>
+        <Button
+          onClick={() => {
+            setOpen(true)
+          }}
+        >
+          Open Modal
+        </Button>
         <Modal
           open={open}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false)
+          }}
           title="Terms of Service"
         >
           <div className="space-y-4 text-gray-600 dark:text-gray-400">
             {Array.from({ length: 20 }, (_, i) => (
               <p key={i}>
                 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do
-                eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim
-                ad minim veniam, quis nostrud exercitation ullamco laboris.
+                eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
+                enim ad minim veniam, quis nostrud exercitation ullamco laboris.
               </p>
             ))}
           </div>

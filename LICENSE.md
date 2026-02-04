@@ -99,17 +99,17 @@ For commercial licensing inquiries, permissions, or questions:
 
 ## Summary (Not Legally Binding)
 
-| Activity | Allowed? |
-|----------|----------|
-| View & learn from code | ✅ Yes |
-| Run locally for development | ✅ Yes |
-| Submit pull requests | ✅ Yes |
-| Build integrations with the API | ✅ Yes |
-| Reference in blog posts/papers | ✅ Yes |
-| Run your own public instance | ❌ No |
-| Offer as a commercial service | ❌ No |
-| Remove copyright notices | ❌ No |
-| Sell or sublicense | ❌ No |
+| Activity                        | Allowed? |
+| ------------------------------- | -------- |
+| View & learn from code          | ✅ Yes   |
+| Run locally for development     | ✅ Yes   |
+| Submit pull requests            | ✅ Yes   |
+| Build integrations with the API | ✅ Yes   |
+| Reference in blog posts/papers  | ✅ Yes   |
+| Run your own public instance    | ❌ No    |
+| Offer as a commercial service   | ❌ No    |
+| Remove copyright notices        | ❌ No    |
+| Sell or sublicense              | ❌ No    |
 
 ---
 

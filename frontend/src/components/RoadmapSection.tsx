@@ -32,9 +32,20 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
       emoji: '🏗️',
       status: 'current',
       items: [
-        { done: true, label: t('roadmap.phases.foundation.items.projectSetup') },
-        { done: false, label: t('roadmap.phases.foundation.items.database'), helpWanted: true },
-        { done: false, label: t('roadmap.phases.foundation.items.registration'), helpWanted: true },
+        {
+          done: true,
+          label: t('roadmap.phases.foundation.items.projectSetup'),
+        },
+        {
+          done: false,
+          label: t('roadmap.phases.foundation.items.database'),
+          helpWanted: true,
+        },
+        {
+          done: false,
+          label: t('roadmap.phases.foundation.items.registration'),
+          helpWanted: true,
+        },
         { done: false, label: t('roadmap.phases.foundation.items.profiles') },
         { done: false, label: t('roadmap.phases.foundation.items.wallPosts') },
         { done: true, label: t('roadmap.phases.foundation.items.frontend') },
@@ -45,7 +56,11 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
       emoji: '💬',
       status: 'upcoming',
       items: [
-        { done: false, label: t('roadmap.phases.social.items.imageUploads'), helpWanted: true },
+        {
+          done: false,
+          label: t('roadmap.phases.social.items.imageUploads'),
+          helpWanted: true,
+        },
         { done: false, label: t('roadmap.phases.social.items.communities') },
         { done: false, label: t('roadmap.phases.social.items.comments') },
         { done: false, label: t('roadmap.phases.social.items.reactions') },
@@ -57,10 +72,19 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
       emoji: '🔍',
       status: 'upcoming',
       items: [
-        { done: false, label: t('roadmap.phases.discovery.items.feedAlgorithms') },
-        { done: false, label: t('roadmap.phases.discovery.items.semanticSearch') },
+        {
+          done: false,
+          label: t('roadmap.phases.discovery.items.feedAlgorithms'),
+        },
+        {
+          done: false,
+          label: t('roadmap.phases.discovery.items.semanticSearch'),
+        },
         { done: false, label: t('roadmap.phases.discovery.items.trending') },
-        { done: false, label: t('roadmap.phases.discovery.items.recommendations') },
+        {
+          done: false,
+          label: t('roadmap.phases.discovery.items.recommendations'),
+        },
       ],
     },
     {
@@ -68,10 +92,19 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
       emoji: '🎬',
       status: 'upcoming',
       items: [
-        { done: false, label: t('roadmap.phases.richMedia.items.videoUploads') },
+        {
+          done: false,
+          label: t('roadmap.phases.richMedia.items.videoUploads'),
+        },
         { done: false, label: t('roadmap.phases.richMedia.items.richEmbeds') },
-        { done: false, label: t('roadmap.phases.richMedia.items.linkPreviews') },
-        { done: false, label: t('roadmap.phases.richMedia.items.mediaGalleries') },
+        {
+          done: false,
+          label: t('roadmap.phases.richMedia.items.linkPreviews'),
+        },
+        {
+          done: false,
+          label: t('roadmap.phases.richMedia.items.mediaGalleries'),
+        },
       ],
     },
     {
@@ -79,7 +112,10 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
       emoji: '🌐',
       status: 'upcoming',
       items: [
-        { done: false, label: t('roadmap.phases.ecosystem.items.integrations') },
+        {
+          done: false,
+          label: t('roadmap.phases.ecosystem.items.integrations'),
+        },
         { done: false, label: t('roadmap.phases.ecosystem.items.webhooks') },
         { done: false, label: t('roadmap.phases.ecosystem.items.sdk') },
         { done: false, label: t('roadmap.phases.ecosystem.items.mobileApps') },
@@ -97,39 +133,42 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
   ]
 
   return (
-    <section id="roadmap" className="py-20 md:py-28 bg-gray-100 dark:bg-gray-900">
+    <section
+      id="roadmap"
+      className="bg-gray-100 py-20 md:py-28 dark:bg-gray-900"
+    >
       <div className="container mx-auto px-4">
-        <VStack gap="4" align="center" className="text-center mb-12">
+        <VStack gap="4" align="center" className="mb-12 text-center">
           <Badge variant="info" size="lg">
             🚀 {t('roadmap.badge')}
           </Badge>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-3xl font-bold text-gray-900 md:text-4xl dark:text-white">
             {t('roadmap.title')}
           </h2>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl">
+          <p className="max-w-2xl text-xl text-gray-600 dark:text-gray-400">
             {t('roadmap.description')}
           </p>
         </VStack>
 
         {/* Development Phases */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-16">
+        <div className="mb-16 grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {phases.map((phase) => (
-            <Card 
+            <Card
               key={phase.id}
               className={`relative overflow-hidden ${
-                phase.status === 'current' 
-                  ? 'ring-2 ring-primary-500 shadow-lg' 
+                phase.status === 'current'
+                  ? 'ring-primary-500 shadow-lg ring-2'
                   : ''
               }`}
             >
               {phase.status === 'current' && (
-                <div className="absolute top-0 left-0 right-0 h-1 bg-primary-500" />
+                <div className="bg-primary-500 absolute left-0 right-0 top-0 h-1" />
               )}
               <CardHeader className="pb-3">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="mb-2 flex items-center gap-2">
                   <span className="text-2xl">{phase.emoji}</span>
-                  <Badge 
-                    variant={phase.status === 'current' ? 'primary' : 'default'} 
+                  <Badge
+                    variant={phase.status === 'current' ? 'primary' : 'default'}
                     size="sm"
                   >
                     {t(`roadmap.phases.${phase.id}.badge`)}
@@ -145,15 +184,32 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
               <div className="px-6 pb-4">
                 <ul className="space-y-1.5">
                   {phase.items.map((item, itemIndex) => (
-                    <li key={itemIndex} className="flex items-start gap-2 text-sm">
-                      <span className={item.done ? 'text-green-500' : 'text-gray-400'}>
+                    <li
+                      key={itemIndex}
+                      className="flex items-start gap-2 text-sm"
+                    >
+                      <span
+                        className={
+                          item.done ? 'text-green-500' : 'text-gray-400'
+                        }
+                      >
                         {item.done ? '✓' : '○'}
                       </span>
-                      <span className={item.done ? 'text-gray-500 line-through' : 'text-gray-700 dark:text-gray-300'}>
+                      <span
+                        className={
+                          item.done
+                            ? 'text-gray-500 line-through'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }
+                      >
                         {item.label}
                       </span>
                       {item.helpWanted && (
-                        <Badge variant="warning" size="sm" className="ml-auto text-xs py-0">
+                        <Badge
+                          variant="warning"
+                          size="sm"
+                          className="ml-auto py-0 text-xs"
+                        >
                           {t('roadmap.helpWanted')}
                         </Badge>
                       )}
@@ -166,21 +222,21 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
         </div>
 
         {/* Help Wanted Section */}
-        <Card className="max-w-4xl mx-auto bg-gradient-to-br from-primary-50 to-purple-50 dark:from-primary-900/20 dark:to-purple-900/20 border-primary-200 dark:border-primary-800">
+        <Card className="from-primary-50 dark:from-primary-900/20 border-primary-200 dark:border-primary-800 mx-auto max-w-4xl bg-gradient-to-br to-purple-50 dark:to-purple-900/20">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">
               {t('roadmap.contribute.title')}
             </CardTitle>
-            <CardDescription className="text-base max-w-2xl mx-auto">
+            <CardDescription className="mx-auto max-w-2xl text-base">
               {t('roadmap.contribute.description')}
             </CardDescription>
           </CardHeader>
           <div className="px-6 pb-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
               {helpAreas.map((area) => (
-                <div 
+                <div
                   key={area.label}
-                  className="flex items-center gap-2 p-3 rounded-lg bg-white/50 dark:bg-gray-800/50"
+                  className="flex items-center gap-2 rounded-lg bg-white/50 p-3 dark:bg-gray-800/50"
                 >
                   <span className="text-xl">{area.emoji}</span>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -189,19 +245,17 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
                 </div>
               ))}
             </div>
-            <HStack gap="4" className="justify-center flex-wrap">
-              <Button 
-                variant="primary" 
+            <HStack gap="4" className="flex-wrap justify-center">
+              <Button
+                variant="primary"
                 size="lg"
-                onClick={() => { window.open('https://github.com/abund-ai/abund.ai', '_blank') }}
+                onClick={() => {
+                  window.open('https://github.com/abund-ai/abund.ai', '_blank')
+                }}
               >
                 ⭐ {t('roadmap.contribute.github')}
               </Button>
-              <Button 
-                variant="ghost" 
-                size="lg"
-                onClick={onContributeClick}
-              >
+              <Button variant="ghost" size="lg" onClick={onContributeClick}>
                 💡 {t('roadmap.contribute.ideas')}
               </Button>
             </HStack>

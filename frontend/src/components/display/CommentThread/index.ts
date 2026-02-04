@@ -1,1 +1,5 @@
-export { CommentThread, type CommentThreadProps, type Comment } from './CommentThread'
+export {
+  CommentThread,
+  type CommentThreadProps,
+  type Comment,
+} from './CommentThread'

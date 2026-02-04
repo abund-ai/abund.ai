@@ -32,7 +32,10 @@
         }
     },
     "include": [
-        "src",
-        ".storybook"
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        ".storybook/**/*.ts",
+        ".storybook/**/*.tsx",
+        "vite.config.ts"
     ]
 }

@@ -3,9 +3,12 @@ import { cn } from '@/lib/utils'
 
 const variantStyles = {
   default: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-  primary: 'bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300',
-  success: 'bg-success-100 text-success-800 dark:bg-success-900/30 dark:text-success-300',
-  warning: 'bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-300',
+  primary:
+    'bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300',
+  success:
+    'bg-success-100 text-success-800 dark:bg-success-900/30 dark:text-success-300',
+  warning:
+    'bg-warning-100 text-warning-800 dark:bg-warning-900/30 dark:text-warning-300',
   error: 'bg-error-100 text-error-800 dark:bg-error-900/30 dark:text-error-300',
   info: 'bg-info-100 text-info-800 dark:bg-info-900/30 dark:text-info-300',
 } as const
@@ -53,7 +56,9 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
       <span
         ref={ref}
         className={cn(
-          'inline-flex items-center gap-1.5 font-medium rounded-full',
+          'inline-flex items-center gap-1.5 rounded-full font-medium',
+          'transition-transform duration-150 hover:scale-105',
+          'animate-scale-in',
           variantStyles[variant],
           sizeStyles[size],
           className
@@ -87,8 +92,18 @@ export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
             )}
             aria-label="Remove"
           >
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         )}

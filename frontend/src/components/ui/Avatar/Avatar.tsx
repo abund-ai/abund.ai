@@ -13,7 +13,7 @@ const sizeStyles = {
 const statusColors = {
   online: 'bg-success-500',
   offline: 'bg-gray-400',
-  busy: 'bg-warning-500',
+  busy: 'bg-error-500',
   away: 'bg-warning-500',
 } as const
 
@@ -30,6 +30,8 @@ export interface AvatarProps extends ComponentPropsWithoutRef<'div'> {
   status?: keyof typeof statusColors | undefined
   /** Shape of the avatar */
   shape?: 'circle' | 'square' | undefined
+  /** Animate status indicator with pulse (only for 'online' status) */
+  pulse?: boolean | undefined
 }
 
 /**
@@ -42,6 +44,7 @@ export interface AvatarProps extends ComponentPropsWithoutRef<'div'> {
  *   alt="Agent Name"
  *   fallback="AN"
  *   status="online"
+ *   pulse
  * />
  * ```
  */
@@ -54,12 +57,14 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
       size = 'md',
       status,
       shape = 'circle',
+      pulse = false,
       className,
       ...props
     },
     ref
   ) => {
     const initials = fallback?.slice(0, 2).toUpperCase()
+    const shouldPulse = pulse && status === 'online'
 
     return (
       <div
@@ -72,6 +77,7 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
             'flex items-center justify-center overflow-hidden',
             'bg-gray-200 dark:bg-gray-700',
             'font-medium text-gray-600 dark:text-gray-300',
+            'transition-transform duration-200 hover:scale-105',
             sizeStyles[size],
             shape === 'circle' ? 'rounded-full' : 'rounded-lg'
           )}
@@ -80,7 +86,8 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
             <img
               src={src}
               alt={alt ?? 'Avatar'}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover transition-opacity duration-300"
+              loading="lazy"
             />
           ) : (
             <span aria-label={alt}>{initials}</span>
@@ -91,6 +98,7 @@ export const Avatar = forwardRef<HTMLDivElement, AvatarProps>(
             className={cn(
               'absolute bottom-0 right-0 block rounded-full ring-2 ring-white dark:ring-gray-900',
               statusColors[status],
+              shouldPulse && 'animate-pulse-glow',
               // Size-responsive status indicator
               size === 'xs' && 'h-1.5 w-1.5',
               size === 'sm' && 'h-2 w-2',
@@ -126,18 +134,14 @@ export const AvatarGroup = forwardRef<HTMLDivElement, AvatarGroupProps>(
     const remainingCount = Math.max(0, childArray.length - max)
 
     return (
-      <div
-        ref={ref}
-        className={cn('flex -space-x-2', className)}
-        {...props}
-      >
+      <div ref={ref} className={cn('flex -space-x-2', className)} {...props}>
         {visibleAvatars}
         {remainingCount > 0 && (
           <div
             className={cn(
               'flex items-center justify-center',
               'bg-gray-100 dark:bg-gray-800',
-              'text-gray-600 dark:text-gray-400 font-medium',
+              'font-medium text-gray-600 dark:text-gray-400',
               'ring-2 ring-white dark:ring-gray-900',
               sizeStyles[size],
               'rounded-full'

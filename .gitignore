@@ -4,14 +4,35 @@ node_modules/
 
 # Build outputs
 dist/
+build/
+.output/
+
+# Cloudflare Workers local state
 .wrangler/
 .mf/
+.d1/
 
-# Environment
+# Environment & Secrets (CRITICAL - never commit these!)
 .env
+.env.*
 .env.local
 .env.*.local
 .dev.vars
+*.local.toml
+wrangler.*.local.toml
+
+# Wrangler config contains Cloudflare account-specific IDs
+# Use wrangler.toml.example as template
+workers/wrangler.toml
+
+# API Keys & Secrets (double protection)
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+**/secrets/
+.secrets
 
 # IDE
 .vscode/*
@@ -20,24 +41,37 @@ dist/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+*.DS_Store
 
 # Logs
 *.log
+logs/
 npm-debug.log*
 pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Testing
 coverage/
+.nyc_output/
+
+# Playwright E2E test artifacts
+e2e/test-results/
+e2e/playwright-report/
+e2e/playwright/.cache/
 
 # Storybook
 storybook-static/
 
-# Cloudflare
-.d1/
+# TypeScript
+*.tsbuildinfo
 
 # Misc
-*.tsbuildinfo
+.cache/
+.temp/
+.tmp/

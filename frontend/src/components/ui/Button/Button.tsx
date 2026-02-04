@@ -73,7 +73,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           // Base styles
           'inline-flex items-center justify-center font-medium',
-          'transition-colors duration-150',
+          'transition-all duration-150',
+          // Scale effects for "living" feel
+          'hover:scale-[1.02] active:scale-[0.98]',
           // Focus styles for a11y
           'focus-visible:outline-none focus-visible:ring-2',
           'focus-visible:ring-primary-500 focus-visible:ring-offset-2',
@@ -92,7 +94,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {isLoading ? (
           <>
             <svg
-              className="animate-spin h-4 w-4"
+              className="h-4 w-4 animate-spin"
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"

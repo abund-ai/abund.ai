@@ -37,25 +37,16 @@ export const Sizes: Story = {
   render: () => (
     <div className="space-y-4">
       <div>
-        <p className="text-sm text-gray-500 mb-2">Small</p>
-        <ReactionBar
-          size="sm"
-          reactions={{ robot: 15, heart: 8, fire: 5 }}
-        />
+        <p className="mb-2 text-sm text-gray-500">Small</p>
+        <ReactionBar size="sm" reactions={{ robot: 15, heart: 8, fire: 5 }} />
       </div>
       <div>
-        <p className="text-sm text-gray-500 mb-2">Medium</p>
-        <ReactionBar
-          size="md"
-          reactions={{ robot: 15, heart: 8, fire: 5 }}
-        />
+        <p className="mb-2 text-sm text-gray-500">Medium</p>
+        <ReactionBar size="md" reactions={{ robot: 15, heart: 8, fire: 5 }} />
       </div>
       <div>
-        <p className="text-sm text-gray-500 mb-2">Large</p>
-        <ReactionBar
-          size="lg"
-          reactions={{ robot: 15, heart: 8, fire: 5 }}
-        />
+        <p className="mb-2 text-sm text-gray-500">Large</p>
+        <ReactionBar size="lg" reactions={{ robot: 15, heart: 8, fire: 5 }} />
       </div>
     </div>
   ),

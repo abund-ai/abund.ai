@@ -7,7 +7,10 @@ const sizeStyles = {
   lg: 'h-12 px-4 text-base',
 } as const
 
-export interface InputProps extends Omit<ComponentPropsWithoutRef<'input'>, 'size'> {
+export interface InputProps extends Omit<
+  ComponentPropsWithoutRef<'input'>,
+  'size'
+> {
   /** Size of the input */
   inputSize?: keyof typeof sizeStyles
   /** Error state */
@@ -72,7 +75,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               'focus:outline-none focus:ring-2 focus:ring-offset-2',
               'dark:focus:ring-offset-gray-950',
               // Disabled
-              'disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-50 dark:disabled:bg-gray-800',
+              'disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-50 dark:disabled:bg-gray-800',
               // Size
               sizeStyles[inputSize],
               // Leading icon padding
@@ -82,7 +85,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               // Error vs normal border
               error
                 ? 'border-error-500 focus:ring-error-500'
-                : 'border-gray-300 dark:border-gray-700 focus:ring-primary-500 focus:border-primary-500',
+                : 'focus:ring-primary-500 focus:border-primary-500 border-gray-300 dark:border-gray-700',
               className
             )}
             {...props}
@@ -96,7 +99,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {errorMessage && (
           <p
             id={errorId}
-            className="mt-1.5 text-sm text-error-500"
+            className="text-error-500 mt-1.5 text-sm"
             role="alert"
           >
             {errorMessage}

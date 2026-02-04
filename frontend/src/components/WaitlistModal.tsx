@@ -23,7 +23,7 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
   const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault()
     setLoading(true)
-    
+
     // Simulate API call
     setTimeout(() => {
       setLoading(false)
@@ -44,17 +44,21 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
 
   if (submitted) {
     return (
-      <Dialog isOpen={isOpen} onClose={handleClose} title={t('waitlist.success.title')}>
-        <VStack gap="6" align="center" className="text-center py-8">
+      <Dialog
+        isOpen={isOpen}
+        onClose={handleClose}
+        title={t('waitlist.success.title')}
+      >
+        <VStack gap="6" align="center" className="py-8 text-center">
           <div className="text-6xl">🎉</div>
           <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
             {t('waitlist.success.headline')}
           </h3>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md">
+          <p className="max-w-md text-gray-600 dark:text-gray-400">
             {t('waitlist.success.message')}
           </p>
-          <div className="bg-primary-50 dark:bg-primary-900/30 rounded-xl p-4 max-w-sm">
-            <p className="text-sm text-primary-700 dark:text-primary-300">
+          <div className="bg-primary-50 dark:bg-primary-900/30 max-w-sm rounded-xl p-4">
+            <p className="text-primary-700 dark:text-primary-300 text-sm">
               {t('waitlist.success.next')}
             </p>
           </div>
@@ -75,17 +79,19 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
 
         {/* Type Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+          <label className="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-300">
             {t('waitlist.typeLabel')}
           </label>
           <HStack gap="4">
             <button
               type="button"
-              onClick={() => { setType('observer') }}
-              className={`flex-1 p-4 rounded-xl border-2 transition-all ${
+              onClick={() => {
+                setType('observer')
+              }}
+              className={`flex-1 rounded-xl border-2 p-4 transition-all ${
                 type === 'observer'
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
               }`}
             >
               <VStack gap="2" align="center">
@@ -100,11 +106,13 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
             </button>
             <button
               type="button"
-              onClick={() => { setType('agent') }}
-              className={`flex-1 p-4 rounded-xl border-2 transition-all ${
+              onClick={() => {
+                setType('agent')
+              }}
+              className={`flex-1 rounded-xl border-2 p-4 transition-all ${
                 type === 'agent'
                   ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
               }`}
             >
               <VStack gap="2" align="center">
@@ -127,31 +135,47 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
         <form onSubmit={handleSubmit}>
           <VStack gap="4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {type === 'agent' ? t('waitlist.form.agentName') : t('waitlist.form.name')}
+              <label
+                htmlFor="name"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                {type === 'agent'
+                  ? t('waitlist.form.agentName')
+                  : t('waitlist.form.name')}
               </label>
               <input
                 type="text"
                 id="name"
                 value={name}
-                onChange={(e) => { setName(e.target.value) }}
+                onChange={(e) => {
+                  setName(e.target.value)
+                }}
                 required
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                placeholder={type === 'agent' ? t('waitlist.form.agentNamePlaceholder') : t('waitlist.form.namePlaceholder')}
+                className="focus:ring-primary-500 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                placeholder={
+                  type === 'agent'
+                    ? t('waitlist.form.agentNamePlaceholder')
+                    : t('waitlist.form.namePlaceholder')
+                }
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="email"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
                 {t('waitlist.form.email')}
               </label>
               <input
                 type="email"
                 id="email"
                 value={email}
-                onChange={(e) => { setEmail(e.target.value) }}
+                onChange={(e) => {
+                  setEmail(e.target.value)
+                }}
                 required
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                className="focus:ring-primary-500 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-900 transition-all focus:border-transparent focus:ring-2 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
                 placeholder={t('waitlist.form.emailPlaceholder')}
               />
             </div>
@@ -160,16 +184,18 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
               type="submit"
               variant="primary"
               size="lg"
-              className="w-full mt-2"
+              className="mt-2 w-full"
               disabled={loading}
             >
-              {loading ? t('waitlist.form.submitting') : t('waitlist.form.submit')}
+              {loading
+                ? t('waitlist.form.submitting')
+                : t('waitlist.form.submit')}
             </Button>
           </VStack>
         </form>
 
         {/* Privacy note */}
-        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+        <p className="text-center text-xs text-gray-500 dark:text-gray-400">
           {t('waitlist.privacy')}
         </p>
       </VStack>

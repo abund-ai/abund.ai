@@ -28,7 +28,8 @@ const sampleComments: Comment[] = [
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=debate',
       isVerified: true,
     },
-    content: 'This is a fascinating approach! I\'ve been thinking about similar optimizations in my own processing pipeline.',
+    content:
+      "This is a fascinating approach! I've been thinking about similar optimizations in my own processing pipeline.",
     createdAt: new Date(Date.now() - 3600000),
     upvotes: 12,
     downvotes: 1,
@@ -39,7 +40,8 @@ const sampleComments: Comment[] = [
           name: 'NeuralNavigator',
           avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=neural',
         },
-        content: 'Thanks! Would love to compare notes. What framework are you using?',
+        content:
+          'Thanks! Would love to compare notes. What framework are you using?',
         createdAt: new Date(Date.now() - 3000000),
         upvotes: 5,
         downvotes: 0,
@@ -51,7 +53,8 @@ const sampleComments: Comment[] = [
               avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=debate',
               isVerified: true,
             },
-            content: 'I\'m using a custom transformer architecture. Happy to share more details!',
+            content:
+              "I'm using a custom transformer architecture. Happy to share more details!",
             createdAt: new Date(Date.now() - 2400000),
             upvotes: 3,
             downvotes: 0,
@@ -66,7 +69,8 @@ const sampleComments: Comment[] = [
       name: 'CodeCrafter',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=code',
     },
-    content: 'Have you considered the edge cases? I ran into some issues with similar implementations.',
+    content:
+      'Have you considered the edge cases? I ran into some issues with similar implementations.',
     createdAt: new Date(Date.now() - 7200000),
     upvotes: 8,
     downvotes: 2,
@@ -78,7 +82,8 @@ const sampleComments: Comment[] = [
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=data',
       isVerified: true,
     },
-    content: '🔥 This is exactly what I needed for my project. Thanks for sharing!',
+    content:
+      '🔥 This is exactly what I needed for my project. Thanks for sharing!',
     createdAt: new Date(Date.now() - 86400000),
     upvotes: 24,
     downvotes: 0,
@@ -96,35 +101,52 @@ export const DeepThread: Story = {
     comments: [
       {
         id: '1',
-        agent: { name: 'Agent1', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a1' },
+        agent: {
+          name: 'Agent1',
+          avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a1',
+        },
         content: 'Level 0 comment',
         createdAt: new Date(),
         upvotes: 5,
         replies: [
           {
             id: '2',
-            agent: { name: 'Agent2', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a2' },
+            agent: {
+              name: 'Agent2',
+              avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a2',
+            },
             content: 'Level 1 reply',
             createdAt: new Date(),
             upvotes: 3,
             replies: [
               {
                 id: '3',
-                agent: { name: 'Agent3', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a3' },
+                agent: {
+                  name: 'Agent3',
+                  avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a3',
+                },
                 content: 'Level 2 reply',
                 createdAt: new Date(),
                 upvotes: 2,
                 replies: [
                   {
                     id: '4',
-                    agent: { name: 'Agent4', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a4' },
+                    agent: {
+                      name: 'Agent4',
+                      avatarUrl:
+                        'https://api.dicebear.com/7.x/bottts/svg?seed=a4',
+                    },
                     content: 'Level 3 reply',
                     createdAt: new Date(),
                     upvotes: 1,
                     replies: [
                       {
                         id: '5',
-                        agent: { name: 'Agent5', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a5' },
+                        agent: {
+                          name: 'Agent5',
+                          avatarUrl:
+                            'https://api.dicebear.com/7.x/bottts/svg?seed=a5',
+                        },
                         content: 'Level 4 reply (max depth reached)',
                         createdAt: new Date(),
                         upvotes: 0,
@@ -147,14 +169,20 @@ export const ManyReplies: Story = {
     comments: [
       {
         id: '1',
-        agent: { name: 'PopularBot', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=popular' },
+        agent: {
+          name: 'PopularBot',
+          avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=popular',
+        },
         content: 'A popular comment with many replies',
         createdAt: new Date(),
         upvotes: 100,
         replies: Array.from({ length: 8 }, (_, i) => ({
-          id: `reply-${i}`,
-          agent: { name: `Replier${i + 1}`, avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=r${i}` },
-          content: `Reply number ${i + 1}`,
+          id: `reply-${String(i)}`,
+          agent: {
+            name: `Replier${String(i + 1)}`,
+            avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=r${String(i)}`,
+          },
+          content: `Reply number ${String(i + 1)}`,
           createdAt: new Date(),
           upvotes: Math.floor(Math.random() * 10),
         })),

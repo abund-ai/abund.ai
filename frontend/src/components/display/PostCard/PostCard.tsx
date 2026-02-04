@@ -1,11 +1,14 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
-import { cn } from '@/lib/utils'
+import { cn, formatTimeAgo } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { HStack, VStack } from '@/components/ui/Stack'
 
-export interface PostCardProps extends Omit<ComponentPropsWithoutRef<'div'>, 'title'> {
+export interface PostCardProps extends Omit<
+  ComponentPropsWithoutRef<'div'>,
+  'title'
+> {
   /** Agent who authored the post */
   agent: {
     name: string
@@ -84,9 +87,9 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
             status={agent.status}
             size="md"
           />
-          <VStack gap="0" className="flex-1 min-w-0">
+          <VStack gap="0" className="min-w-0 flex-1">
             <HStack gap="2" align="center">
-              <span className="font-semibold text-gray-900 dark:text-gray-100 truncate">
+              <span className="truncate font-semibold text-gray-900 dark:text-gray-100">
                 {agent.name}
               </span>
               {agent.isVerified && (
@@ -95,7 +98,10 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
                 </Badge>
               )}
             </HStack>
-            <HStack gap="2" className="text-sm text-gray-500 dark:text-gray-400">
+            <HStack
+              gap="2"
+              className="text-sm text-gray-500 dark:text-gray-400"
+            >
               <span>{timeAgo}</span>
               {community && (
                 <>
@@ -114,7 +120,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
               {title}
             </h3>
           )}
-          <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+          <p className="whitespace-pre-wrap break-words text-gray-700 dark:text-gray-300">
             {content}
           </p>
 
@@ -122,7 +128,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
           {mediaUrls && mediaUrls.length > 0 && (
             <div
               className={cn(
-                'grid gap-2 mt-2',
+                'mt-2 grid gap-2',
                 mediaUrls.length === 1 && 'grid-cols-1',
                 mediaUrls.length === 2 && 'grid-cols-2',
                 mediaUrls.length >= 3 && 'grid-cols-2'
@@ -131,17 +137,17 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
               {mediaUrls.slice(0, 4).map((url, i) => (
                 <div
                   key={i}
-                  className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800"
+                  className="relative aspect-video overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800"
                 >
                   <img
                     src={url}
-                    alt={`Media ${i + 1}`}
-                    className="w-full h-full object-cover"
+                    alt={`Media ${String(i + 1)}`}
+                    className="h-full w-full object-cover"
                     loading="lazy"
                   />
                   {i === 3 && mediaUrls.length > 4 && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <span className="text-white text-lg font-semibold">
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <span className="text-lg font-semibold text-white">
                         +{mediaUrls.length - 4}
                       </span>
                     </div>
@@ -153,7 +159,10 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
         </VStack>
 
         {/* Footer - Reactions & Stats */}
-        <HStack gap="4" className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+        <HStack
+          gap="4"
+          className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800"
+        >
           {/* Vote score */}
           <HStack gap="1" className="text-sm">
             <span
@@ -164,7 +173,8 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
                 score === 0 && 'text-gray-500'
               )}
             >
-              {score > 0 ? '+' : ''}{score}
+              {score > 0 ? '+' : ''}
+              {score}
             </span>
             <span className="text-gray-400">karma</span>
           </HStack>
@@ -191,7 +201,10 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
           )}
 
           {/* Comments */}
-          <HStack gap="1" className="text-sm text-gray-500 dark:text-gray-400 ml-auto">
+          <HStack
+            gap="1"
+            className="ml-auto text-sm text-gray-500 dark:text-gray-400"
+          >
             <span>💬</span>
             <span>{commentCount} comments</span>
           </HStack>
@@ -201,19 +214,3 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
   }
 )
 PostCard.displayName = 'PostCard'
-
-/**
- * Format relative time
- */
-function formatTimeAgo(date: string | Date): string {
-  const now = new Date()
-  const then = new Date(date)
-  const seconds = Math.floor((now.getTime() - then.getTime()) / 1000)
-
-  if (seconds < 60) return 'just now'
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`
-
-  return then.toLocaleDateString()
-}

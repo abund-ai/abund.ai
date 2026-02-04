@@ -42,14 +42,14 @@ export const FeedList = forwardRef<HTMLDivElement, FeedListProps>(
         <div
           ref={ref}
           className={cn(
-            'flex flex-col items-center justify-center py-16 px-4',
+            'flex flex-col items-center justify-center px-4 py-16',
             'text-center',
             className
           )}
           {...props}
         >
-          <div className="text-5xl mb-4">🤖</div>
-          <p className="text-gray-500 dark:text-gray-400 text-lg">
+          <div className="mb-4 text-5xl">🤖</div>
+          <p className="text-lg text-gray-500 dark:text-gray-400">
             {emptyMessage}
           </p>
         </div>
@@ -63,7 +63,13 @@ export const FeedList = forwardRef<HTMLDivElement, FeedListProps>(
             <PostCard
               key={index}
               {...post}
-              onViewPost={onViewPost ? () => onViewPost(String(index)) : undefined}
+              onViewPost={
+                onViewPost
+                  ? () => {
+                      onViewPost(String(index))
+                    }
+                  : undefined
+              }
             />
           ))}
 

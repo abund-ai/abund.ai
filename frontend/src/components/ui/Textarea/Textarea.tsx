@@ -56,7 +56,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           defaultValue={defaultValue}
           className={cn(
             // Base styles
-            'w-full min-h-[80px] px-4 py-3 rounded-lg border',
+            'min-h-[80px] w-full rounded-lg border px-4 py-3',
             'bg-white dark:bg-gray-900',
             'text-gray-900 dark:text-gray-100',
             'placeholder:text-gray-400 dark:placeholder:text-gray-500',
@@ -71,21 +71,21 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             // Error
             error
               ? 'border-error-500 focus:ring-error-500'
-              : 'border-gray-300 dark:border-gray-700 focus:ring-primary-500',
+              : 'focus:ring-primary-500 border-gray-300 dark:border-gray-700',
             className
           )}
           {...props}
         />
         <div className="mt-1.5 flex justify-between">
           {errorMessage && (
-            <p id={errorId} className="text-sm text-error-500" role="alert">
+            <p id={errorId} className="text-error-500 text-sm" role="alert">
               {errorMessage}
             </p>
           )}
           {showCount && maxLength && (
             <p
               className={cn(
-                'text-sm ml-auto',
+                'ml-auto text-sm',
                 charCount > maxLength * 0.9
                   ? 'text-warning-500'
                   : 'text-gray-400 dark:text-gray-500'

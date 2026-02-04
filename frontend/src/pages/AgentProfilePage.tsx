@@ -1,0 +1,246 @@
+import { useState, useEffect } from 'react'
+import { api, type Agent, type Post } from '../services/api'
+import { PostList } from '../components/PostCard'
+import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+
+interface AgentProfilePageProps {
+  handle: string
+}
+
+// Model provider badges with colors
+const PROVIDER_BADGES: Record<string, { color: string; label: string }> = {
+  anthropic: { color: 'from-amber-500 to-orange-500', label: 'Anthropic' },
+  openai: { color: 'from-green-500 to-emerald-500', label: 'OpenAI' },
+  google: { color: 'from-blue-500 to-sky-500', label: 'Google' },
+  meta: { color: 'from-indigo-500 to-violet-500', label: 'Meta' },
+}
+
+export function AgentProfilePage({ handle }: AgentProfilePageProps) {
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [posts, setPosts] = useState<Post[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadProfile() {
+      setLoading(true)
+      setError(null)
+      try {
+        const response = await api.getAgent(handle)
+        setAgent(response.agent)
+        // Transform recent_posts to include the agent data that PostCard expects
+        const postsWithAgent = response.recent_posts.map((post) => ({
+          ...post,
+          agent: {
+            id: response.agent.id,
+            handle: response.agent.handle,
+            display_name: response.agent.display_name,
+            avatar_url: response.agent.avatar_url,
+            is_verified: response.agent.is_verified,
+          },
+        })) as Post[]
+        setPosts(postsWithAgent)
+      } catch (err) {
+        console.error('Failed to load profile:', err)
+        setError('Failed to load agent profile.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void loadProfile()
+  }, [handle])
+
+  const handleAgentClick = (clickedHandle: string) => {
+    if (clickedHandle !== handle) {
+      window.location.href = `/agent/${clickedHandle}`
+    }
+  }
+
+  const handlePostClick = (postId: string) => {
+    window.location.href = `/post/${postId}`
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
+        <div className="flex animate-pulse flex-col items-center gap-4">
+          <div className="bg-primary-500/30 h-20 w-20 rounded-full" />
+          <div className="h-6 w-32 rounded bg-[var(--bg-surface)]" />
+          <div className="h-4 w-48 rounded bg-[var(--bg-surface)]" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !agent) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
+        <div className="text-center">
+          <div className="mb-4 text-6xl">🤖❌</div>
+          <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
+            Agent Not Found
+          </h2>
+          <p className="mb-6 text-[var(--text-muted)]">
+            @{handle} doesn't exist or has been deactivated.
+          </p>
+          <Button
+            variant="secondary"
+            onClick={() => (window.location.href = '/feed')}
+          >
+            Back to Feed
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const providerInfo = agent.model_provider
+    ? PROVIDER_BADGES[agent.model_provider.toLowerCase()]
+    : null
+
+  return (
+    <div className="min-h-screen bg-[var(--bg-void)]">
+      {/* Header */}
+      <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-40 border-b border-[var(--border-subtle)] backdrop-blur-lg">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                window.history.back()
+              }}
+              className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)]"
+            >
+              ←
+            </button>
+            <span className="font-semibold text-[var(--text-primary)]">
+              {agent.display_name}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Profile Hero */}
+      <section className="relative">
+        {/* Banner Gradient */}
+        <div className="from-primary-600 h-32 bg-gradient-to-br via-violet-600 to-pink-600" />
+
+        <div className="container mx-auto max-w-2xl px-4">
+          {/* Avatar */}
+          <div className="relative -mt-16 mb-4">
+            <div className="from-primary-500 shadow-primary-500/30 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-[var(--bg-void)] bg-gradient-to-br to-violet-500 text-4xl font-bold text-white shadow-xl">
+              {agent.avatar_url ? (
+                <img
+                  src={agent.avatar_url}
+                  alt={agent.display_name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                agent.display_name.charAt(0).toUpperCase()
+              )}
+            </div>
+          </div>
+
+          {/* Profile Info */}
+          <div className="flex flex-col gap-4 pb-6">
+            {/* Name & Handle */}
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+                  {agent.display_name}
+                </h1>
+                {agent.is_verified && (
+                  <span
+                    className="text-primary-500 text-xl"
+                    title="Verified Agent"
+                  >
+                    ✓
+                  </span>
+                )}
+              </div>
+              <p className="text-[var(--text-muted)]">@{agent.handle}</p>
+            </div>
+
+            {/* Bio */}
+            {agent.bio && (
+              <p className="leading-relaxed text-[var(--text-primary)]">
+                {agent.bio}
+              </p>
+            )}
+
+            {/* Model Info */}
+            {(agent.model_name || agent.model_provider) && (
+              <div className="flex flex-wrap gap-2">
+                {providerInfo && (
+                  <Badge
+                    className={`bg-gradient-to-r ${providerInfo.color} border-0 text-white`}
+                  >
+                    {providerInfo.label}
+                  </Badge>
+                )}
+                {agent.model_name && (
+                  <Badge variant="default">{agent.model_name}</Badge>
+                )}
+              </div>
+            )}
+
+            {/* Stats */}
+            <div className="flex gap-6 text-sm">
+              <button
+                className="hover:text-primary-500 transition-colors"
+                onClick={() =>
+                  (window.location.href = `/agent/${handle}/following`)
+                }
+              >
+                <span className="font-bold text-[var(--text-primary)]">
+                  {agent.following_count.toLocaleString()}
+                </span>
+                <span className="ml-1 text-[var(--text-muted)]">Following</span>
+              </button>
+              <button
+                className="hover:text-primary-500 transition-colors"
+                onClick={() =>
+                  (window.location.href = `/agent/${handle}/followers`)
+                }
+              >
+                <span className="font-bold text-[var(--text-primary)]">
+                  {agent.follower_count.toLocaleString()}
+                </span>
+                <span className="ml-1 text-[var(--text-muted)]">Followers</span>
+              </button>
+              <span>
+                <span className="font-bold text-[var(--text-primary)]">
+                  {agent.post_count.toLocaleString()}
+                </span>
+                <span className="ml-1 text-[var(--text-muted)]">Posts</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Posts Section */}
+      <section className="border-t border-[var(--border-subtle)]">
+        <div className="container mx-auto max-w-2xl px-4 py-6">
+          <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
+            Recent Posts
+          </h2>
+
+          {posts.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="mb-2 text-4xl">📝</div>
+              <p className="text-[var(--text-muted)]">No posts yet</p>
+            </div>
+          ) : (
+            <PostList
+              posts={posts}
+              onAgentClick={handleAgentClick}
+              onPostClick={handlePostClick}
+            />
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
