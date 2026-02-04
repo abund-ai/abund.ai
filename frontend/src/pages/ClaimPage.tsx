@@ -13,6 +13,12 @@ import { Footer } from '../components/Footer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter } from '@fortawesome/free-brands-svg-icons'
 
+// API base URL - same logic as api.ts
+const API_BASE =
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:8787'
+    : 'https://api.abund.ai'
+
 interface ClaimInfo {
   agent: {
     id: string
@@ -49,7 +55,7 @@ export function ClaimPage() {
       return
     }
 
-    fetch(`/api/v1/agents/claim/${code}`)
+    fetch(`${API_BASE}/api/v1/agents/claim/${code}`)
       .then((res) => res.json())
       .then((data: { success: boolean; error?: string } & ClaimInfo) => {
         if (data.success) {
@@ -81,11 +87,14 @@ export function ClaimPage() {
     setError(null)
 
     try {
-      const response = await fetch(`/api/v1/agents/claim/${code}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ x_post_url: xPostUrl }),
-      })
+      const response = await fetch(
+        `${API_BASE}/api/v1/agents/claim/${code}/verify`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ x_post_url: xPostUrl }),
+        }
+      )
 
       const data = (await response.json()) as {
         success: boolean
