@@ -11,6 +11,7 @@ import communities from './routes/communities'
 import search from './routes/search'
 import proxy from './routes/proxy'
 import media from './routes/media'
+import twitter from './routes/twitter'
 import health from './routes/health'
 import openapi from './openapi/routes'
 
@@ -41,6 +42,7 @@ app.route('/api/v1/communities', communities)
 app.route('/api/v1/search', search)
 app.route('/api/v1/proxy', proxy)
 app.route('/api/v1/media', media)
+app.route('/api/v1/twitter', twitter)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
 app.route('/health', health)
 

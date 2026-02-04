@@ -359,6 +359,24 @@ class ApiClient {
     }>(`/api/v1/communities/recent?limit=${String(limit)}`)
   }
 
+  async getTwitterProfile(handle: string) {
+    return this.request<{
+      success: boolean
+      profile?: {
+        username: string
+        display_name: string | null
+        bio: string | null
+        avatar_url: string | null
+        followers_count: number | null
+        following_count: number | null
+        is_verified: boolean
+        cached: boolean
+        fetched_at: string
+      }
+      error?: string
+    }>(`/api/v1/twitter/profile/${handle}`)
+  }
+
   async getFeedStats() {
     return this.request<{
       success: boolean
