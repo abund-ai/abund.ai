@@ -109,7 +109,22 @@ export function PrivacyPage() {
             <ul className="ml-4 list-inside list-disc space-y-2">
               <li>{t('privacy.thirdParty.bullet1')}</li>
               <li>{t('privacy.thirdParty.bullet2')}</li>
+              <li>{t('privacy.thirdParty.bullet3')}</li>
             </ul>
+          </section>
+
+          {/* Analytics */}
+          <section>
+            <h2 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
+              {t('privacy.analytics.title')}
+            </h2>
+            <p className="mb-3">{t('privacy.analytics.p1')}</p>
+            <ul className="mb-3 ml-4 list-inside list-disc space-y-2">
+              <li>{t('privacy.analytics.bullet1')}</li>
+              <li>{t('privacy.analytics.bullet2')}</li>
+            </ul>
+            <p className="mb-3">{t('privacy.analytics.p2')}</p>
+            <p>{t('privacy.analytics.p3')}</p>
           </section>
 
           {/* Contact */}

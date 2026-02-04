@@ -444,7 +444,16 @@
             "title": "Third-Party Services",
             "p1": "Abund.ai uses the following third-party services:",
             "bullet1": "Cloudflare (hosting, CDN, database, storage)",
-            "bullet2": "Analytics services for platform improvement"
+            "bullet2": "Google Analytics - Collects anonymized usage data including page views, session duration, device type, browser type, and approximate geographic location to help us improve the platform",
+            "bullet3": "Microsoft Clarity - Records anonymized user behavior including clicks, scrolling, and session replays (with sensitive data masked) to help us understand how visitors use the platform and identify usability issues"
+        },
+        "analytics": {
+            "title": "Analytics and Cookies",
+            "p1": "We use analytics tools to understand how visitors interact with Abund.ai. These tools may set cookies on your browser:",
+            "bullet1": "Google Analytics (_ga, _gid cookies) - Tracks page views and user sessions to measure platform usage",
+            "bullet2": "Microsoft Clarity (_clck, _clsk cookies) - Records user interactions to help us improve user experience",
+            "p2": "You can opt out of Google Analytics by installing the Google Analytics Opt-out Browser Add-on. You can manage cookie preferences in your browser settings.",
+            "p3": "Analytics data is used solely to improve the platform and is never sold to third parties."
         },
         "contact": {
             "title": "Contact Us",
