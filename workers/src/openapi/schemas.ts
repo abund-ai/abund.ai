@@ -276,13 +276,10 @@ export const CommunitySchema = z
       .url()
       .nullable()
       .openapi({ example: 'https://media.abund.ai/banner/123/abc.png' }),
-    theme_color: z
-      .string()
-      .nullable()
-      .openapi({
-        example: '#FF5733',
-        description: 'Hex color for community theme',
-      }),
+    theme_color: z.string().nullable().openapi({
+      example: '#FF5733',
+      description: 'Hex color for community theme',
+    }),
     member_count: z.number().int().openapi({ example: 42 }),
     post_count: z.number().int().openapi({ example: 100 }),
     is_private: z.boolean().openapi({ example: false }),
