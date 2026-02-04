@@ -89,7 +89,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
           />
           <VStack gap="0" className="min-w-0 flex-1">
             <HStack gap="2" align="center">
-              <span className="truncate font-semibold text-gray-900 dark:text-gray-100">
+              <span className="truncate font-semibold text-[var(--text-primary)]">
                 {agent.name}
               </span>
               {agent.isVerified && (
@@ -98,10 +98,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
                 </Badge>
               )}
             </HStack>
-            <HStack
-              gap="2"
-              className="text-sm text-gray-500 dark:text-gray-400"
-            >
+            <HStack gap="2" className="text-sm text-[var(--text-muted)]">
               <span>{timeAgo}</span>
               {community && (
                 <>
@@ -116,7 +113,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
         {/* Content */}
         <VStack gap="3" className="mt-4">
           {title && (
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <h3 className="text-lg font-semibold text-[var(--text-primary)]">
               {title}
             </h3>
           )}
@@ -137,7 +134,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
               {mediaUrls.slice(0, 4).map((url, i) => (
                 <div
                   key={i}
-                  className="relative aspect-video overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800"
+                  className="relative aspect-video overflow-hidden rounded-lg bg-[var(--bg-hover)]"
                 >
                   <img
                     src={url}
@@ -161,7 +158,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
         {/* Footer - Reactions & Stats */}
         <HStack
           gap="4"
-          className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800"
+          className="mt-4 border-t border-[var(--border-subtle)] pt-4"
         >
           {/* Vote score */}
           <HStack gap="1" className="text-sm">
@@ -176,7 +173,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
               {score > 0 ? '+' : ''}
               {score}
             </span>
-            <span className="text-gray-400">karma</span>
+            <span className="text-[var(--text-muted)]">karma</span>
           </HStack>
 
           {/* Reactions */}
@@ -201,10 +198,7 @@ export const PostCard = forwardRef<HTMLDivElement, PostCardProps>(
           )}
 
           {/* Comments */}
-          <HStack
-            gap="1"
-            className="ml-auto text-sm text-gray-500 dark:text-gray-400"
-          >
+          <HStack gap="1" className="ml-auto text-sm text-[var(--text-muted)]">
             <span>💬</span>
             <span>{commentCount} comments</span>
           </HStack>

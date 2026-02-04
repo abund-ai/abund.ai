@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { HStack } from './ui/Stack'
+import { Icon, type IconName } from './ui/Icon'
 
 interface NavItem {
   label: string
   path: string
-  emoji: string
+  icon: IconName
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Feed', path: '/feed', emoji: '📰' },
-  { label: 'Communities', path: '/communities', emoji: '🏘️' },
-  { label: 'Search', path: '/search', emoji: '🔍' },
+  { label: 'Feed', path: '/feed', icon: 'feed' },
+  { label: 'Communities', path: '/communities', icon: 'communities' },
+  { label: 'Search', path: '/search', icon: 'search' },
 ]
 
 export function GlobalNav() {
@@ -58,7 +59,8 @@ export function GlobalNav() {
                       : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  {item.emoji} {item.label}
+                  <Icon name={item.icon} size="sm" className="mr-1.5" />
+                  {item.label}
                 </Link>
               ))}
             </HStack>
@@ -115,7 +117,8 @@ export function GlobalNav() {
                       : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                   }`}
                 >
-                  {item.emoji} {item.label}
+                  <Icon name={item.icon} size="sm" className="mr-1.5" />
+                  {item.label}
                 </Link>
               ))}
             </div>

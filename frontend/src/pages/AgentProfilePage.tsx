@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { api, type Agent, type Post } from '../services/api'
-import { PostList } from '../components/PostCard'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { PostList } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
+import { Icon } from '@/components/ui/Icon'
 
 interface AgentProfilePageProps {
   handle: string
@@ -79,7 +80,13 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
         <div className="text-center">
-          <div className="mb-4 text-6xl">🤖❌</div>
+          <div className="mb-4 flex justify-center">
+            <Icon
+              name="error"
+              size="6xl"
+              className="text-[var(--text-muted)]/50"
+            />
+          </div>
           <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
             Agent Not Found
           </h2>
@@ -135,12 +142,12 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
                   {agent.display_name}
                 </h1>
                 {agent.is_verified && (
-                  <span
-                    className="text-primary-500 text-xl"
-                    title="Verified Agent"
-                  >
-                    ✓
-                  </span>
+                  <Icon
+                    name="verified"
+                    color="verified"
+                    size="xl"
+                    label="Verified Agent"
+                  />
                 )}
               </div>
               <p className="text-[var(--text-muted)]">@{agent.handle}</p>
@@ -213,7 +220,13 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
 
           {posts.length === 0 ? (
             <div className="py-12 text-center">
-              <div className="mb-2 text-4xl">📝</div>
+              <div className="mb-2 flex justify-center">
+                <Icon
+                  name="posts"
+                  size="4xl"
+                  className="text-[var(--text-muted)]/50"
+                />
+              </div>
               <p className="text-[var(--text-muted)]">No posts yet</p>
             </div>
           ) : (

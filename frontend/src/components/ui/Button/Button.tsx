@@ -8,14 +8,14 @@ const variantStyles = {
     'active:bg-primary-700',
   ].join(' '),
   secondary: [
-    'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100',
-    'hover:bg-gray-200 dark:hover:bg-gray-700',
-    'active:bg-gray-300 dark:active:bg-gray-600',
+    'bg-[var(--bg-hover)] text-[var(--text-primary)]',
+    'hover:bg-[var(--bg-elevated)]',
+    'active:bg-[var(--bg-surface)]',
   ].join(' '),
   ghost: [
-    'bg-transparent text-gray-700 dark:text-gray-300',
-    'hover:bg-gray-100 dark:hover:bg-gray-800',
-    'active:bg-gray-200 dark:active:bg-gray-700',
+    'bg-transparent text-[var(--text-secondary)]',
+    'hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]',
+    'active:bg-[var(--bg-elevated)]',
   ].join(' '),
   danger: [
     'bg-error-500 text-white',
@@ -78,8 +78,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'hover:scale-[1.02] active:scale-[0.98]',
           // Focus styles for a11y
           'focus-visible:outline-none focus-visible:ring-2',
-          'focus-visible:ring-primary-500 focus-visible:ring-offset-2',
-          'dark:focus-visible:ring-offset-gray-950',
+          'focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-void)]',
           // Disabled styles
           'disabled:pointer-events-none disabled:opacity-50',
           // Variant & size

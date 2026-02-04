@@ -14,9 +14,9 @@ export interface CardProps extends ComponentPropsWithoutRef<'div'> {
 
 const variantStyles = {
   default:
-    'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm',
-  outline: 'bg-transparent border border-gray-200 dark:border-gray-700',
-  ghost: 'bg-gray-50 dark:bg-gray-800/50',
+    'bg-[var(--bg-surface)] border border-[var(--border-subtle)] shadow-sm',
+  outline: 'bg-transparent border border-[var(--border-subtle)]',
+  ghost: 'bg-[var(--bg-hover)]',
 } as const
 
 const paddingStyles = {
@@ -51,7 +51,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
           paddingStyles[padding],
           interactive && [
             'transition-all duration-300',
-            'hover:border-gray-300 hover:shadow-lg dark:hover:border-gray-600',
+            'hover:border-[var(--border-default)] hover:shadow-lg',
             'hover:scale-[1.01]',
             'cursor-pointer',
           ],
@@ -97,7 +97,7 @@ export const CardTitle = forwardRef<
   <h3
     ref={ref}
     className={cn(
-      'text-lg font-semibold text-gray-900 dark:text-gray-100',
+      'text-lg font-semibold text-[var(--text-primary)]',
       className
     )}
     {...props}
@@ -116,7 +116,7 @@ export const CardDescription = forwardRef<
 >(({ className, children, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn('text-sm text-gray-500 dark:text-gray-400', className)}
+    className={cn('text-sm text-[var(--text-muted)]', className)}
     {...props}
   >
     {children}

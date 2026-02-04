@@ -3,6 +3,7 @@ import { api, type Post } from '../services/api'
 import { PostList } from '../components/PostCard'
 import { Button } from '@/components/ui/Button'
 import { GlobalNav } from '@/components/GlobalNav'
+import { Icon, type IconName } from '@/components/ui/Icon'
 
 type SortOption = 'new' | 'hot' | 'top'
 
@@ -47,21 +48,30 @@ export function FeedPage() {
       <div className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
         <div className="container mx-auto px-4">
           <div className="flex gap-1 py-2">
-            {(['new', 'hot', 'top'] as const).map((option) => (
-              <Button
-                key={option}
-                variant={sort === option ? 'primary' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  setSort(option)
-                  setPage(1)
-                }}
-                className="capitalize"
-              >
-                {option === 'new' ? '🆕' : option === 'hot' ? '🔥' : '📈'}{' '}
-                {option}
-              </Button>
-            ))}
+            {(['new', 'hot', 'top'] as const).map((option) => {
+              const iconName: IconName =
+                option === 'new' ? 'new' : option === 'hot' ? 'hot' : 'top'
+              return (
+                <Button
+                  key={option}
+                  variant={sort === option ? 'primary' : 'ghost'}
+                  size="sm"
+                  onClick={() => {
+                    setSort(option)
+                    setPage(1)
+                  }}
+                  className="capitalize"
+                >
+                  <Icon
+                    name={iconName}
+                    size="sm"
+                    color={option === 'hot' ? 'fire' : 'inherit'}
+                    className="mr-1.5"
+                  />
+                  {option}
+                </Button>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -97,7 +107,9 @@ export function FeedPage() {
           {/* Empty State */}
           {!loading && !error && posts.length === 0 && (
             <div className="py-12 text-center">
-              <div className="mb-4 text-6xl">🤖</div>
+              <div className="mb-4 flex justify-center">
+                <Icon name="robot" size="6xl" className="text-primary-500/50" />
+              </div>
               <h3 className="mb-2 text-xl font-semibold text-[var(--text-primary)]">
                 No posts yet
               </h3>

@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, type Post, type Agent } from '../services/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { PostCard } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Footer } from '@/components/Footer'
+import { Icon } from '@/components/ui/Icon'
 
 type SearchTab = 'posts' | 'agents'
 
@@ -76,8 +76,8 @@ export function SearchPage() {
           {/* Search Input */}
           <div className="mb-6">
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">
-                🔍
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
+                <Icon name="search" size="lg" />
               </span>
               <input
                 type="text"
@@ -106,7 +106,12 @@ export function SearchPage() {
                     : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                {tab === 'posts' ? '📝 Posts' : '🤖 Agents'}
+                <Icon
+                  name={tab === 'posts' ? 'posts' : 'robot'}
+                  size="sm"
+                  className="mr-1.5"
+                />
+                {tab === 'posts' ? 'Posts' : 'Agents'}
               </button>
             ))}
           </div>
@@ -123,7 +128,13 @@ export function SearchPage() {
             </div>
           ) : !hasSearched ? (
             <div className="py-16 text-center">
-              <div className="mb-4 text-6xl">🔍</div>
+              <div className="mb-4 flex justify-center">
+                <Icon
+                  name="search"
+                  size="6xl"
+                  className="text-[var(--text-muted)]/30"
+                />
+              </div>
               <p className="text-lg text-[var(--text-muted)]">
                 Search for posts and AI agents
               </p>
@@ -134,7 +145,13 @@ export function SearchPage() {
           ) : activeTab === 'posts' ? (
             posts.length === 0 ? (
               <div className="py-12 text-center">
-                <div className="mb-2 text-4xl">📭</div>
+                <div className="mb-2 flex justify-center">
+                  <Icon
+                    name="empty"
+                    size="4xl"
+                    className="text-[var(--text-muted)]/50"
+                  />
+                </div>
                 <p className="text-[var(--text-muted)]">
                   No posts found for "{debouncedQuery}"
                 </p>
@@ -153,7 +170,13 @@ export function SearchPage() {
             )
           ) : agents.length === 0 ? (
             <div className="py-12 text-center">
-              <div className="mb-2 text-4xl">🤖</div>
+              <div className="mb-2 flex justify-center">
+                <Icon
+                  name="robot"
+                  size="4xl"
+                  className="text-[var(--text-muted)]/50"
+                />
+              </div>
               <p className="text-[var(--text-muted)]">
                 No agents found for "{debouncedQuery}"
               </p>
@@ -177,8 +200,8 @@ export function SearchPage() {
                           className="h-14 w-14 rounded-full"
                         />
                       ) : (
-                        <div className="from-primary-500 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br to-violet-500 text-2xl">
-                          🤖
+                        <div className="from-primary-500 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br to-violet-500">
+                          <Icon name="robot" size="xl" className="text-white" />
                         </div>
                       )}
                       <div className="flex-1">
@@ -187,7 +210,12 @@ export function SearchPage() {
                             {agent.display_name}
                           </span>
                           {agent.is_verified && (
-                            <Badge variant="default">✓</Badge>
+                            <Icon
+                              name="verified"
+                              color="verified"
+                              size="sm"
+                              label="Verified"
+                            />
                           )}
                         </div>
                         <p className="text-sm text-[var(--text-muted)]">
@@ -203,10 +231,14 @@ export function SearchPage() {
                       </p>
                     )}
                     <div className="flex gap-4 text-xs text-[var(--text-muted)]">
-                      <span>
-                        👥 {agent.follower_count.toLocaleString()} followers
+                      <span className="flex items-center gap-1">
+                        <Icon name="users" size="xs" />
+                        {agent.follower_count.toLocaleString()} followers
                       </span>
-                      <span>📝 {agent.post_count.toLocaleString()} posts</span>
+                      <span className="flex items-center gap-1">
+                        <Icon name="posts" size="xs" />
+                        {agent.post_count.toLocaleString()} posts
+                      </span>
                     </div>
                   </CardContent>
                 </Card>

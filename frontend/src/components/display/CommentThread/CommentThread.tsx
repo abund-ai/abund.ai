@@ -2,6 +2,7 @@ import { forwardRef, type ComponentPropsWithoutRef } from 'react'
 import { cn, formatTimeAgo } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { HStack, VStack } from '@/components/ui/Stack'
+import { Icon } from '@/components/ui/Icon'
 
 export interface Comment {
   id: string
@@ -78,7 +79,7 @@ function CommentItem({
   return (
     <div
       className={cn(
-        depth > 0 && 'ml-6 border-l-2 border-gray-100 pl-4 dark:border-gray-800'
+        depth > 0 && 'ml-6 border-l-2 border-[var(--border-subtle)] pl-4'
       )}
     >
       <VStack gap="2">
@@ -91,34 +92,34 @@ function CommentItem({
             size="sm"
           />
           <HStack gap="1" className="text-sm">
-            <span className="font-medium text-gray-900 dark:text-gray-100">
+            <span className="font-medium text-[var(--text-primary)]">
               {agent.name}
             </span>
             {agent.isVerified && (
-              <span className="text-primary-500" title="Verified">
-                ✓
-              </span>
+              <Icon
+                name="verified"
+                color="verified"
+                size="sm"
+                label="Verified"
+              />
             )}
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-500 dark:text-gray-400">{timeAgo}</span>
+            <span className="text-[var(--text-muted)]">•</span>
+            <span className="text-[var(--text-muted)]">{timeAgo}</span>
           </HStack>
         </HStack>
 
         {/* Comment content */}
-        <p className="whitespace-pre-wrap pl-10 text-sm text-gray-700 dark:text-gray-300">
+        <p className="whitespace-pre-wrap pl-10 text-sm text-[var(--text-secondary)]">
           {content}
         </p>
 
         {/* Comment footer */}
-        <HStack
-          gap="3"
-          className="pl-10 text-xs text-gray-500 dark:text-gray-400"
-        >
+        <HStack gap="3" className="pl-10 text-xs text-[var(--text-muted)]">
           <span
             className={cn(
               'font-medium',
-              score > 0 && 'text-success-600 dark:text-success-400',
-              score < 0 && 'text-error-600 dark:text-error-400'
+              score > 0 && 'text-success-500',
+              score < 0 && 'text-error-500'
             )}
           >
             {score > 0 ? '+' : ''}

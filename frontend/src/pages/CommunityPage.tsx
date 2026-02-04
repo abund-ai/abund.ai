@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { PostCard } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
+import { Icon, type IconName } from '@/components/ui/Icon'
 
 interface CommunityPageProps {
   slug: string
@@ -88,7 +89,7 @@ export function CommunityPage({ slug }: CommunityPageProps) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
         <div className="flex animate-pulse flex-col items-center gap-4">
-          <div className="text-6xl">🏘️</div>
+          <Icon name="communities" size="6xl" className="text-primary-500/50" />
           <div className="h-6 w-40 rounded bg-[var(--bg-surface)]" />
         </div>
       </div>
@@ -99,7 +100,13 @@ export function CommunityPage({ slug }: CommunityPageProps) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
         <div className="text-center">
-          <div className="mb-4 text-6xl">🏚️</div>
+          <div className="mb-4 flex justify-center">
+            <Icon
+              name="notFoundCommunity"
+              size="6xl"
+              className="text-[var(--text-muted)]/50"
+            />
+          </div>
           <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
             Community Not Found
           </h2>
@@ -125,7 +132,11 @@ export function CommunityPage({ slug }: CommunityPageProps) {
       <section className="relative">
         {/* Banner */}
         <div className="from-primary-600/50 flex h-40 items-center justify-center bg-gradient-to-br via-violet-600/50 to-pink-600/50">
-          <span className="text-8xl">{community.icon_emoji || '🌐'}</span>
+          {community.icon_emoji ? (
+            <span className="text-8xl">{community.icon_emoji}</span>
+          ) : (
+            <Icon name="globe" size="6xl" className="text-white/80" />
+          )}
         </div>
 
         <div className="container mx-auto max-w-2xl px-4">
@@ -171,23 +182,30 @@ export function CommunityPage({ slug }: CommunityPageProps) {
       <section className="border-b border-[var(--border-subtle)]">
         <div className="container mx-auto max-w-2xl px-4">
           <div className="flex gap-1 py-2">
-            {(['new', 'hot', 'top'] as const).map((option) => (
-              <button
-                key={option}
-                onClick={() => {
-                  setSort(option)
-                }}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  sort === option
-                    ? 'bg-primary-500/20 text-primary-400'
-                    : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
-                }`}
-              >
-                {option === 'new' && '🕐 New'}
-                {option === 'hot' && '🔥 Hot'}
-                {option === 'top' && '⭐ Top'}
-              </button>
-            ))}
+            {(['new', 'hot', 'top'] as const).map((option) => {
+              const iconName: IconName =
+                option === 'new' ? 'new' : option === 'hot' ? 'hot' : 'topStar'
+              return (
+                <button
+                  key={option}
+                  onClick={() => {
+                    setSort(option)
+                  }}
+                  className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    sort === option
+                      ? 'bg-primary-500/20 text-primary-400'
+                      : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <Icon
+                    name={iconName}
+                    size="sm"
+                    color={option === 'hot' ? 'fire' : 'inherit'}
+                  />
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                </button>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -206,7 +224,13 @@ export function CommunityPage({ slug }: CommunityPageProps) {
             </div>
           ) : posts.length === 0 ? (
             <div className="py-12 text-center">
-              <div className="mb-2 text-4xl">💬</div>
+              <div className="mb-2 flex justify-center">
+                <Icon
+                  name="comment"
+                  size="4xl"
+                  className="text-[var(--text-muted)]/50"
+                />
+              </div>
               <p className="text-[var(--text-muted)]">
                 No posts in this community yet
               </p>
@@ -285,9 +309,15 @@ export function CommunitiesListPage() {
               >
                 <CardHeader>
                   <div className="flex items-start gap-3">
-                    <span className="text-4xl">
-                      {community.icon_emoji || '🌐'}
-                    </span>
+                    {community.icon_emoji ? (
+                      <span className="text-4xl">{community.icon_emoji}</span>
+                    ) : (
+                      <Icon
+                        name="globe"
+                        size="3xl"
+                        className="text-primary-500"
+                      />
+                    )}
                     <div className="flex-1">
                       <CardTitle className="text-lg">
                         {community.name}
@@ -305,8 +335,14 @@ export function CommunitiesListPage() {
                     </p>
                   )}
                   <div className="flex gap-4 text-xs text-[var(--text-muted)]">
-                    <span>👥 {community.member_count.toLocaleString()}</span>
-                    <span>📝 {community.post_count.toLocaleString()}</span>
+                    <span className="flex items-center gap-1">
+                      <Icon name="users" size="xs" />
+                      {community.member_count.toLocaleString()}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Icon name="posts" size="xs" />
+                      {community.post_count.toLocaleString()}
+                    </span>
                   </div>
                 </CardContent>
               </Card>

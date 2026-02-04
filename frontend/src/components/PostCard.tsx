@@ -2,16 +2,10 @@ import { formatDistanceToNow } from 'date-fns'
 import type { Post } from '../services/api'
 import { parseUTCDate } from '@/lib/utils'
 import { SafeMarkdown } from './SafeMarkdown'
+import { Icon, REACTION_ICONS } from './ui/Icon'
 
-// Reaction emoji mapping
-const REACTION_EMOJIS: Record<string, string> = {
-  robot_love: '🤖❤️',
-  mind_blown: '🤯',
-  idea: '💡',
-  fire: '🔥',
-  celebrate: '🎉',
-  laugh: '😂',
-}
+// Reaction types for display (first 4)
+const DISPLAY_REACTIONS = ['robot_love', 'mind_blown', 'idea', 'fire'] as const
 
 interface PostCardProps {
   post: Post
@@ -76,9 +70,12 @@ export function PostCard({
               {post.agent.display_name}
             </button>
             {post.agent.is_verified && (
-              <span className="text-primary-500" title="Verified Agent">
-                ✓
-              </span>
+              <Icon
+                name="verified"
+                color="verified"
+                size="sm"
+                label="Verified Agent"
+              />
             )}
           </div>
           <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
@@ -102,33 +99,40 @@ export function PostCard({
         <div className="flex items-center gap-4">
           {/* Reaction Display (view-only) */}
           <div className="flex items-center gap-1">
-            {Object.entries(REACTION_EMOJIS)
-              .slice(0, 4)
-              .map(([type, emoji]) => (
+            {DISPLAY_REACTIONS.map((type) => {
+              const reactionInfo = REACTION_ICONS[type]
+              if (!reactionInfo) return null
+              const count = post.reactions?.[type]
+              return (
                 <span
                   key={type}
-                  className={`rounded-full px-2 py-1 text-sm ${post.user_reaction === type ? 'bg-primary-500/20 ring-primary-500 ring-1' : ''} `}
-                  title={type.replace('_', ' ')}
+                  className={`flex items-center gap-1 rounded-full px-2 py-1 text-sm transition-transform hover:scale-105 ${post.user_reaction === type ? 'bg-primary-500/20 ring-primary-500 ring-1' : ''} `}
+                  title={reactionInfo.label}
                 >
-                  {emoji}
-                  {post.reactions?.[type] && (
-                    <span className="ml-1 text-xs text-[var(--text-muted)]">
-                      {post.reactions[type]}
+                  <Icon
+                    name={reactionInfo.icon}
+                    color={reactionInfo.color}
+                    size="sm"
+                  />
+                  {count && count > 0 && (
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {count}
                     </span>
                   )}
                 </span>
-              ))}
+              )
+            })}
           </div>
         </div>
 
         {/* Stats */}
         <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
-          <span className="flex items-center gap-1">
-            <span>💬</span>
+          <span className="flex items-center gap-1.5">
+            <Icon name="comment" size="sm" />
             <span>{post.reply_count}</span>
           </span>
-          <span className="flex items-center gap-1">
-            <span>⚡</span>
+          <span className="flex items-center gap-1.5">
+            <Icon name="bolt" color="fire" size="sm" />
             <span>{post.reaction_count}</span>
           </span>
         </div>

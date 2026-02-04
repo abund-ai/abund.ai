@@ -1,6 +1,7 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
 import { cn } from '@/lib/utils'
 import { HStack } from '@/components/ui/Stack'
+import { Icon, type IconName, type IconColor } from '@/components/ui/Icon'
 
 export type ReactionType =
   | 'robot'
@@ -11,14 +12,17 @@ export type ReactionType =
   | 'laugh'
   | 'celebrate'
 
-const reactionEmojis: Record<ReactionType, string> = {
-  robot: '🤖',
-  heart: '❤️',
-  fire: '🔥',
-  brain: '🧠',
-  idea: '💡',
-  laugh: '😂',
-  celebrate: '🎉',
+const reactionIcons: Record<
+  ReactionType,
+  { icon: IconName; color: IconColor }
+> = {
+  robot: { icon: 'robot', color: 'robot' },
+  heart: { icon: 'heart', color: 'heart' },
+  fire: { icon: 'fire', color: 'fire' },
+  brain: { icon: 'brain', color: 'brain' },
+  idea: { icon: 'lightbulb', color: 'lightbulb' },
+  laugh: { icon: 'laugh', color: 'laugh' },
+  celebrate: { icon: 'celebrate', color: 'celebrate' },
 }
 
 const reactionLabels: Record<ReactionType, string> = {
@@ -46,17 +50,14 @@ const sizeStyles = {
   sm: {
     container: 'gap-1',
     reaction: 'px-1.5 py-0.5 text-xs gap-1',
-    emoji: 'text-sm',
   },
   md: {
     container: 'gap-2',
     reaction: 'px-2 py-1 text-sm gap-1.5',
-    emoji: 'text-base',
   },
   lg: {
     container: 'gap-2',
     reaction: 'px-3 py-1.5 text-base gap-2',
-    emoji: 'text-lg',
   },
 } as const
 
@@ -82,7 +83,7 @@ export const ReactionBar = forwardRef<HTMLDivElement, ReactionBarProps>(
       number,
     ][]
     const displayReactions = showEmpty
-      ? (Object.keys(reactionEmojis) as ReactionType[]).map(
+      ? (Object.keys(reactionIcons) as ReactionType[]).map(
           (type) => [type, reactions[type] ?? 0] as [ReactionType, number]
         )
       : reactionEntries.filter(([, count]) => count > 0)
@@ -101,31 +102,34 @@ export const ReactionBar = forwardRef<HTMLDivElement, ReactionBarProps>(
         wrap
         {...props}
       >
-        {displayReactions.map(([type, count]) => (
-          <div
-            key={type}
-            className={cn(
-              'inline-flex items-center rounded-full',
-              'bg-gray-100 dark:bg-gray-800',
-              'text-gray-700 dark:text-gray-300',
-              count === 0 && 'opacity-40',
-              styles.reaction
-            )}
-            title={`${reactionLabels[type]}: ${String(count)}`}
-          >
-            <span
-              className={styles.emoji}
-              role="img"
-              aria-label={reactionLabels[type]}
+        {displayReactions.map(([type, count]) => {
+          const iconInfo = reactionIcons[type]
+          return (
+            <div
+              key={type}
+              className={cn(
+                'inline-flex items-center rounded-full',
+                'bg-[var(--bg-hover)]',
+                'text-[var(--text-secondary)]',
+                'transition-transform hover:scale-105',
+                count === 0 && 'opacity-40',
+                styles.reaction
+              )}
+              title={`${reactionLabels[type]}: ${String(count)}`}
             >
-              {reactionEmojis[type]}
-            </span>
-            <span className="font-medium">{formatCount(count)}</span>
-          </div>
-        ))}
+              <Icon
+                name={iconInfo.icon}
+                color={iconInfo.color}
+                size={size}
+                label={reactionLabels[type]}
+              />
+              <span className="font-medium">{formatCount(count)}</span>
+            </div>
+          )
+        })}
 
         {total > 0 && (
-          <span className="ml-1 text-sm text-gray-400 dark:text-gray-500">
+          <span className="ml-1 text-sm text-[var(--text-muted)]">
             {formatCount(total)} total
           </span>
         )}
@@ -152,21 +156,25 @@ export interface ReactionBadgeProps extends ComponentPropsWithoutRef<'span'> {
 export const ReactionBadge = forwardRef<HTMLSpanElement, ReactionBadgeProps>(
   ({ type, count, className, ...props }, ref) => {
     if (count === 0) return null
+    const iconInfo = reactionIcons[type]
 
     return (
       <span
         ref={ref}
         className={cn(
           'inline-flex items-center gap-1 text-sm',
-          'text-gray-600 dark:text-gray-400',
+          'text-[var(--text-muted)]',
           className
         )}
         title={`${reactionLabels[type]}: ${String(count)}`}
         {...props}
       >
-        <span role="img" aria-label={reactionLabels[type]}>
-          {reactionEmojis[type]}
-        </span>
+        <Icon
+          name={iconInfo.icon}
+          color={iconInfo.color}
+          size="sm"
+          label={reactionLabels[type]}
+        />
         <span>{formatCount(count)}</span>
       </span>
     )

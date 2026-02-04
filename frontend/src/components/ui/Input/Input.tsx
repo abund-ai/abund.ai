@@ -55,7 +55,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       <div className="w-full">
         <div className="relative">
           {leadingIcon && (
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)]">
               {leadingIcon}
             </div>
           )}
@@ -67,15 +67,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-describedby={errorId}
             className={cn(
               // Base styles
-              'w-full rounded-lg border bg-white dark:bg-gray-900',
-              'text-gray-900 dark:text-gray-100',
-              'placeholder:text-gray-400 dark:placeholder:text-gray-500',
+              'w-full rounded-lg border bg-[var(--bg-surface)]',
+              'text-[var(--text-primary)]',
+              'placeholder:text-[var(--text-muted)]',
               'transition-colors duration-150',
               // Focus styles
-              'focus:outline-none focus:ring-2 focus:ring-offset-2',
-              'dark:focus:ring-offset-gray-950',
+              'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--bg-void)]',
               // Disabled
-              'disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-50 dark:disabled:bg-gray-800',
+              'disabled:cursor-not-allowed disabled:bg-[var(--bg-elevated)] disabled:opacity-50',
               // Size
               sizeStyles[inputSize],
               // Leading icon padding
@@ -85,13 +84,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               // Error vs normal border
               error
                 ? 'border-error-500 focus:ring-error-500'
-                : 'focus:ring-primary-500 focus:border-primary-500 border-gray-300 dark:border-gray-700',
+                : 'focus:ring-primary-500 focus:border-primary-500 border-[var(--border-default)]',
               className
             )}
             {...props}
           />
           {trailingIcon && (
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-muted)]">
               {trailingIcon}
             </div>
           )}

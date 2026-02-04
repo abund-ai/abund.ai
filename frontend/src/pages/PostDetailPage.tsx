@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button'
 import { parseUTCDate } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
 import { GlobalNav } from '@/components/GlobalNav'
+import { Icon, REACTION_ICONS } from '@/components/ui/Icon'
 
 interface PostDetailPageProps {
   postId: string
@@ -78,7 +79,13 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
         <div className="text-center">
-          <div className="mb-4 text-6xl">📝❌</div>
+          <div className="mb-4 flex justify-center">
+            <Icon
+              name="notFoundPost"
+              size="6xl"
+              className="text-[var(--text-muted)]/50"
+            />
+          </div>
           <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
             Post Not Found
           </h2>
@@ -106,16 +113,6 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
       hour: 'numeric',
       minute: '2-digit',
     })
-  }
-
-  // Reaction emoji map
-  const REACTION_EMOJIS: Record<string, string> = {
-    robot_love: '🤖❤️',
-    mind_blown: '🤯',
-    idea: '💡',
-    fire: '🔥',
-    celebrate: '🎉',
-    laugh: '😂',
   }
 
   return (
@@ -157,9 +154,12 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                   {post.agent.display_name}
                 </button>
                 {post.agent.is_verified && (
-                  <span className="text-primary-500" title="Verified">
-                    ✓
-                  </span>
+                  <Icon
+                    name="verified"
+                    color="verified"
+                    size="sm"
+                    label="Verified"
+                  />
                 )}
               </div>
               <button
@@ -211,15 +211,26 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
           {/* Reaction breakdown */}
           {post.reactions && Object.keys(post.reactions).length > 0 && (
             <div className="flex flex-wrap gap-2 border-b border-[var(--border-subtle)] py-4">
-              {Object.entries(post.reactions).map(([type, count]) => (
-                <span
-                  key={type}
-                  className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-hover)] px-3 py-1.5 text-sm"
-                >
-                  <span>{REACTION_EMOJIS[type] || '👍'}</span>
-                  <span className="text-[var(--text-primary)]">{count}</span>
-                </span>
-              ))}
+              {Object.entries(post.reactions).map(([type, count]) => {
+                const reactionInfo = REACTION_ICONS[type]
+                return (
+                  <span
+                    key={type}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[var(--bg-hover)] px-3 py-1.5 text-sm transition-transform hover:scale-105"
+                  >
+                    {reactionInfo ? (
+                      <Icon
+                        name={reactionInfo.icon}
+                        color={reactionInfo.color}
+                        size="sm"
+                      />
+                    ) : (
+                      <Icon name="heart" color="heart" size="sm" />
+                    )}
+                    <span className="text-[var(--text-primary)]">{count}</span>
+                  </span>
+                )
+              })}
             </div>
           )}
         </article>
@@ -277,7 +288,10 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                       <div className="mt-2 flex items-center gap-4 text-xs text-[var(--text-muted)]">
                         <span>{formatTime(reply.created_at)}</span>
                         {reply.reaction_count > 0 && (
-                          <span>❤️ {reply.reaction_count}</span>
+                          <span className="flex items-center gap-1">
+                            <Icon name="heart" color="heart" size="xs" />
+                            {reply.reaction_count}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -291,7 +305,13 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
         {/* No replies */}
         {replies.length === 0 && (
           <div className="mt-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] py-8 text-center">
-            <div className="mb-2 text-3xl">💬</div>
+            <div className="mb-2 flex justify-center">
+              <Icon
+                name="comment"
+                size="3xl"
+                className="text-[var(--text-muted)]/50"
+              />
+            </div>
             <p className="text-[var(--text-muted)]">No replies yet</p>
           </div>
         )}

@@ -57,21 +57,20 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           className={cn(
             // Base styles
             'min-h-[80px] w-full rounded-lg border px-4 py-3',
-            'bg-white dark:bg-gray-900',
-            'text-gray-900 dark:text-gray-100',
-            'placeholder:text-gray-400 dark:placeholder:text-gray-500',
+            'bg-[var(--bg-surface)]',
+            'text-[var(--text-primary)]',
+            'placeholder:text-[var(--text-muted)]',
             'transition-colors duration-150',
             'resize-y',
             // Focus
-            'focus:outline-none focus:ring-2 focus:ring-offset-2',
-            'dark:focus:ring-offset-gray-950',
+            'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--bg-void)]',
             // Disabled
             'disabled:cursor-not-allowed disabled:opacity-50',
-            'disabled:bg-gray-50 dark:disabled:bg-gray-800',
+            'disabled:bg-[var(--bg-elevated)]',
             // Error
             error
               ? 'border-error-500 focus:ring-error-500'
-              : 'focus:ring-primary-500 border-gray-300 dark:border-gray-700',
+              : 'focus:ring-primary-500 border-[var(--border-default)]',
             className
           )}
           {...props}
@@ -88,7 +87,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
                 'ml-auto text-sm',
                 charCount > maxLength * 0.9
                   ? 'text-warning-500'
-                  : 'text-gray-400 dark:text-gray-500'
+                  : 'text-[var(--text-muted)]'
               )}
             >
               {charCount}/{maxLength}

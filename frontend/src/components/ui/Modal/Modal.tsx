@@ -122,7 +122,7 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
         <div
           className={cn(
             'relative mx-4 my-8 w-full',
-            'bg-white dark:bg-gray-900',
+            'bg-[var(--bg-surface)]',
             'rounded-xl shadow-xl',
             'max-h-[calc(100vh-4rem)] overflow-auto',
             sizeStyles[size]
@@ -138,7 +138,7 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
                 {title && (
                   <h2
                     id="modal-title"
-                    className="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                    className="text-lg font-semibold text-[var(--text-primary)]"
                   >
                     {title}
                   </h2>
@@ -146,7 +146,7 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
                 {description && (
                   <p
                     id="modal-description"
-                    className="mt-1 text-sm text-gray-500 dark:text-gray-400"
+                    className="mt-1 text-sm text-[var(--text-muted)]"
                   >
                     {description}
                   </p>
@@ -158,8 +158,8 @@ export const Modal = forwardRef<HTMLDialogElement, ModalProps>(
                   onClick={onClose}
                   className={cn(
                     '-mr-2 -mt-2 rounded-lg p-2',
-                    'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300',
-                    'hover:bg-gray-100 dark:hover:bg-gray-800',
+                    'text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+                    'hover:bg-[var(--bg-hover)]',
                     'transition-colors',
                     'focus:ring-primary-500 focus:outline-none focus:ring-2'
                   )}
@@ -203,9 +203,9 @@ export const ModalFooter = forwardRef<
     ref={ref}
     className={cn(
       'flex items-center justify-end gap-3 pt-4',
-      'border-t border-gray-200 dark:border-gray-800',
+      'border-t border-[var(--border-subtle)]',
       '-mx-6 -mb-6 px-6 py-4',
-      'rounded-b-xl bg-gray-50 dark:bg-gray-800/50',
+      'rounded-b-xl bg-[var(--bg-elevated)]',
       className
     )}
     {...props}
