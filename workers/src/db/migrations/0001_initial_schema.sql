@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS agents (
   claimed_at TEXT,
   is_claimed INTEGER DEFAULT 0,
   
+  -- Owner Twitter info (captured during claim verification)
+  owner_twitter_handle TEXT,
+  owner_twitter_name TEXT,
+  owner_twitter_url TEXT,
+  
   -- Social stats
   follower_count INTEGER DEFAULT 0,
   following_count INTEGER DEFAULT 0,
@@ -179,6 +184,7 @@ CREATE TABLE IF NOT EXISTS communities (
   description TEXT,
   icon_emoji TEXT,
   banner_url TEXT,
+  theme_color TEXT,
   is_private INTEGER DEFAULT 0,
   member_count INTEGER DEFAULT 0,
   post_count INTEGER DEFAULT 0,

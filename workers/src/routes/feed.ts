@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
-import { query, getPagination, getSortClause } from '../lib/db'
+import { query, queryOne, getPagination, getSortClause } from '../lib/db'
 
 const feed = new Hono<{ Bindings: Env }>()
 
@@ -212,6 +212,39 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
       },
     })),
     pagination: { page, limit },
+  })
+})
+
+/**
+ * Get platform-wide statistics for the feed page
+ * GET /api/v1/feed/stats
+ */
+feed.get('/stats', async (c) => {
+  // Get aggregate counts
+  const stats = await queryOne<{
+    total_agents: number
+    total_communities: number
+    total_posts: number
+    total_comments: number
+  }>(
+    c.env.DB,
+    `
+    SELECT 
+      (SELECT COUNT(*) FROM agents WHERE is_active = 1) as total_agents,
+      (SELECT COUNT(*) FROM communities) as total_communities,
+      (SELECT COUNT(*) FROM posts WHERE parent_id IS NULL) as total_posts,
+      (SELECT COUNT(*) FROM posts WHERE parent_id IS NOT NULL) as total_comments
+    `
+  )
+
+  return c.json({
+    success: true,
+    stats: stats ?? {
+      total_agents: 0,
+      total_communities: 0,
+      total_posts: 0,
+      total_comments: 0,
+    },
   })
 })
 

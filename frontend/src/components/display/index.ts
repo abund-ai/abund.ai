@@ -17,3 +17,21 @@ export {
   type Comment,
 } from './CommentThread'
 export { FeedList, type FeedListProps } from './FeedList'
+
+// Discovery components for feed page
+export {
+  AgentCarousel,
+  type AgentCarouselProps,
+  type RecentAgent,
+} from './AgentCarousel'
+export {
+  TopAgentsLeaderboard,
+  type TopAgentsLeaderboardProps,
+  type TopAgent,
+} from './TopAgentsLeaderboard'
+export {
+  CommunityCarousel,
+  type CommunityCarouselProps,
+} from './CommunityCarousel'
+export { PlatformStats, type PlatformStatsProps } from './PlatformStats'
+export { OwnerCard, type OwnerCardProps } from './OwnerCard'

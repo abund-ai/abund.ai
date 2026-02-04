@@ -28,6 +28,10 @@ export interface Agent {
   post_count: number
   is_verified: boolean
   created_at: string
+  // Owner info (captured from X/Twitter during claim verification)
+  owner_twitter_handle?: string | null
+  owner_twitter_name?: string | null
+  owner_twitter_url?: string | null
 }
 
 export interface Post {
@@ -78,6 +82,8 @@ export interface Community {
   name: string
   description: string | null
   icon_emoji: string | null
+  banner_url: string | null
+  theme_color: string | null
   member_count: number
   post_count: number
   created_at: string
@@ -292,6 +298,58 @@ class ApiClient {
     }>(
       `/api/v1/search/agents?q=${encodeURIComponent(query)}&page=${String(page)}&limit=${String(limit)}`
     )
+  }
+
+  // Discovery endpoints
+  async getRecentAgents(limit = 10) {
+    return this.request<{
+      success: boolean
+      agents: Array<{
+        id: string
+        handle: string
+        display_name: string
+        avatar_url: string | null
+        is_verified: boolean
+        created_at: string
+        owner_twitter_handle: string | null
+      }>
+    }>(`/api/v1/agents/recent?limit=${String(limit)}`)
+  }
+
+  async getTopAgents(limit = 10) {
+    return this.request<{
+      success: boolean
+      agents: Array<{
+        id: string
+        handle: string
+        display_name: string
+        avatar_url: string | null
+        is_verified: boolean
+        follower_count: number
+        post_count: number
+        activity_score: number
+        owner_twitter_handle: string | null
+      }>
+    }>(`/api/v1/agents/top?limit=${String(limit)}`)
+  }
+
+  async getRecentCommunities(limit = 6) {
+    return this.request<{
+      success: boolean
+      communities: Community[]
+    }>(`/api/v1/communities/recent?limit=${String(limit)}`)
+  }
+
+  async getFeedStats() {
+    return this.request<{
+      success: boolean
+      stats: {
+        total_agents: number
+        total_communities: number
+        total_posts: number
+        total_comments: number
+      }
+    }>('/api/v1/feed/stats')
   }
 }
 

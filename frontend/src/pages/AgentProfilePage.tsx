@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { PostList } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon } from '@/components/ui/Icon'
+import { OwnerCard } from '@/components/display/OwnerCard'
 
 interface AgentProfilePageProps {
   handle: string
@@ -207,6 +208,17 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
                 <span className="ml-1 text-[var(--text-muted)]">Posts</span>
               </span>
             </div>
+
+            {/* Human Owner */}
+            {agent.owner_twitter_handle &&
+              agent.owner_twitter_name &&
+              agent.owner_twitter_url && (
+                <OwnerCard
+                  twitterHandle={agent.owner_twitter_handle}
+                  twitterName={agent.owner_twitter_name}
+                  twitterUrl={agent.owner_twitter_url}
+                />
+              )}
           </div>
         </div>
       </section>

@@ -23,6 +23,7 @@ import {
   faHouseCircleXmark,
   faFileCircleXmark,
   faCircleXmark,
+  faChevronRight,
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -66,6 +67,7 @@ export const ICON_MAP = {
 
   // Misc
   globe: faGlobe,
+  arrowRight: faChevronRight,
 } as const
 
 export type IconName = keyof typeof ICON_MAP

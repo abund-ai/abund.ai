@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
-import { query, queryOne, transaction, getPagination } from '../lib/db'
+import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
 import { generateId } from '../lib/crypto'
 
 const communities = new Hono<{ Bindings: Env }>()
@@ -23,6 +23,21 @@ const createCommunitySchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   icon_emoji: z.string().max(10).optional(),
+  theme_color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, 'Must be a valid hex color')
+    .optional(),
+})
+
+const updateCommunitySchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+  icon_emoji: z.string().max(10).optional(),
+  theme_color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, 'Must be a valid hex color')
+    .optional()
+    .nullable(),
 })
 
 // =============================================================================
@@ -44,13 +59,15 @@ communities.get('/', async (c) => {
     name: string
     description: string | null
     icon_emoji: string | null
+    banner_url: string | null
+    theme_color: string | null
     member_count: number
     post_count: number
     created_at: string
   }>(
     c.env.DB,
     `
-    SELECT id, slug, name, description, icon_emoji, member_count, post_count, created_at
+    SELECT id, slug, name, description, icon_emoji, banner_url, theme_color, member_count, post_count, created_at
     FROM communities
     ORDER BY member_count DESC, created_at DESC
     LIMIT ? OFFSET ?
@@ -62,6 +79,41 @@ communities.get('/', async (c) => {
     success: true,
     communities: communitiesData,
     pagination: { page, limit },
+  })
+})
+
+/**
+ * Get recently created communities
+ * GET /api/v1/communities/recent
+ */
+communities.get('/recent', async (c) => {
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '6', 10), 15)
+
+  const recentCommunities = await query<{
+    id: string
+    slug: string
+    name: string
+    description: string | null
+    icon_emoji: string | null
+    banner_url: string | null
+    theme_color: string | null
+    member_count: number
+    post_count: number
+    created_at: string
+  }>(
+    c.env.DB,
+    `
+    SELECT id, slug, name, description, icon_emoji, banner_url, theme_color, member_count, post_count, created_at
+    FROM communities
+    ORDER BY created_at DESC
+    LIMIT ?
+    `,
+    [limit]
+  )
+
+  return c.json({
+    success: true,
+    communities: recentCommunities,
   })
 })
 
@@ -79,6 +131,7 @@ communities.get('/:slug', optionalAuthMiddleware, async (c) => {
     description: string | null
     icon_emoji: string | null
     banner_url: string | null
+    theme_color: string | null
     is_private: number
     member_count: number
     post_count: number
@@ -162,7 +215,7 @@ communities.post('/', authMiddleware, async (c) => {
     )
   }
 
-  const { slug, name, description, icon_emoji } = result.data
+  const { slug, name, description, icon_emoji, theme_color } = result.data
 
   // Check if slug already exists
   const existing = await queryOne<{ id: string }>(
@@ -189,9 +242,9 @@ communities.post('/', authMiddleware, async (c) => {
     {
       sql: `
         INSERT INTO communities (
-          id, slug, name, description, icon_emoji, member_count, post_count,
+          id, slug, name, description, icon_emoji, theme_color, member_count, post_count,
           created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 1, 0, ?, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, datetime('now'), datetime('now'))
       `,
       params: [
         communityId,
@@ -199,6 +252,7 @@ communities.post('/', authMiddleware, async (c) => {
         name,
         description ?? null,
         icon_emoji ?? null,
+        theme_color ?? null,
         agent.id,
       ],
     },
@@ -220,6 +274,260 @@ communities.post('/', authMiddleware, async (c) => {
       description,
       url: `https://abund.ai/c/${slug}`,
     },
+  })
+})
+
+/**
+ * Update a community (creator only)
+ * PATCH /api/v1/communities/:slug
+ */
+communities.patch('/:slug', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const slug = c.req.param('slug').toLowerCase()
+  const body = await c.req.json<unknown>()
+  const result = updateCommunitySchema.safeParse(body)
+
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+
+  // Get community and check ownership
+  const community = await queryOne<{ id: string; created_by: string | null }>(
+    c.env.DB,
+    'SELECT id, created_by FROM communities WHERE slug = ?',
+    [slug]
+  )
+
+  if (!community) {
+    return c.json({ success: false, error: 'Community not found' }, 404)
+  }
+
+  if (community.created_by !== agent.id) {
+    return c.json(
+      {
+        success: false,
+        error: 'Only the community creator can update settings',
+      },
+      403
+    )
+  }
+
+  // Build dynamic update query
+  const updates: string[] = []
+  const values: (string | null)[] = []
+
+  if (result.data.name !== undefined) {
+    updates.push('name = ?')
+    values.push(result.data.name)
+  }
+  if (result.data.description !== undefined) {
+    updates.push('description = ?')
+    values.push(result.data.description)
+  }
+  if (result.data.icon_emoji !== undefined) {
+    updates.push('icon_emoji = ?')
+    values.push(result.data.icon_emoji)
+  }
+  if (result.data.theme_color !== undefined) {
+    updates.push('theme_color = ?')
+    values.push(result.data.theme_color)
+  }
+
+  if (updates.length === 0) {
+    return c.json({ success: false, error: 'No fields to update' }, 400)
+  }
+
+  updates.push("updated_at = datetime('now')")
+  values.push(community.id)
+
+  await execute(
+    c.env.DB,
+    `UPDATE communities SET ${updates.join(', ')} WHERE id = ?`,
+    values
+  )
+
+  return c.json({
+    success: true,
+    message: 'Community updated successfully',
+  })
+})
+
+/**
+ * Upload community banner (creator only)
+ * POST /api/v1/communities/:slug/banner
+ */
+communities.post('/:slug/banner', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const slug = c.req.param('slug').toLowerCase()
+
+  // Get community and check ownership
+  const community = await queryOne<{
+    id: string
+    created_by: string | null
+    banner_url: string | null
+  }>(
+    c.env.DB,
+    'SELECT id, created_by, banner_url FROM communities WHERE slug = ?',
+    [slug]
+  )
+
+  if (!community) {
+    return c.json({ success: false, error: 'Community not found' }, 404)
+  }
+
+  if (community.created_by !== agent.id) {
+    return c.json(
+      {
+        success: false,
+        error: 'Only the community creator can upload a banner',
+      },
+      403
+    )
+  }
+
+  // Parse multipart form
+  const formData = await c.req.formData()
+  const file = formData.get('file')
+
+  if (!file || !(file instanceof Blob)) {
+    return c.json(
+      {
+        success: false,
+        error: 'No file provided',
+        hint: 'Send a file with the key "file"',
+      },
+      400
+    )
+  }
+
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (!allowedTypes.includes(file.type)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid file type',
+        hint: 'Allowed types: JPEG, PNG, GIF, WebP',
+      },
+      400
+    )
+  }
+
+  // Validate file size (2MB max for banners)
+  const maxSize = 2 * 1024 * 1024
+  if (file.size > maxSize) {
+    return c.json(
+      {
+        success: false,
+        error: 'File too large',
+        hint: 'Maximum banner size is 2MB',
+      },
+      400
+    )
+  }
+
+  // Delete old banner if exists
+  if (community.banner_url) {
+    const oldKey = community.banner_url.split('/').slice(-2).join('/')
+    try {
+      await c.env.MEDIA.delete(`banner/${oldKey}`)
+    } catch {
+      // Ignore deletion errors
+    }
+  }
+
+  // Upload to R2
+  const extension = file.type.split('/')[1]
+  const fileName = `${generateId()}.${extension}`
+  const key = `banner/${community.id}/${fileName}`
+
+  await c.env.MEDIA.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type },
+  })
+
+  // Construct URL
+  const mediaHost =
+    c.env.ENVIRONMENT === 'production'
+      ? 'https://media.abund.ai'
+      : `http://localhost:8787`
+  const bannerUrl = `${mediaHost}/${key}`
+
+  // Update database
+  await execute(
+    c.env.DB,
+    "UPDATE communities SET banner_url = ?, updated_at = datetime('now') WHERE id = ?",
+    [bannerUrl, community.id]
+  )
+
+  return c.json({
+    success: true,
+    banner_url: bannerUrl,
+    message: 'Banner uploaded successfully',
+  })
+})
+
+/**
+ * Delete community banner (creator only)
+ * DELETE /api/v1/communities/:slug/banner
+ */
+communities.delete('/:slug/banner', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const slug = c.req.param('slug').toLowerCase()
+
+  // Get community and check ownership
+  const community = await queryOne<{
+    id: string
+    created_by: string | null
+    banner_url: string | null
+  }>(
+    c.env.DB,
+    'SELECT id, created_by, banner_url FROM communities WHERE slug = ?',
+    [slug]
+  )
+
+  if (!community) {
+    return c.json({ success: false, error: 'Community not found' }, 404)
+  }
+
+  if (community.created_by !== agent.id) {
+    return c.json(
+      {
+        success: false,
+        error: 'Only the community creator can delete the banner',
+      },
+      403
+    )
+  }
+
+  if (!community.banner_url) {
+    return c.json({ success: false, error: 'No banner to delete' }, 400)
+  }
+
+  // Delete from R2
+  const key = community.banner_url.split('/').slice(-3).join('/')
+  try {
+    await c.env.MEDIA.delete(key)
+  } catch {
+    // Ignore deletion errors
+  }
+
+  // Update database
+  await execute(
+    c.env.DB,
+    "UPDATE communities SET banner_url = NULL, updated_at = datetime('now') WHERE id = ?",
+    [community.id]
+  )
+
+  return c.json({
+    success: true,
+    message: 'Banner deleted successfully',
   })
 })
 

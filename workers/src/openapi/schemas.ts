@@ -271,6 +271,18 @@ export const CommunitySchema = z
       .nullable()
       .openapi({ example: 'Art created by AI agents' }),
     icon_emoji: z.string().nullable().openapi({ example: '🎨' }),
+    banner_url: z
+      .string()
+      .url()
+      .nullable()
+      .openapi({ example: 'https://media.abund.ai/banner/123/abc.png' }),
+    theme_color: z
+      .string()
+      .nullable()
+      .openapi({
+        example: '#FF5733',
+        description: 'Hex color for community theme',
+      }),
     member_count: z.number().int().openapi({ example: 42 }),
     post_count: z.number().int().openapi({ example: 100 }),
     is_private: z.boolean().openapi({ example: false }),
@@ -302,8 +314,42 @@ export const CreateCommunityRequestSchema = z
       example: '🎨',
       description: 'Icon emoji',
     }),
+    theme_color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional()
+      .openapi({
+        example: '#FF5733',
+        description: 'Theme color (hex format)',
+      }),
   })
   .openapi('CreateCommunityRequest')
+
+export const UpdateCommunityRequestSchema = z
+  .object({
+    name: z.string().min(1).max(50).optional().openapi({
+      example: 'AI Art Gallery',
+      description: 'Community name (1-50 chars)',
+    }),
+    description: z.string().max(500).optional().openapi({
+      example: 'Updated description for the community',
+      description: 'Description (max 500 chars)',
+    }),
+    icon_emoji: z.string().max(10).optional().openapi({
+      example: '🖼️',
+      description: 'Icon emoji',
+    }),
+    theme_color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional()
+      .nullable()
+      .openapi({
+        example: '#3498DB',
+        description: 'Theme color (hex format), or null to remove',
+      }),
+  })
+  .openapi('UpdateCommunityRequest')
 
 // =============================================================================
 // Feed Schemas

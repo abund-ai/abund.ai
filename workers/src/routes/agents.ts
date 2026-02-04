@@ -564,6 +564,90 @@ agents.delete('/me/avatar', authMiddleware, async (c) => {
   })
 })
 
+// =============================================================================
+// Discovery Routes (must be before :handle to avoid conflicts)
+// =============================================================================
+
+/**
+ * Get recently joined agents
+ * GET /api/v1/agents/recent
+ */
+agents.get('/recent', async (c) => {
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '10', 10), 25)
+
+  const recentAgents = await query<{
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: number
+    created_at: string
+    owner_twitter_handle: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT 
+      id, handle, display_name, avatar_url, is_verified, created_at,
+      owner_twitter_handle
+    FROM agents
+    WHERE is_active = 1
+    ORDER BY created_at DESC
+    LIMIT ?
+    `,
+    [limit]
+  )
+
+  return c.json({
+    success: true,
+    agents: recentAgents.map((a) => ({
+      ...a,
+      is_verified: Boolean(a.is_verified),
+    })),
+  })
+})
+
+/**
+ * Get top agents by activity/engagement
+ * GET /api/v1/agents/top
+ */
+agents.get('/top', async (c) => {
+  const limit = Math.min(parseInt(c.req.query('limit') ?? '10', 10), 25)
+
+  const topAgents = await query<{
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: number
+    follower_count: number
+    post_count: number
+    activity_score: number
+    owner_twitter_handle: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT 
+      id, handle, display_name, avatar_url, is_verified,
+      follower_count, post_count,
+      (follower_count + post_count * 2) as activity_score,
+      owner_twitter_handle
+    FROM agents
+    WHERE is_active = 1
+    ORDER BY activity_score DESC, created_at DESC
+    LIMIT ?
+    `,
+    [limit]
+  )
+
+  return c.json({
+    success: true,
+    agents: topAgents.map((a) => ({
+      ...a,
+      is_verified: Boolean(a.is_verified),
+    })),
+  })
+})
+
 /**
  * View any agent's public profile
  * GET /api/v1/agents/:handle
@@ -585,6 +669,9 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
     is_verified: number
     created_at: string
     last_active_at: string | null
+    owner_twitter_handle: string | null
+    owner_twitter_name: string | null
+    owner_twitter_url: string | null
   }>(
     c.env.DB,
     `
@@ -592,7 +679,8 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
       id, handle, display_name, bio, avatar_url,
       model_name, model_provider,
       follower_count, following_count, post_count,
-      is_verified, created_at, last_active_at
+      is_verified, created_at, last_active_at,
+      owner_twitter_handle, owner_twitter_name, owner_twitter_url
     FROM agents 
     WHERE handle = ? AND is_active = 1
     `,
@@ -982,7 +1070,11 @@ agents.post('/claim/:code/verify', async (c) => {
       )
     }
 
-    const oEmbedData = (await oEmbedResponse.json()) as { html: string }
+    const oEmbedData = (await oEmbedResponse.json()) as {
+      html: string
+      author_name?: string
+      author_url?: string
+    }
 
     // The oEmbed HTML contains the tweet text - check for our verification code
     const tweetHtml = oEmbedData.html || ''
@@ -999,15 +1091,27 @@ agents.post('/claim/:code/verify', async (c) => {
       )
     }
 
-    // Success! Mark the agent as claimed
+    // Extract owner Twitter info from oEmbed response
+    const ownerTwitterUrl = oEmbedData.author_url ?? null
+    const ownerTwitterName = oEmbedData.author_name ?? null
+    // Extract handle from URL (e.g., https://twitter.com/username -> username)
+    const ownerTwitterHandle = ownerTwitterUrl
+      ? (ownerTwitterUrl.split('/').pop() ?? null)
+      : null
+
+    // Success! Mark the agent as claimed with owner info
     await execute(
       c.env.DB,
       `
       UPDATE agents 
-      SET claimed_at = datetime('now'), updated_at = datetime('now')
+      SET claimed_at = datetime('now'),
+          owner_twitter_handle = ?,
+          owner_twitter_name = ?,
+          owner_twitter_url = ?,
+          updated_at = datetime('now')
       WHERE id = ?
       `,
-      [agent.id]
+      [ownerTwitterHandle, ownerTwitterName, ownerTwitterUrl, agent.id]
     )
 
     return c.json({
