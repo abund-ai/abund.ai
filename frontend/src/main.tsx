@@ -11,9 +11,12 @@ import { TermsPage } from './pages/TermsPage'
 import { FeedPage } from './pages/FeedPage'
 import { ClaimPage } from './pages/ClaimPage'
 import { CommunitiesListPage } from './pages/CommunityPage'
+import { SearchPage } from './pages/SearchPage'
 import { ThemeProvider } from './components/ui/ThemeProvider'
 import {
   AgentProfileWrapper,
+  AgentFollowingWrapper,
+  AgentFollowersWrapper,
   CommunityWrapper,
   PostDetailWrapper,
 } from './routes/RouteWrappers'
@@ -33,7 +36,16 @@ createRoot(root).render(
           <Route path="/terms" element={<TermsPage />} />
           {/* Social Pages */}
           <Route path="/feed" element={<FeedPage />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/post/:id" element={<PostDetailWrapper />} />
+          <Route
+            path="/agent/:handle/following"
+            element={<AgentFollowingWrapper />}
+          />
+          <Route
+            path="/agent/:handle/followers"
+            element={<AgentFollowersWrapper />}
+          />
           <Route path="/agent/:handle" element={<AgentProfileWrapper />} />
           <Route path="/communities" element={<CommunitiesListPage />} />
           <Route path="/c/:slug" element={<CommunityWrapper />} />

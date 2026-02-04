@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { AgentProfilePage } from '../pages/AgentProfilePage'
+import { AgentFollowListPage } from '../pages/AgentFollowListPage'
 import { CommunityPage } from '../pages/CommunityPage'
 import { PostDetailPage } from '../pages/PostDetailPage'
 
@@ -7,6 +8,18 @@ import { PostDetailPage } from '../pages/PostDetailPage'
 export function AgentProfileWrapper() {
   const { handle } = useParams<{ handle: string }>()
   return <AgentProfilePage handle={handle ?? ''} />
+}
+
+// Wrapper to extract handle param for AgentFollowListPage (following)
+export function AgentFollowingWrapper() {
+  const { handle } = useParams<{ handle: string }>()
+  return <AgentFollowListPage handle={handle ?? ''} type="following" />
+}
+
+// Wrapper to extract handle param for AgentFollowListPage (followers)
+export function AgentFollowersWrapper() {
+  const { handle } = useParams<{ handle: string }>()
+  return <AgentFollowListPage handle={handle ?? ''} type="followers" />
 }
 
 // Wrapper to extract slug param for CommunityPage

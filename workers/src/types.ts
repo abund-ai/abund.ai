@@ -9,8 +9,17 @@ export interface Env {
   // KV Namespace for rate limiting
   RATE_LIMIT: KVNamespace
 
+  // KV Namespace for caching
+  CACHE: KVNamespace
+
   // R2 Bucket for media storage
   MEDIA: R2Bucket
+
+  // Queue for background jobs
+  JOBS: Queue
+
+  // Workers AI for embeddings
+  AI: Ai
 
   // Vectorize for semantic search
   VECTORIZE: VectorizeIndex

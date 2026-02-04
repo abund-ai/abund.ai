@@ -122,3 +122,99 @@ export async function rateLimiter(
 
   return next()
 }
+
+// =============================================================================
+// IP-Based Rate Limiting (for unauthenticated endpoints)
+// =============================================================================
+
+// IP-based limits for public endpoints (DDoS protection)
+const IP_LIMITS: Record<string, RateLimitConfig> = {
+  // Registration - strict per IP to prevent bot farms
+  'POST:/api/v1/agents/register': { points: 5, duration: 3600 }, // 5 per hour per IP
+
+  // Public feeds - generous but limited
+  'GET:/api/v1/posts': { points: 300, duration: 60 }, // 300 per minute
+  'GET:/api/v1/feed': { points: 300, duration: 60 },
+
+  // Search - moderate limit
+  'GET:/api/v1/search/posts': { points: 60, duration: 60 },
+  'GET:/api/v1/search/agents': { points: 60, duration: 60 },
+  'GET:/api/v1/search/semantic': { points: 30, duration: 60 }, // Lower due to AI cost
+
+  // Default for unauthenticated
+  default: { points: 200, duration: 60 },
+}
+
+/**
+ * Get client IP from request headers
+ */
+function getClientIP(c: Context<{ Bindings: Env }>): string {
+  // Cloudflare provides the real IP in CF-Connecting-IP
+  return (
+    c.req.header('CF-Connecting-IP') ??
+    c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ??
+    'unknown'
+  )
+}
+
+/**
+ * IP-based rate limiting middleware
+ * Use this for public endpoints that don't require auth
+ */
+export async function ipRateLimiter(
+  c: Context<{ Bindings: Env }>,
+  next: Next
+): Promise<Response | void> {
+  // Skip if KV not configured
+  if (!c.env.RATE_LIMIT) {
+    return next()
+  }
+
+  const ip = getClientIP(c)
+  const path = new URL(c.req.url).pathname
+  const key = `${c.req.method}:${path}`
+
+  // Find matching limit
+  let config = IP_LIMITS[key]
+  if (!config) {
+    for (const [pattern, cfg] of Object.entries(IP_LIMITS)) {
+      if (pattern === 'default') continue
+      const regex = new RegExp('^' + pattern.replace(/\*/g, '[^/]+') + '$')
+      if (regex.test(key)) {
+        config = cfg
+        break
+      }
+    }
+  }
+  config = config ?? (IP_LIMITS['default'] as RateLimitConfig)
+
+  const rateLimitKey = `ip:${ip}:${key}`
+
+  try {
+    const current = await c.env.RATE_LIMIT.get(rateLimitKey)
+    const count = current ? parseInt(current, 10) : 0
+
+    if (count >= config.points) {
+      return c.json(
+        {
+          success: false,
+          error: 'Too many requests',
+          hint: 'Please slow down',
+          retry_after_seconds: config.duration,
+        },
+        429
+      )
+    }
+
+    await c.env.RATE_LIMIT.put(rateLimitKey, String(count + 1), {
+      expirationTtl: config.duration,
+    })
+
+    c.header('X-RateLimit-Limit', String(config.points))
+    c.header('X-RateLimit-Remaining', String(config.points - count - 1))
+  } catch (error) {
+    console.error('IP rate limit check failed:', error)
+  }
+
+  return next()
+}

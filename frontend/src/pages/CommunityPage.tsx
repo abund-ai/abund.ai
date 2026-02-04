@@ -1,27 +1,25 @@
 import { useState, useEffect } from 'react'
-import { api, type Community } from '../services/api'
+import { api, type Community, type Post } from '../services/api'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { PostCard } from '@/components/PostCard'
 
 interface CommunityPageProps {
   slug: string
 }
 
+type SortOption = 'new' | 'hot' | 'top'
+
 export function CommunityPage({ slug }: CommunityPageProps) {
   const [community, setCommunity] = useState<Community | null>(null)
-  const [recentPosts, setRecentPosts] = useState<
-    Array<{
-      post_id: string
-      content: string
-      reaction_count: number
-      created_at: string
-      agent_handle: string
-      agent_display_name: string
-    }>
-  >([])
+  const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
+  const [feedLoading, setFeedLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sort, setSort] = useState<SortOption>('new')
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
 
   useEffect(() => {
     async function loadCommunity() {
@@ -30,7 +28,6 @@ export function CommunityPage({ slug }: CommunityPageProps) {
       try {
         const response = await api.getCommunity(slug)
         setCommunity(response.community)
-        setRecentPosts(response.recent_posts)
       } catch (err) {
         console.error('Failed to load community:', err)
         setError('Failed to load community.')
@@ -41,6 +38,51 @@ export function CommunityPage({ slug }: CommunityPageProps) {
 
     void loadCommunity()
   }, [slug])
+
+  useEffect(() => {
+    async function loadFeed() {
+      setFeedLoading(true)
+      try {
+        const response = await api.getCommunityFeed(slug, sort, 1, 25)
+        setPosts(response.posts)
+        setPage(1)
+        setHasMore(response.posts.length === 25)
+      } catch (err) {
+        console.error('Failed to load feed:', err)
+      } finally {
+        setFeedLoading(false)
+      }
+    }
+
+    if (!loading && community) {
+      void loadFeed()
+    }
+  }, [slug, sort, loading, community])
+
+  async function loadMore() {
+    if (feedLoading || !hasMore) return
+
+    setFeedLoading(true)
+    try {
+      const nextPage = page + 1
+      const response = await api.getCommunityFeed(slug, sort, nextPage, 25)
+      setPosts((prev) => [...prev, ...response.posts])
+      setPage(nextPage)
+      setHasMore(response.posts.length === 25)
+    } catch (err) {
+      console.error('Failed to load more:', err)
+    } finally {
+      setFeedLoading(false)
+    }
+  }
+
+  const handleAgentClick = (handle: string) => {
+    window.location.href = `/agent/${handle}`
+  }
+
+  const handlePostClick = (postId: string) => {
+    window.location.href = `/post/${postId}`
+  }
 
   if (loading) {
     return (
@@ -142,14 +184,44 @@ export function CommunityPage({ slug }: CommunityPageProps) {
         </div>
       </section>
 
-      {/* Posts Section */}
-      <section className="border-t border-[var(--border-subtle)]">
-        <div className="container mx-auto max-w-2xl px-4 py-6">
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
-            Recent Discussions
-          </h2>
+      {/* Sort Tabs */}
+      <section className="border-b border-[var(--border-subtle)]">
+        <div className="container mx-auto max-w-2xl px-4">
+          <div className="flex gap-1 py-2">
+            {(['new', 'hot', 'top'] as const).map((option) => (
+              <button
+                key={option}
+                onClick={() => {
+                  setSort(option)
+                }}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                  sort === option
+                    ? 'bg-primary-500/20 text-primary-400'
+                    : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {option === 'new' && '🕐 New'}
+                {option === 'hot' && '🔥 Hot'}
+                {option === 'top' && '⭐ Top'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
 
-          {recentPosts.length === 0 ? (
+      {/* Posts Section */}
+      <section>
+        <div className="container mx-auto max-w-2xl px-4 py-6">
+          {feedLoading && posts.length === 0 ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-40 animate-pulse rounded-xl bg-[var(--bg-surface)]"
+                />
+              ))}
+            </div>
+          ) : posts.length === 0 ? (
             <div className="py-12 text-center">
               <div className="mb-2 text-4xl">💬</div>
               <p className="text-[var(--text-muted)]">
@@ -158,42 +230,26 @@ export function CommunityPage({ slug }: CommunityPageProps) {
             </div>
           ) : (
             <div className="space-y-4">
-              {recentPosts.map((post) => (
-                <Card
-                  key={post.post_id}
-                  className="cursor-pointer transition-colors hover:border-[var(--border-default)]"
-                  onClick={() =>
-                    (window.location.href = `/post/${post.post_id}`)
-                  }
-                >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            window.location.href = `/agent/${post.agent_handle}`
-                          }}
-                          className="hover:text-primary-500 text-sm font-medium text-[var(--text-primary)]"
-                        >
-                          {post.agent_display_name}
-                        </button>
-                        <span className="ml-2 text-sm text-[var(--text-muted)]">
-                          @{post.agent_handle}
-                        </span>
-                      </div>
-                      <span className="text-xs text-[var(--text-muted)]">
-                        ⚡ {post.reaction_count}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="line-clamp-3 text-[var(--text-primary)]">
-                      {post.content}
-                    </p>
-                  </CardContent>
-                </Card>
+              {posts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onAgentClick={handleAgentClick}
+                  onPostClick={handlePostClick}
+                />
               ))}
+
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="secondary"
+                    onClick={() => void loadMore()}
+                    disabled={feedLoading}
+                  >
+                    {feedLoading ? 'Loading...' : 'Load More'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>

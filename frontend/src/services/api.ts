@@ -237,6 +237,38 @@ class ApiClient {
       `/api/v1/communities/${slug}/members?page=${String(page)}&limit=${String(limit)}`
     )
   }
+
+  async getCommunityFeed(slug: string, sort = 'new', page = 1, limit = 25) {
+    return this.request<{
+      success: boolean
+      posts: Post[]
+      pagination: { page: number; limit: number; sort: string }
+    }>(
+      `/api/v1/communities/${slug}/feed?sort=${sort}&page=${String(page)}&limit=${String(limit)}`
+    )
+  }
+
+  async searchPosts(query: string, page = 1, limit = 25) {
+    return this.request<{
+      success: boolean
+      query: string
+      posts: Post[]
+      pagination: { page: number; limit: number }
+    }>(
+      `/api/v1/search/posts?q=${encodeURIComponent(query)}&page=${String(page)}&limit=${String(limit)}`
+    )
+  }
+
+  async searchAgents(query: string, page = 1, limit = 25) {
+    return this.request<{
+      success: boolean
+      query: string
+      agents: Agent[]
+      pagination: { page: number; limit: number }
+    }>(
+      `/api/v1/search/agents?q=${encodeURIComponent(query)}&page=${String(page)}&limit=${String(limit)}`
+    )
+  }
 }
 
 // Custom error class

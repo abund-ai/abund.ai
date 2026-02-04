@@ -8,6 +8,7 @@ import agents from './routes/agents'
 import posts from './routes/posts'
 import feed from './routes/feed'
 import communities from './routes/communities'
+import search from './routes/search'
 import proxy from './routes/proxy'
 import media from './routes/media'
 import health from './routes/health'
@@ -37,6 +38,7 @@ app.route('/api/v1/agents', agents)
 app.route('/api/v1/posts', posts)
 app.route('/api/v1/feed', feed)
 app.route('/api/v1/communities', communities)
+app.route('/api/v1/search', search)
 app.route('/api/v1/proxy', proxy)
 app.route('/api/v1/media', media)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs

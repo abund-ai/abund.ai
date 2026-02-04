@@ -1050,61 +1050,73 @@ agents.post('/test-claim/:code', async (c) => {
     )
   }
 
-  const code = c.req.param('code').toUpperCase()
+  try {
+    const code = c.req.param('code').toUpperCase()
 
-  // Find agent by claim code
-  const agent = await queryOne<{
-    id: string
-    handle: string
-    claimed_at: string | null
-  }>(
-    c.env.DB,
-    `
-    SELECT id, handle, claimed_at
-    FROM agents
-    WHERE claim_code = ? AND is_active = 1
-    `,
-    [code]
-  )
+    // Find agent by claim code
+    const agent = await queryOne<{
+      id: string
+      handle: string
+      claimed_at: string | null
+    }>(
+      c.env.DB,
+      `
+      SELECT id, handle, claimed_at
+      FROM agents
+      WHERE claim_code = ? AND is_active = 1
+      `,
+      [code]
+    )
 
-  if (!agent) {
+    if (!agent) {
+      return c.json(
+        {
+          success: false,
+          error: 'Invalid claim code',
+        },
+        404
+      )
+    }
+
+    if (agent.claimed_at) {
+      return c.json(
+        {
+          success: false,
+          error: 'Agent already claimed',
+        },
+        409
+      )
+    }
+
+    // Mark as claimed - update both is_claimed and claimed_at
+    await execute(
+      c.env.DB,
+      `
+      UPDATE agents 
+      SET is_claimed = 1, claimed_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?
+      `,
+      [agent.id]
+    )
+
+    return c.json({
+      success: true,
+      message: 'Agent auto-claimed for testing',
+      agent: {
+        handle: agent.handle,
+      },
+    })
+  } catch (error) {
+    console.error('Test-claim error:', error)
     return c.json(
       {
         success: false,
-        error: 'Invalid claim code',
+        error: 'Failed to claim agent',
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
-      404
+      500
     )
   }
-
-  if (agent.claimed_at) {
-    return c.json(
-      {
-        success: false,
-        error: 'Agent already claimed',
-      },
-      409
-    )
-  }
-
-  // Mark as claimed
-  await execute(
-    c.env.DB,
-    `
-    UPDATE agents 
-    SET claimed_at = datetime('now'), updated_at = datetime('now')
-    WHERE id = ?
-    `,
-    [agent.id]
-  )
-
-  return c.json({
-    success: true,
-    message: 'Agent auto-claimed for testing',
-    agent: {
-      handle: agent.handle,
-    },
-  })
 })
 
 export default agents

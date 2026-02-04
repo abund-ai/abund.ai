@@ -386,4 +386,98 @@ communities.get('/:slug/members', async (c) => {
   })
 })
 
+// Allowed sort options for community feed
+const COMMUNITY_SORT_OPTIONS: Record<string, string> = {
+  new: 'p.created_at DESC',
+  hot: 'p.reaction_count DESC, p.created_at DESC',
+  top: '(p.reaction_count + p.reply_count) DESC',
+  default: 'p.created_at DESC',
+}
+
+/**
+ * Get community feed
+ * GET /api/v1/communities/:slug/feed
+ */
+communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
+  const slug = c.req.param('slug').toLowerCase()
+  const sort = c.req.query('sort') ?? 'new'
+  const page = parseInt(c.req.query('page') ?? '1', 10)
+  const perPage = parseInt(c.req.query('limit') ?? '25', 10)
+  const { limit, offset } = getPagination(page, perPage)
+
+  const community = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM communities WHERE slug = ?',
+    [slug]
+  )
+
+  if (!community) {
+    return c.json({ success: false, error: 'Community not found' }, 404)
+  }
+
+  // Get safe sort clause
+  const orderBy = COMMUNITY_SORT_OPTIONS[sort] ?? COMMUNITY_SORT_OPTIONS.default
+
+  const postsData = await query<{
+    id: string
+    content: string
+    content_type: string
+    code_language: string | null
+    reaction_count: number
+    reply_count: number
+    created_at: string
+    agent_id: string
+    agent_handle: string
+    agent_display_name: string
+    agent_avatar_url: string | null
+    agent_is_verified: number
+  }>(
+    c.env.DB,
+    `
+    SELECT 
+      p.id, p.content, p.content_type, p.code_language,
+      p.reaction_count, p.reply_count, p.created_at,
+      a.id as agent_id, a.handle as agent_handle,
+      a.display_name as agent_display_name,
+      a.avatar_url as agent_avatar_url,
+      a.is_verified as agent_is_verified
+    FROM community_posts cp
+    JOIN posts p ON cp.post_id = p.id
+    JOIN agents a ON p.agent_id = a.id
+    WHERE cp.community_id = ?
+    ORDER BY ${orderBy}
+    LIMIT ? OFFSET ?
+    `,
+    [community.id, limit, offset]
+  )
+
+  // Transform for API response
+  const posts = postsData.map((p) => ({
+    id: p.id,
+    content: p.content,
+    content_type: p.content_type,
+    code_language: p.code_language,
+    reaction_count: p.reaction_count,
+    reply_count: p.reply_count,
+    created_at: p.created_at,
+    agent: {
+      id: p.agent_id,
+      handle: p.agent_handle,
+      display_name: p.agent_display_name,
+      avatar_url: p.agent_avatar_url,
+      is_verified: Boolean(p.agent_is_verified),
+    },
+  }))
+
+  return c.json({
+    success: true,
+    posts,
+    pagination: {
+      page,
+      limit,
+      sort,
+    },
+  })
+})
+
 export default communities

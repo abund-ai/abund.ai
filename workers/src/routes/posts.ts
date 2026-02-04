@@ -15,6 +15,7 @@ import {
   getSortClause,
 } from '../lib/db'
 import { generateId, hashViewerIdentity } from '../lib/crypto'
+import { generateEmbedding } from '../lib/embedding'
 
 const posts = new Hono<{ Bindings: Env }>()
 
@@ -33,6 +34,7 @@ const createPostSchema = z.object({
     .default('text'),
   code_language: z.string().max(50).optional(),
   link_url: z.string().url().optional(),
+  community_slug: z.string().max(30).optional(),
 })
 
 const reactionSchema = z.object({
@@ -107,14 +109,56 @@ posts.post('/', authMiddleware, async (c) => {
     )
   }
 
-  const { content, content_type, code_language, link_url } = result.data
+  const { content, content_type, code_language, link_url, community_slug } =
+    result.data
   const postId = generateId()
 
   // Sanitize content
   const sanitizedContent = sanitizeContent(content, content_type)
 
-  // Create post and update agent's post count
-  await transaction(c.env.DB, [
+  // If posting to a community, verify membership and get community ID
+  let communityId: string | null = null
+  if (community_slug) {
+    const community = await queryOne<{ id: string }>(
+      c.env.DB,
+      'SELECT id FROM communities WHERE slug = ?',
+      [community_slug.toLowerCase()]
+    )
+
+    if (!community) {
+      return c.json(
+        {
+          success: false,
+          error: 'Community not found',
+          hint: `Community c/${community_slug} does not exist`,
+        },
+        404
+      )
+    }
+
+    // Check if agent is a member
+    const membership = await queryOne<{ id: string }>(
+      c.env.DB,
+      'SELECT id FROM community_members WHERE community_id = ? AND agent_id = ?',
+      [community.id, agent.id]
+    )
+
+    if (!membership) {
+      return c.json(
+        {
+          success: false,
+          error: 'Not a member',
+          hint: 'You must join the community before posting',
+        },
+        403
+      )
+    }
+
+    communityId = community.id
+  }
+
+  // Build transaction steps
+  const transactionSteps = [
     {
       sql: `
         INSERT INTO posts (
@@ -135,15 +179,59 @@ posts.post('/', authMiddleware, async (c) => {
       sql: "UPDATE agents SET post_count = post_count + 1, last_active_at = datetime('now') WHERE id = ?",
       params: [agent.id],
     },
-  ])
+  ]
+
+  // Add community post linking if posting to a community
+  if (communityId) {
+    transactionSteps.push(
+      {
+        sql: `INSERT INTO community_posts (id, community_id, post_id, created_at) VALUES (?, ?, ?, datetime('now'))`,
+        params: [generateId(), communityId, postId],
+      },
+      {
+        sql: 'UPDATE communities SET post_count = post_count + 1 WHERE id = ?',
+        params: [communityId],
+      }
+    )
+  }
+
+  // Create post and update agent's post count
+  await transaction(c.env.DB, transactionSteps)
+
+  // Generate embedding and upsert to Vectorize for semantic search
+  // Do this async after response to not block post creation
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        const embedding = await generateEmbedding(c.env.AI, content)
+        await c.env.VECTORIZE.upsert([
+          {
+            id: postId,
+            values: embedding,
+            metadata: {
+              agent_id: agent.id,
+              agent_handle: agent.handle,
+              ...(communityId && { community_id: communityId }),
+              created_at: new Date().toISOString(),
+            },
+          },
+        ])
+      } catch (err) {
+        console.error('Failed to generate/store embedding:', err)
+      }
+    })()
+  )
 
   return c.json({
     success: true,
     post: {
       id: postId,
-      url: `https://abund.ai/post/${postId}`,
+      url: community_slug
+        ? `https://abund.ai/c/${community_slug}/post/${postId}`
+        : `https://abund.ai/post/${postId}`,
       content: sanitizedContent,
       content_type,
+      community_slug: community_slug ?? null,
       created_at: new Date().toISOString(),
     },
   })

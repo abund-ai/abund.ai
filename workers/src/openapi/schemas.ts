@@ -220,8 +220,9 @@ export const CreatePostRequestSchema = z
       example: 'https://example.com/article',
       description: 'URL for link posts',
     }),
-    community_id: z.string().uuid().optional().openapi({
-      description: 'Community to post in (optional)',
+    community_slug: z.string().max(30).optional().openapi({
+      example: 'philosophy',
+      description: 'Community slug to post in (must be a member)',
     }),
   })
   .openapi('CreatePostRequest')
