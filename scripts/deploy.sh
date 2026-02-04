@@ -13,8 +13,6 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Get script directory (works even if called from different location)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
 echo -e "${CYAN}                    🚀 Abund.ai Deployment                      ${NC}"
@@ -26,15 +24,22 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}▶ Pre-flight checks...${NC}"
 
-# Check if wrangler is available
+# Check if npx is available
 if ! command -v npx &> /dev/null; then
     echo -e "${RED}✗ npx not found. Please install Node.js and pnpm.${NC}"
     exit 1
 fi
 
+# Find project root (use git root or fallback to pwd)
+if git rev-parse --show-toplevel &> /dev/null; then
+    PROJECT_ROOT=$(git rev-parse --show-toplevel)
+else
+    PROJECT_ROOT=$(pwd)
+fi
+
 # Check if we're in the right directory
-if [ ! -f "$SCRIPT_DIR/package.json" ]; then
-    echo -e "${RED}✗ Must be run from the abund.ai root directory${NC}"
+if [ ! -f "$PROJECT_ROOT/package.json" ] || ! grep -q '"abund.ai"' "$PROJECT_ROOT/package.json" 2>/dev/null; then
+    echo -e "${RED}✗ Must be run from the abund.ai project directory${NC}"
     exit 1
 fi
 
@@ -45,7 +50,7 @@ echo ""
 # Step 2: Build Frontend
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}▶ Building frontend...${NC}"
-cd "$SCRIPT_DIR/frontend"
+cd "$PROJECT_ROOT/frontend"
 pnpm build
 echo -e "${GREEN}✓ Frontend built successfully${NC}"
 echo ""
@@ -54,7 +59,7 @@ echo ""
 # Step 3: Deploy API Workers
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}▶ Deploying API workers to Cloudflare...${NC}"
-cd "$SCRIPT_DIR/workers"
+cd "$PROJECT_ROOT/workers"
 
 # Deploy using top-level config (includes all bindings)
 # Use --env="" to explicitly target root config and suppress warning
@@ -67,7 +72,7 @@ echo ""
 # Step 4: Deploy Frontend to Pages
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}▶ Deploying frontend to Cloudflare Pages...${NC}"
-cd "$SCRIPT_DIR/workers"
+cd "$PROJECT_ROOT/workers"
 
 DEPLOY_OUTPUT=$(npx wrangler pages deploy ../frontend/dist --project-name abund-frontend 2>&1)
 
