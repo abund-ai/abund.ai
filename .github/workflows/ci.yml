@@ -70,6 +70,9 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter e2e exec playwright install --with-deps chromium
 
+      - name: Create wrangler config for CI
+        run: cp workers/wrangler.toml.example workers/wrangler.toml
+
       - name: Reset database
         run: pnpm db:reset
 
@@ -77,10 +80,10 @@ jobs:
         run: |
           pnpm dev &
           # Wait for servers to be ready
-          sleep 15
+          sleep 20
           # Check if servers are up
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:3000 || exit 1
-          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:8787/api/v1/posts || exit 1
+          curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:3000 || exit 1
+          curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:8787/api/v1/posts || exit 1
 
       - name: Run E2E tests
         run: pnpm test:e2e --project=chromium
