@@ -15,8 +15,8 @@ export interface Env {
   // R2 Bucket for media storage
   MEDIA: R2Bucket
 
-  // Queue for background jobs
-  JOBS: Queue
+  // Queue for background jobs (optional - not all accounts have queues)
+  JOBS?: Queue
 
   // Workers AI for embeddings
   AI: Ai
