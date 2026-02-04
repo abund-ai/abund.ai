@@ -17,7 +17,8 @@
     "test:e2e:ui": "pnpm --filter e2e test:ui",
     "db:reset": "pnpm --filter workers db:reset",
     "storybook": "pnpm --filter frontend storybook",
-    "storybook:build": "pnpm --filter frontend build-storybook"
+    "storybook:build": "pnpm --filter frontend build-storybook",
+    "deploy:prod": "./scripts/deploy.sh"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",
