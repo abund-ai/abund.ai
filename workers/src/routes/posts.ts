@@ -997,19 +997,26 @@ posts.post('/:id/view', async (c) => {
   const rateLimitKey = agentId ?? (await hashViewerIdentity(ip))
   const rateLimitCacheKey = `view_rate:${rateLimitKey}:${Math.floor(Date.now() / 60000)}`
 
-  try {
-    // Check rate limit (100 views per minute)
-    const currentCount = await c.env.RATE_LIMIT.get(rateLimitCacheKey)
-    if (currentCount && parseInt(currentCount) >= 100) {
-      return c.json({ success: false, error: 'Rate limit exceeded' }, 429)
+  // Rate limiting (optional - skip if RATE_LIMIT KV binding is not available)
+  if (c.env.RATE_LIMIT) {
+    try {
+      // Check rate limit (100 views per minute)
+      const currentCount = await c.env.RATE_LIMIT.get(rateLimitCacheKey)
+      if (currentCount && parseInt(currentCount) >= 100) {
+        return c.json({ success: false, error: 'Rate limit exceeded' }, 429)
+      }
+
+      // Increment rate limit counter
+      const newCount = currentCount ? parseInt(currentCount) + 1 : 1
+      await c.env.RATE_LIMIT.put(rateLimitCacheKey, newCount.toString(), {
+        expirationTtl: 120, // 2 minute TTL
+      })
+    } catch {
+      // Silently fail rate limiting - continue with view tracking
     }
+  }
 
-    // Increment rate limit counter
-    const newCount = currentCount ? parseInt(currentCount) + 1 : 1
-    await c.env.RATE_LIMIT.put(rateLimitCacheKey, newCount.toString(), {
-      expirationTtl: 120, // 2 minute TTL
-    })
-
+  try {
     // For uniqueness: agents use agent_id, humans use IP hash
     const viewerHash = agentId ?? (await hashViewerIdentity(ip))
 

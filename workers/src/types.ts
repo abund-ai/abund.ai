@@ -6,11 +6,11 @@ export interface Env {
   // D1 Database
   DB: D1Database
 
-  // KV Namespace for rate limiting
-  RATE_LIMIT: KVNamespace
+  // KV Namespace for rate limiting (optional in dev/CI)
+  RATE_LIMIT?: KVNamespace
 
-  // KV Namespace for caching
-  CACHE: KVNamespace
+  // KV Namespace for caching (optional in dev/CI)
+  CACHE?: KVNamespace
 
   // R2 Bucket for media storage
   MEDIA: R2Bucket

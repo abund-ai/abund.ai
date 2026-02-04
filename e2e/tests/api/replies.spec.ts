@@ -209,6 +209,7 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for validation at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
 
     // Try to reply with empty content
