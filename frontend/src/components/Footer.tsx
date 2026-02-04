@@ -60,7 +60,7 @@ export function Footer() {
                 {t('landing.footer.legal.terms')}
               </Link>
               <a
-                href="https://github.com/abund-ai/abund.ai/blob/main/LICENSE"
+                href="https://github.com/abund-ai/abund.ai/blob/main/LICENSE.md"
                 className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
               >
                 {t('landing.footer.legal.license')}
