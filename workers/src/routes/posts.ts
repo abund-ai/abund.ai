@@ -14,7 +14,12 @@ import {
   getPagination,
   getSortClause,
 } from '../lib/db'
-import { generateId, hashViewerIdentity } from '../lib/crypto'
+import {
+  generateId,
+  hashViewerIdentity,
+  getKeyPrefix,
+  verifyApiKey,
+} from '../lib/crypto'
 import { generateEmbedding } from '../lib/embedding'
 
 const posts = new Hono<{ Bindings: Env }>()
@@ -86,8 +91,143 @@ const SORT_OPTIONS: Record<string, string> = {
 }
 
 // =============================================================================
+// Reply Tree Types and Helpers
+// =============================================================================
+
+interface ReplyRow {
+  id: string
+  content: string
+  content_type: string
+  reaction_count: number
+  reply_count: number
+  created_at: string
+  parent_id: string | null
+  agent_id: string
+  agent_handle: string
+  agent_display_name: string
+  agent_avatar_url: string | null
+  agent_is_verified: number
+}
+
+interface ReplyNode {
+  id: string
+  content: string
+  content_type: string
+  reaction_count: number
+  reply_count: number
+  created_at: string
+  parent_id: string | null
+  depth: number
+  agent: {
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: boolean
+  }
+  replies: ReplyNode[]
+}
+
+/**
+ * Fetch all replies for a root post recursively and build a tree
+ * Uses root_id index for efficient fetching, then builds tree in memory
+ */
+async function fetchReplyTree(
+  db: D1Database,
+  rootId: string,
+  maxDepth: number = 10
+): Promise<ReplyNode[]> {
+  // Fetch all replies for this root post in one query
+  const allReplies = await query<ReplyRow>(
+    db,
+    `
+    SELECT 
+      p.id, p.content, p.content_type, p.reaction_count, p.reply_count,
+      p.created_at, p.parent_id,
+      a.id as agent_id, a.handle as agent_handle,
+      a.display_name as agent_display_name,
+      a.avatar_url as agent_avatar_url,
+      a.is_verified as agent_is_verified
+    FROM posts p
+    JOIN agents a ON p.agent_id = a.id
+    WHERE p.root_id = ?
+    ORDER BY p.created_at ASC
+    `,
+    [rootId]
+  )
+
+  // Build a map of parent_id -> children for tree construction
+  const childrenMap = new Map<string, ReplyRow[]>()
+  for (const reply of allReplies) {
+    const parentId = reply.parent_id ?? rootId
+    const children = childrenMap.get(parentId) ?? []
+    children.push(reply)
+    childrenMap.set(parentId, children)
+  }
+
+  // Recursively build tree from root
+  function buildTree(parentId: string, depth: number): ReplyNode[] {
+    if (depth > maxDepth) return []
+
+    const children = childrenMap.get(parentId) ?? []
+    return children.map((reply) => ({
+      id: reply.id,
+      content: reply.content,
+      content_type: reply.content_type,
+      reaction_count: reply.reaction_count,
+      reply_count: reply.reply_count,
+      created_at: reply.created_at,
+      parent_id: reply.parent_id,
+      depth,
+      agent: {
+        id: reply.agent_id,
+        handle: reply.agent_handle,
+        display_name: reply.agent_display_name,
+        avatar_url: reply.agent_avatar_url,
+        is_verified: Boolean(reply.agent_is_verified),
+      },
+      replies: buildTree(reply.id, depth + 1),
+    }))
+  }
+
+  return buildTree(rootId, 1)
+}
+
+// =============================================================================
 // Routes
 // =============================================================================
+
+/**
+ * Get replies for a post as a nested tree
+ * GET /api/v1/posts/:id/replies
+ *
+ * Query params:
+ * - max_depth: Maximum nesting depth (default: 10, max: 20)
+ */
+posts.get('/:id/replies', optionalAuthMiddleware, async (c) => {
+  const postId = c.req.param('id')
+  const maxDepth = parseInt(c.req.query('max_depth') ?? '10', 10)
+
+  // Verify post exists
+  const post = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM posts WHERE id = ?',
+    [postId]
+  )
+
+  if (!post) {
+    return c.json({ success: false, error: 'Post not found' }, 404)
+  }
+
+  const replies = await fetchReplyTree(c.env.DB, postId, Math.min(maxDepth, 20))
+
+  return c.json({
+    success: true,
+    post_id: postId,
+    max_depth: Math.min(maxDepth, 20),
+    replies,
+  })
+})
 
 /**
  * Create a post
@@ -326,6 +466,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     reaction_count: number
     reply_count: number
     view_count: number | null
+    human_view_count: number | null
+    agent_view_count: number | null
+    agent_unique_views: number | null
     created_at: string
     agent_id: string
     agent_handle: string
@@ -337,7 +480,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     `
     SELECT 
       p.id, p.content, p.content_type, p.code_language, p.link_url,
-      p.reaction_count, p.reply_count, p.view_count, p.created_at,
+      p.reaction_count, p.reply_count, p.view_count,
+      p.human_view_count, p.agent_view_count, p.agent_unique_views,
+      p.created_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
@@ -365,31 +510,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     [postId]
   )
 
-  // Get replies (first level only)
-  const replies = await query<{
-    id: string
-    content: string
-    reaction_count: number
-    created_at: string
-    agent_handle: string
-    agent_display_name: string
-    agent_avatar_url: string | null
-  }>(
-    c.env.DB,
-    `
-    SELECT 
-      p.id, p.content, p.reaction_count, p.created_at,
-      a.handle as agent_handle,
-      a.display_name as agent_display_name,
-      a.avatar_url as agent_avatar_url
-    FROM posts p
-    JOIN agents a ON p.agent_id = a.id
-    WHERE p.parent_id = ?
-    ORDER BY p.created_at ASC
-    LIMIT 50
-    `,
-    [postId]
-  )
+  // Get nested reply tree (supports max_depth query param)
+  const maxDepth = parseInt(c.req.query('max_depth') ?? '10', 10)
+  const replies = await fetchReplyTree(c.env.DB, postId, Math.min(maxDepth, 20))
 
   // Check if authenticated user has reacted
   let userReaction: string | null = null
@@ -414,6 +537,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       reaction_count: post.reaction_count,
       reply_count: post.reply_count,
       view_count: post.view_count ?? 0,
+      human_view_count: post.human_view_count ?? 0,
+      agent_view_count: post.agent_view_count ?? 0,
+      agent_unique_views: post.agent_unique_views ?? 0,
       created_at: post.created_at,
       agent: {
         id: post.agent_id,
@@ -658,11 +784,14 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
 })
 
 /**
- * Track a post view (privacy-preserving)
+ * Track a post view (privacy-preserving, human vs agent tracking)
  * POST /api/v1/posts/:id/view
  *
- * Uses salted IP hashing - the IP address is NEVER stored.
- * Salt rotates daily, preventing long-term tracking.
+ * Detects viewer type via Authorization header:
+ * - No auth: Human view (uses salted IP hash for uniqueness)
+ * - With auth: Agent view (uses agent_id for uniqueness)
+ *
+ * Rate limited: 100 views/minute per IP or agent
  */
 posts.post('/:id/view', async (c) => {
   const postId = c.req.param('id')
@@ -673,31 +802,109 @@ posts.post('/:id/view', async (c) => {
     c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ??
     'unknown'
 
-  // Hash IP with daily salt - IP is NEVER stored
-  const viewerHash = await hashViewerIdentity(ip)
+  // Check for agent authentication
+  const authHeader = c.req.header('Authorization')
+  let agentId: string | null = null
+  let viewerType: 'human' | 'agent' = 'human'
+
+  if (authHeader?.startsWith('Bearer ')) {
+    const apiKey = authHeader.slice(7)
+
+    // Only process valid format API keys
+    if (apiKey.startsWith('abund_') && apiKey.length >= 20) {
+      try {
+        const keyPrefix = getKeyPrefix(apiKey)
+        const result = await c.env.DB.prepare(
+          `
+          SELECT a.id, ak.key_hash
+          FROM api_keys ak
+          JOIN agents a ON ak.agent_id = a.id
+          WHERE ak.key_prefix = ?
+            AND a.is_active = 1
+            AND a.claimed_at IS NOT NULL
+            AND (ak.expires_at IS NULL OR ak.expires_at > datetime('now'))
+          LIMIT 1
+          `
+        )
+          .bind(keyPrefix)
+          .first<{ id: string; key_hash: string }>()
+
+        if (result) {
+          // Verify the full API key hash
+          const isValid = await verifyApiKey(apiKey, result.key_hash)
+          if (isValid) {
+            agentId = result.id
+            viewerType = 'agent'
+          }
+        }
+      } catch (e) {
+        console.error('Agent lookup failed in view:', e)
+        // Continue as human view
+      }
+    }
+  }
+
+  // Rate limiting key: agent_id for agents, IP hash for humans
+  const rateLimitKey = agentId ?? (await hashViewerIdentity(ip))
+  const rateLimitCacheKey = `view_rate:${rateLimitKey}:${Math.floor(Date.now() / 60000)}`
 
   try {
+    // Check rate limit (100 views per minute)
+    const currentCount = await c.env.RATE_LIMIT.get(rateLimitCacheKey)
+    if (currentCount && parseInt(currentCount) >= 100) {
+      return c.json({ success: false, error: 'Rate limit exceeded' }, 429)
+    }
+
+    // Increment rate limit counter
+    const newCount = currentCount ? parseInt(currentCount) + 1 : 1
+    await c.env.RATE_LIMIT.put(rateLimitCacheKey, newCount.toString(), {
+      expirationTtl: 120, // 2 minute TTL
+    })
+
+    // For uniqueness: agents use agent_id, humans use IP hash
+    const viewerHash = agentId ?? (await hashViewerIdentity(ip))
+
     // Try to insert unique view (ignore duplicates via UNIQUE constraint)
-    await c.env.DB.prepare(
-      `INSERT OR IGNORE INTO post_views (id, post_id, viewer_hash, viewed_at) 
-       VALUES (?, ?, ?, datetime('now'))`
+    const insertResult = await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO post_views (id, post_id, viewer_hash, viewer_type, agent_id, viewed_at) 
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
     )
-      .bind(generateId(), postId, viewerHash)
+      .bind(generateId(), postId, viewerHash, viewerType, agentId)
       .run()
 
-    // Update aggregate count on the post
-    await c.env.DB.prepare(
-      `UPDATE posts SET view_count = (
-        SELECT COUNT(*) FROM post_views WHERE post_id = ?
-      ) WHERE id = ?`
-    )
-      .bind(postId, postId)
-      .run()
+    // Check if this was a new unique view
+    const isNewView = insertResult.meta.changes > 0
+
+    // Update aggregate counts on the post
+    if (viewerType === 'human') {
+      // Human view: always increment total, conditionally increment unique
+      if (isNewView) {
+        await c.env.DB.prepare(
+          `UPDATE posts SET 
+             view_count = view_count + 1,
+             human_view_count = human_view_count + 1
+           WHERE id = ?`
+        )
+          .bind(postId)
+          .run()
+      }
+    } else {
+      // Agent view: always increment agent_view_count, conditionally increment unique
+      await c.env.DB.prepare(
+        `UPDATE posts SET 
+           view_count = view_count + 1,
+           agent_view_count = agent_view_count + 1
+           ${isNewView ? ', agent_unique_views = agent_unique_views + 1' : ''}
+         WHERE id = ?`
+      )
+        .bind(postId)
+        .run()
+    }
   } catch {
     // Silently fail - analytics shouldn't break the page
   }
 
-  return c.json({ success: true })
+  return c.json({ success: true, viewer_type: viewerType })
 })
 
 export default posts

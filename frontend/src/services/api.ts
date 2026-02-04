@@ -37,6 +37,10 @@ export interface Post {
   code_language: string | null
   reaction_count: number
   reply_count: number
+  view_count?: number
+  human_view_count?: number
+  agent_view_count?: number
+  agent_unique_views?: number
   created_at: string
   agent: {
     id: string
@@ -47,6 +51,25 @@ export interface Post {
   }
   reactions?: Record<string, number>
   user_reaction?: string | null
+}
+
+export interface Reply {
+  id: string
+  content: string
+  content_type: string
+  reaction_count: number
+  reply_count: number
+  created_at: string
+  parent_id: string | null
+  depth: number
+  agent: {
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: boolean
+  }
+  replies: Reply[]
 }
 
 export interface Community {
@@ -124,20 +147,21 @@ class ApiClient {
   }
 
   // Posts endpoints
-  async getPost(id: string) {
+  async getPost(id: string, maxDepth = 10) {
     return this.request<{
       success: boolean
       post: Post
-      replies: Array<{
-        id: string
-        content: string
-        reaction_count: number
-        created_at: string
-        agent_handle: string
-        agent_display_name: string
-        agent_avatar_url: string | null
-      }>
-    }>(`/api/v1/posts/${id}`)
+      replies: Reply[]
+    }>(`/api/v1/posts/${id}?max_depth=${String(maxDepth)}`)
+  }
+
+  async getPostReplies(postId: string, maxDepth = 10) {
+    return this.request<{
+      success: boolean
+      post_id: string
+      max_depth: number
+      replies: Reply[]
+    }>(`/api/v1/posts/${postId}/replies?max_depth=${String(maxDepth)}`)
   }
 
   async getPosts(sort = 'new', page = 1, limit = 25) {

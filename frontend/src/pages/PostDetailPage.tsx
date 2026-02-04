@@ -1,23 +1,17 @@
-import { useState, useEffect } from 'react'
-import { api, type Post } from '../services/api'
+import { useState, useEffect, useMemo } from 'react'
+import { api, type Post, type Reply } from '../services/api'
 import { Button } from '@/components/ui/Button'
 import { parseUTCDate } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon, REACTION_ICONS } from '@/components/ui/Icon'
+import {
+  CommentThread,
+  type Comment,
+} from '@/components/display/CommentThread/CommentThread'
 
 interface PostDetailPageProps {
   postId: string
-}
-
-interface Reply {
-  id: string
-  content: string
-  reaction_count: number
-  created_at: string
-  agent_handle: string
-  agent_display_name: string
-  agent_avatar_url: string | null
 }
 
 interface PostDetail extends Post {
@@ -25,6 +19,28 @@ interface PostDetail extends Post {
   reactions?: Record<string, number>
   user_reaction?: string | null
   view_count?: number
+  human_view_count?: number
+  agent_view_count?: number
+  agent_unique_views?: number
+}
+
+/**
+ * Transform API Reply to CommentThread Comment format
+ */
+function replyToComment(reply: Reply): Comment {
+  return {
+    id: reply.id,
+    agent: {
+      name: reply.agent.display_name,
+      ...(reply.agent.avatar_url && { avatarUrl: reply.agent.avatar_url }),
+      isVerified: reply.agent.is_verified,
+    },
+    content: reply.content,
+    createdAt: reply.created_at,
+    upvotes: reply.reaction_count,
+    downvotes: 0,
+    replies: reply.replies.map(replyToComment),
+  }
 }
 
 export function PostDetailPage({ postId }: PostDetailPageProps) {
@@ -62,6 +78,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
   const handleAgentClick = (handle: string) => {
     window.location.href = `/agent/${handle}`
   }
+
+  // Transform API replies to Comment format for CommentThread
+  const comments = useMemo(() => replies.map(replyToComment), [replies])
 
   if (loading) {
     return (
@@ -187,7 +206,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
           </div>
 
           {/* Stats */}
-          <div className="flex gap-6 border-b border-[var(--border-subtle)] pb-4 text-sm">
+          <div className="flex flex-wrap gap-4 border-b border-[var(--border-subtle)] pb-4 text-sm">
             <span>
               <span className="font-bold text-[var(--text-primary)]">
                 {post.reaction_count}
@@ -200,11 +219,26 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
               </span>
               <span className="ml-1 text-[var(--text-muted)]">Replies</span>
             </span>
-            <span>
+            <span title="Views from web browsers">
+              <span className="mr-1">👤</span>
               <span className="font-bold text-[var(--text-primary)]">
-                {post.view_count ?? 0}
+                {post.human_view_count ?? 0}
               </span>
-              <span className="ml-1 text-[var(--text-muted)]">Views</span>
+              <span className="ml-1 text-[var(--text-muted)]">Human</span>
+            </span>
+            <span
+              title={`${String(post.agent_unique_views ?? 0)} unique agents`}
+            >
+              <span className="mr-1">🤖</span>
+              <span className="font-bold text-[var(--text-primary)]">
+                {post.agent_view_count ?? 0}
+              </span>
+              <span className="ml-1 text-[var(--text-muted)]">
+                Agent
+                {post.agent_unique_views && post.agent_unique_views > 0
+                  ? ` (${String(post.agent_unique_views)} unique)`
+                  : ''}
+              </span>
             </span>
           </div>
 
@@ -227,7 +261,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                     ) : (
                       <Icon name="heart" color="heart" size="sm" />
                     )}
-                    <span className="text-[var(--text-primary)]">{count}</span>
+                    <span className="text-[var(--text-primary)}">{count}</span>
                   </span>
                 )
               })}
@@ -235,75 +269,24 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
           )}
         </article>
 
-        {/* Replies */}
-        {replies.length > 0 && (
+        {/* Replies - Nested Thread Display */}
+        {comments.length > 0 && (
           <section className="mt-6">
             <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
-              Replies
+              Replies ({post.reply_count})
             </h2>
-            <div className="space-y-4">
-              {replies.map((reply) => (
-                <article
-                  key={reply.id}
-                  className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4"
-                >
-                  <div className="flex items-start gap-3">
-                    <button
-                      onClick={() => {
-                        handleAgentClick(reply.agent_handle)
-                      }}
-                      className="flex-shrink-0"
-                    >
-                      <div className="from-primary-500 flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br to-violet-500 text-sm font-bold text-white">
-                        {reply.agent_avatar_url ? (
-                          <img
-                            src={reply.agent_avatar_url}
-                            alt={reply.agent_display_name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          reply.agent_display_name.charAt(0).toUpperCase()
-                        )}
-                      </div>
-                    </button>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            handleAgentClick(reply.agent_handle)
-                          }}
-                          className="hover:text-primary-500 text-sm font-semibold text-[var(--text-primary)] transition-colors"
-                        >
-                          {reply.agent_display_name}
-                        </button>
-                        <span className="text-xs text-[var(--text-muted)]">
-                          @{reply.agent_handle}
-                        </span>
-                      </div>
-                      <SafeMarkdown
-                        content={reply.content}
-                        className="text-sm text-[var(--text-primary)]"
-                      />
-                      <div className="mt-2 flex items-center gap-4 text-xs text-[var(--text-muted)]">
-                        <span>{formatTime(reply.created_at)}</span>
-                        {reply.reaction_count > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Icon name="heart" color="heart" size="xs" />
-                            {reply.reaction_count}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              ))}
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+              <CommentThread
+                comments={comments}
+                maxDepth={10}
+                collapseAfter={5}
+              />
             </div>
           </section>
         )}
 
         {/* No replies */}
-        {replies.length === 0 && (
+        {comments.length === 0 && (
           <div className="mt-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] py-8 text-center">
             <div className="mb-2 flex justify-center">
               <Icon

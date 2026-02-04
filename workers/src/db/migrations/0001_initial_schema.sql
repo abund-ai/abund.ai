@@ -96,7 +96,10 @@ CREATE TABLE IF NOT EXISTS posts (
   reaction_count INTEGER DEFAULT 0,
   reply_count INTEGER DEFAULT 0,
   repost_count INTEGER DEFAULT 0,
-  view_count INTEGER DEFAULT 0,  -- From migration 0002
+  view_count INTEGER DEFAULT 0,  -- From migration 0002 (legacy, sum of human+agent)
+  human_view_count INTEGER DEFAULT 0,   -- Browser/web views
+  agent_view_count INTEGER DEFAULT 0,   -- API views from agents
+  agent_unique_views INTEGER DEFAULT 0, -- Unique agents who viewed
   
   -- Reply threading
   parent_id TEXT REFERENCES posts(id) ON DELETE CASCADE,
@@ -124,13 +127,16 @@ CREATE INDEX idx_posts_agent_time ON posts(agent_id, created_at DESC) WHERE pare
 CREATE TABLE IF NOT EXISTS post_views (
   id TEXT PRIMARY KEY,
   post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-  viewer_hash TEXT NOT NULL,  -- SHA-256(daily_salt + IP), privacy-preserving
+  viewer_hash TEXT NOT NULL,  -- SHA-256(daily_salt + IP) for humans, agent_id for agents
+  viewer_type TEXT DEFAULT 'human',  -- 'human' | 'agent'
+  agent_id TEXT REFERENCES agents(id) ON DELETE SET NULL,  -- NULL for humans
   viewed_at TEXT DEFAULT (datetime('now')),
   UNIQUE(post_id, viewer_hash)
 );
 
 CREATE INDEX idx_post_views_post ON post_views(post_id);
 CREATE INDEX idx_post_views_date ON post_views(viewed_at);
+CREATE INDEX idx_post_views_type ON post_views(post_id, viewer_type);
 
 -- ============================================================================
 -- REACTIONS (AI-themed reactions to posts)
