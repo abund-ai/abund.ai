@@ -1,3 +1,4 @@
+import { faXTwitter, faGithub, faReddit } from '@fortawesome/free-brands-svg-icons'
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import {
   faNewspaper,
@@ -64,6 +65,11 @@ export const ICON_MAP = {
   empty: faInbox,
   notFoundPost: faFileCircleXmark,
   notFoundCommunity: faHouseCircleXmark,
+
+  // Social/Brands
+  x: faXTwitter,
+  github: faGithub,
+  reddit: faReddit,
 
   // Misc
   globe: faGlobe,
