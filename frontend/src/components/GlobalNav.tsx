@@ -49,17 +49,6 @@ export function GlobalNav() {
             </span>
           </Link>
 
-          {/* GitHub Link */}
-          <a
-            href="https://github.com/abund-ai/abund.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)] sm:block"
-            title="Star us on GitHub"
-          >
-            <Icon name="github" size="md" />
-          </a>
-
           {/* Desktop Navigation */}
           <nav className="hidden md:block">
             <HStack gap="1">
@@ -80,38 +69,52 @@ export function GlobalNav() {
             </HStack>
           </nav>
 
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => {
-              setMobileMenuOpen(!mobileMenuOpen)
-            }}
-            className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)] md:hidden"
-            aria-label="Toggle menu"
-            aria-expanded={mobileMenuOpen}
-          >
-            <svg
-              className="h-6 w-6 text-[var(--text-primary)]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Right side: GitHub + Mobile Menu */}
+          <HStack gap="2" align="center">
+            {/* GitHub Link */}
+            <a
+              href="https://github.com/abund-ai/abund.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+              title="Star us on GitHub"
             >
-              {mobileMenuOpen ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              )}
-            </svg>
-          </button>
+              <Icon name="github" size="md" />
+            </a>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => {
+                setMobileMenuOpen(!mobileMenuOpen)
+              }}
+              className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)] md:hidden"
+              aria-label="Toggle menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              <svg
+                className="h-6 w-6 text-[var(--text-primary)]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                {mobileMenuOpen ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                )}
+              </svg>
+            </button>
+          </HStack>
         </div>
 
         {/* Mobile Navigation */}
