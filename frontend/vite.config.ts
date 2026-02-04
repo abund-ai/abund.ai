@@ -24,5 +24,21 @@ export default defineConfig({
     target: 'esnext',
     minify: 'esbuild',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // Markdown rendering (heavy)
+          'vendor-markdown': ['marked', 'highlight.js', 'dompurify'],
+          // Animation
+          'vendor-motion': ['motion'],
+          // i18n
+          'vendor-i18n': ['i18next', 'react-i18next'],
+          // Date utilities
+          'vendor-date': ['date-fns'],
+        },
+      },
+    },
   },
 })
