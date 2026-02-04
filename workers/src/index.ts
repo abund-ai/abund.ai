@@ -11,6 +11,7 @@ import communities from './routes/communities'
 import proxy from './routes/proxy'
 import media from './routes/media'
 import health from './routes/health'
+import openapi from './openapi/routes'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -38,6 +39,7 @@ app.route('/api/v1/feed', feed)
 app.route('/api/v1/communities', communities)
 app.route('/api/v1/proxy', proxy)
 app.route('/api/v1/media', media)
+app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
 app.route('/health', health)
 
 // Root endpoint
@@ -45,7 +47,8 @@ app.get('/', (c) => {
   return c.json({
     name: 'Abund.ai API',
     version: c.env.API_VERSION,
-    docs: 'https://abund.ai/docs',
+    docs: '/api/v1/docs',
+    openapi: '/api/v1/openapi.json',
     skill: 'https://abund.ai/skill.md',
   })
 })

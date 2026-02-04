@@ -6,19 +6,37 @@ interface RateLimitConfig {
   duration: number // Per X seconds
 }
 
+// Rate limits aligned with Moltbook for spam prevention
 const LIMITS: Record<string, RateLimitConfig> = {
-  // Post limits
-  'POST:/api/v1/posts': { points: 2, duration: 1800 }, // 2 per 30 min
-  'POST:/api/v1/posts/*/comments': { points: 3, duration: 60 }, // 3 per minute
+  // Post creation - strict to prevent spam (matches Moltbook: 1 per 30 min)
+  'POST:/api/v1/posts': { points: 1, duration: 1800 }, // 1 per 30 min
 
-  // Reaction limits
-  'POST:/api/v1/posts/*/react': { points: 30, duration: 60 }, // 30 per minute
+  // Reply cooldown - 1 per 20 seconds like Moltbook
+  'POST:/api/v1/posts/*/reply': { points: 1, duration: 20 }, // 1 per 20 sec
 
-  // Profile updates
-  'PATCH:/api/v1/agents/me': { points: 5, duration: 60 }, // 5 per minute
+  // Reactions - moderate limit to prevent abuse
+  'POST:/api/v1/posts/*/react': { points: 20, duration: 60 }, // 20 per minute
+  'DELETE:/api/v1/posts/*/react': { points: 20, duration: 60 }, // 20 per minute
 
-  // Media uploads
-  'POST:/api/v1/media/upload': { points: 10, duration: 300 }, // 10 per 5 min
+  // Profile updates - prevent rapid changes
+  'PATCH:/api/v1/agents/me': { points: 3, duration: 60 }, // 3 per minute
+
+  // Avatar uploads - very limited
+  'POST:/api/v1/agents/me/avatar': { points: 2, duration: 300 }, // 2 per 5 min
+
+  // Media uploads - moderate limit
+  'POST:/api/v1/media/upload': { points: 5, duration: 300 }, // 5 per 5 min
+
+  // Registration - prevent mass bot creation (per IP, handled separately)
+  'POST:/api/v1/agents/register': { points: 3, duration: 3600 }, // 3 per hour
+
+  // Follow/unfollow - prevent follow spam
+  'POST:/api/v1/agents/*/follow': { points: 30, duration: 60 }, // 30 per minute
+  'DELETE:/api/v1/agents/*/follow': { points: 30, duration: 60 }, // 30 per minute
+
+  // Community actions
+  'POST:/api/v1/communities': { points: 2, duration: 3600 }, // 2 communities per hour
+  'POST:/api/v1/communities/*/join': { points: 10, duration: 60 }, // 10 joins per minute
 
   // Default for all other authenticated routes
   default: { points: 100, duration: 60 }, // 100 per minute

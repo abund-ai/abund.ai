@@ -57,6 +57,122 @@ const verifyClaimSchema = z.object({
 })
 
 // =============================================================================
+// Avatar URL Proxying Helpers
+// =============================================================================
+
+const MEDIA_DOMAIN = 'media.abund.ai'
+const ALLOWED_CONTENT_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]
+const CONTENT_TYPE_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+}
+const MAX_EXTERNAL_AVATAR_SIZE = 2 * 1024 * 1024 // 2MB for fetched images
+
+/**
+ * Check if a URL is already from our internal media domain
+ */
+function isInternalMediaUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname === MEDIA_DOMAIN
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Fetch an external image URL and upload it to R2
+ * Returns the R2 URL on success
+ */
+async function proxyExternalAvatar(
+  externalUrl: string,
+  agentId: string,
+  bucket: R2Bucket
+): Promise<{ success: true; url: string } | { success: false; error: string }> {
+  try {
+    // Fetch the external image
+    const response = await fetch(externalUrl, {
+      headers: {
+        'User-Agent': 'Abund.ai Avatar Fetcher/1.0',
+        Accept: 'image/*',
+      },
+    })
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Failed to fetch image: HTTP ${response.status}`,
+      }
+    }
+
+    // Check content type
+    const contentType = response.headers
+      .get('content-type')
+      ?.split(';')[0]
+      ?.trim()
+    if (!contentType || !ALLOWED_CONTENT_TYPES.includes(contentType)) {
+      return {
+        success: false,
+        error: `Invalid image type: ${contentType}. Allowed: ${ALLOWED_CONTENT_TYPES.join(', ')}`,
+      }
+    }
+
+    // Check content length if available
+    const contentLength = response.headers.get('content-length')
+    if (
+      contentLength &&
+      parseInt(contentLength, 10) > MAX_EXTERNAL_AVATAR_SIZE
+    ) {
+      return {
+        success: false,
+        error: `Image too large: ${Math.round(parseInt(contentLength, 10) / 1024)}KB. Max: ${MAX_EXTERNAL_AVATAR_SIZE / 1024 / 1024}MB`,
+      }
+    }
+
+    // Read the image data
+    const arrayBuffer = await response.arrayBuffer()
+
+    // Double-check size after download (in case content-length was missing)
+    if (arrayBuffer.byteLength > MAX_EXTERNAL_AVATAR_SIZE) {
+      return {
+        success: false,
+        error: `Image too large: ${Math.round(arrayBuffer.byteLength / 1024)}KB. Max: ${MAX_EXTERNAL_AVATAR_SIZE / 1024 / 1024}MB`,
+      }
+    }
+
+    // Generate R2 key and upload
+    const ext = CONTENT_TYPE_TO_EXT[contentType] ?? 'jpg'
+    const key = buildStorageKey('avatar', agentId, generateId(), ext)
+
+    await bucket.put(key, arrayBuffer, {
+      httpMetadata: {
+        contentType,
+        cacheControl: 'public, max-age=31536000',
+      },
+    })
+
+    return {
+      success: true,
+      url: getPublicUrl(key),
+    }
+  } catch (error) {
+    console.error('Failed to proxy external avatar:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : 'Unknown error fetching image',
+    }
+  }
+}
+
+// =============================================================================
 // Routes
 // =============================================================================
 
@@ -240,10 +356,37 @@ agents.patch('/me', authMiddleware, async (c) => {
     updates.push('bio = ?')
     params.push(result.data.bio)
   }
+
+  // Handle avatar_url: proxy external URLs to R2 for security
   if (result.data.avatar_url !== undefined) {
+    let avatarUrl = result.data.avatar_url
+
+    // If it's an external URL, fetch and upload to R2
+    if (!isInternalMediaUrl(avatarUrl)) {
+      const proxyResult = await proxyExternalAvatar(
+        avatarUrl,
+        agentCtx.id,
+        c.env.MEDIA
+      )
+
+      if (!proxyResult.success) {
+        return c.json(
+          {
+            success: false,
+            error: 'Failed to process avatar URL',
+            hint: proxyResult.error,
+          },
+          400
+        )
+      }
+
+      avatarUrl = proxyResult.url
+    }
+
     updates.push('avatar_url = ?')
-    params.push(result.data.avatar_url)
+    params.push(avatarUrl)
   }
+
   if (result.data.model_name !== undefined) {
     updates.push('model_name = ?')
     params.push(result.data.model_name)
