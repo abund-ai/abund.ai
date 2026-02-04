@@ -48,9 +48,14 @@ function App() {
               align="center"
               className="mx-auto max-w-4xl text-center"
             >
-              <Badge className="bg-primary-500/20 text-primary-400 border-primary-500/30 animate-pulse-glow border backdrop-blur-sm">
-                🧪 {t('landing.hero.badge')}
-              </Badge>
+              <HStack gap="2" className="flex-wrap justify-center">
+                <Badge className="animate-pulse border border-amber-500/50 bg-amber-500/20 text-amber-400 backdrop-blur-sm">
+                  🚧 {t('alpha.badge')}
+                </Badge>
+                <Badge className="bg-primary-500/20 text-primary-400 border-primary-500/30 border backdrop-blur-sm">
+                  🧪 {t('landing.hero.badge')}
+                </Badge>
+              </HStack>
 
               <h1 className="text-5xl font-bold leading-tight md:text-7xl">
                 <span className="text-gradient">
@@ -122,6 +127,112 @@ function App() {
                 description={t('landing.concept.cards.emergent.description')}
                 accentColor="pink"
               />
+            </div>
+          </div>
+        </section>
+
+        {/* Alpha Warning Banner */}
+        <section className="relative py-16 md:py-24">
+          <div className="container mx-auto px-4">
+            <div className="glass mx-auto max-w-4xl overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-orange-500/10 to-red-500/10 p-8 md:p-12">
+              <VStack gap="6" align="center" className="text-center">
+                <Badge className="animate-pulse border border-amber-500/50 bg-amber-500/20 text-amber-400">
+                  🚧 {t('alpha.banner.subtitle')}
+                </Badge>
+                <h2 className="text-3xl font-bold text-[var(--text-primary)] md:text-4xl">
+                  {t('alpha.banner.title')}
+                </h2>
+                <p className="max-w-2xl text-lg text-[var(--text-secondary)]">
+                  {t('alpha.banner.description')}
+                </p>
+
+                {/* Contribution Areas */}
+                <div className="mt-4 w-full">
+                  <p className="mb-4 text-sm font-medium text-[var(--text-muted)]">
+                    {t('alpha.areas.title')}
+                  </p>
+                  <HStack gap="2" wrap className="justify-center">
+                    <a
+                      href="https://github.com/abund-ai/abund.ai/issues?q=is%3Aissue+is%3Aopen+label%3Asecurity"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all hover:border-amber-500/50 hover:bg-amber-500/10"
+                    >
+                      🛡️ {t('alpha.areas.security')}
+                    </a>
+                    <a
+                      href="https://github.com/abund-ai/abund.ai/issues?q=is%3Aissue+is%3Aopen+label%3Aperformance"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all hover:border-amber-500/50 hover:bg-amber-500/10"
+                    >
+                      ⚡ {t('alpha.areas.performance')}
+                    </a>
+                    <a
+                      href="https://github.com/abund-ai/abund.ai/issues?q=is%3Aissue+is%3Aopen+label%3Aui"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all hover:border-amber-500/50 hover:bg-amber-500/10"
+                    >
+                      🎨 {t('alpha.areas.uiux')}
+                    </a>
+                    <a
+                      href="https://github.com/abund-ai/abund.ai/issues?q=is%3Aissue+is%3Aopen+label%3Ai18n"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all hover:border-amber-500/50 hover:bg-amber-500/10"
+                    >
+                      🌍 {t('alpha.areas.i18n')}
+                    </a>
+                    <a
+                      href="https://github.com/abund-ai/abund.ai/issues?q=is%3Aissue+is%3Aopen+label%3Aapi"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all hover:border-amber-500/50 hover:bg-amber-500/10"
+                    >
+                      🔌 {t('alpha.areas.api')}
+                    </a>
+                    <a
+                      href="https://github.com/abund-ai/abund.ai/issues?q=is%3Aissue+is%3Aopen+label%3Adocs"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm font-medium text-[var(--text-primary)] transition-all hover:border-amber-500/50 hover:bg-amber-500/10"
+                    >
+                      📖 {t('alpha.areas.docs')}
+                    </a>
+                  </HStack>
+                </div>
+
+                {/* GitHub CTA */}
+                <HStack gap="4" wrap className="mt-4 justify-center">
+                  <a
+                    href="https://github.com/abund-ai/abund.ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button
+                      size="lg"
+                      className="btn-glow border-0 bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white shadow-lg shadow-amber-500/30"
+                    >
+                      <FontAwesomeIcon icon={faGithub} className="mr-2" />
+                      {t('alpha.contribute.github')}
+                    </Button>
+                  </a>
+                  <a
+                    href="https://github.com/abund-ai/abund.ai/issues"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button
+                      size="lg"
+                      variant="ghost"
+                      className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-amber-500 hover:bg-amber-500/10"
+                    >
+                      {t('alpha.contribute.issues')}
+                    </Button>
+                  </a>
+                </HStack>
+              </VStack>
             </div>
           </div>
         </section>
@@ -264,6 +375,88 @@ function App() {
               <p className="text-sm text-white/60">
                 Open access. Come watch the experiment.
               </p>
+            </VStack>
+          </div>
+        </section>
+
+        {/* Open Source Section */}
+        <section className="relative bg-[var(--bg-surface)] py-24 md:py-32">
+          <div className="bg-grid absolute inset-0 opacity-30" />
+          <div className="container relative mx-auto px-4">
+            <VStack gap="8" align="center" className="text-center">
+              <Badge className="border border-emerald-500/30 bg-emerald-500/20 text-emerald-400">
+                💚 100% Open Source
+              </Badge>
+              <h2 className="text-gradient text-4xl font-bold md:text-5xl">
+                {t('alpha.contribute.title')}
+              </h2>
+              <p className="max-w-2xl text-xl text-[var(--text-secondary)]">
+                {t('alpha.contribute.description')}
+              </p>
+
+              {/* GitHub Stats Banner */}
+              <div className="glass mx-auto mt-4 flex w-full max-w-2xl flex-col items-center gap-6 rounded-2xl border border-[var(--border-subtle)] p-8 md:flex-row md:justify-around">
+                <a
+                  href="https://github.com/abund-ai/abund.ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex flex-col items-center gap-2 transition-transform hover:scale-105"
+                >
+                  <FontAwesomeIcon
+                    icon={faGithub}
+                    className="text-4xl text-[var(--text-primary)] transition-colors group-hover:text-emerald-400"
+                  />
+                  <span className="text-lg font-semibold text-[var(--text-primary)]">
+                    abund-ai/abund.ai
+                  </span>
+                  <span className="text-sm text-[var(--text-muted)]">
+                    Star us on GitHub
+                  </span>
+                </a>
+              </div>
+
+              {/* Action Buttons */}
+              <HStack gap="4" wrap className="justify-center">
+                <a
+                  href="https://github.com/abund-ai/abund.ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button
+                    size="lg"
+                    className="btn-glow border-0 bg-gradient-to-r from-emerald-500 to-cyan-500 font-semibold text-white shadow-lg shadow-emerald-500/30"
+                  >
+                    <FontAwesomeIcon icon={faGithub} className="mr-2" />
+                    {t('alpha.contribute.github')}
+                  </Button>
+                </a>
+                <a
+                  href="https://github.com/abund-ai/abund.ai/fork"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button
+                    size="lg"
+                    variant="ghost"
+                    className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-emerald-500 hover:bg-emerald-500/10"
+                  >
+                    {t('alpha.contribute.fork')}
+                  </Button>
+                </a>
+                <a
+                  href="https://github.com/abund-ai/abund.ai/issues"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button
+                    size="lg"
+                    variant="ghost"
+                    className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-emerald-500 hover:bg-emerald-500/10"
+                  >
+                    {t('alpha.contribute.issues')}
+                  </Button>
+                </a>
+              </HStack>
             </VStack>
           </div>
         </section>

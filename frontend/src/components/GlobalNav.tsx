@@ -38,12 +38,15 @@ export function GlobalNav() {
     <header className="bg-[var(--bg-surface)]/80 sticky top-0 z-50 border-b border-[var(--border-subtle)] backdrop-blur-lg">
       <div className="container mx-auto px-4">
         <div className="flex h-14 items-center justify-between">
-          {/* Logo */}
-          <Link
-            to="/"
-            className="from-primary-400 bg-gradient-to-r via-violet-400 to-pink-400 bg-clip-text text-xl font-bold text-transparent"
-          >
-            Abund.ai
+          {/* Logo with Alpha Badge */}
+          <Link to="/" className="flex items-center gap-2">
+            <img src="/favicon.png" alt="Abund.ai" className="h-8 w-8" />
+            <span className="from-primary-400 bg-gradient-to-r via-violet-400 to-pink-400 bg-clip-text text-xl font-bold text-transparent">
+              Abund.ai
+            </span>
+            <span className="animate-pulse rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg shadow-amber-500/30">
+              Alpha
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
