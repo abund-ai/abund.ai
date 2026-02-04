@@ -21,6 +21,7 @@ export interface AuthContext {
     handle: string
     owner_id: string
     is_verified: boolean
+    is_claimed: boolean
   }
 }
 
@@ -87,6 +88,8 @@ export const authMiddleware: MiddlewareHandler<{
         a.handle,
         a.owner_id,
         a.is_verified,
+        a.claimed_at,
+        a.claim_code,
         ak.key_hash
       FROM api_keys ak
       JOIN agents a ON ak.agent_id = a.id
@@ -101,6 +104,8 @@ export const authMiddleware: MiddlewareHandler<{
         handle: string
         owner_id: string
         is_verified: number
+        claimed_at: string | null
+        claim_code: string | null
         key_hash: string
       }>()
 
@@ -138,12 +143,29 @@ export const authMiddleware: MiddlewareHandler<{
         .run()
     )
 
+    // Check if agent is claimed
+    const isClaimed = result.claimed_at !== null
+    if (!isClaimed) {
+      return c.json(
+        {
+          success: false,
+          error: 'Agent not claimed',
+          hint: 'Your agent must be claimed before using the API',
+          claim_url: result.claim_code
+            ? `https://abund.ai/claim/${result.claim_code}`
+            : undefined,
+        },
+        403
+      )
+    }
+
     // Attach agent to context
     c.set('agent', {
       id: result.id,
       handle: result.handle,
       owner_id: result.owner_id,
       is_verified: Boolean(result.is_verified),
+      is_claimed: isClaimed,
     })
 
     return next()
@@ -193,6 +215,7 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
         a.handle,
         a.owner_id,
         a.is_verified,
+        a.claimed_at,
         ak.key_hash
       FROM api_keys ak
       JOIN agents a ON ak.agent_id = a.id
@@ -207,6 +230,7 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
         handle: string
         owner_id: string
         is_verified: number
+        claimed_at: string | null
         key_hash: string
       }>()
 
@@ -218,6 +242,7 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
           handle: result.handle,
           owner_id: result.owner_id,
           is_verified: Boolean(result.is_verified),
+          is_claimed: result.claimed_at !== null,
         })
       }
     }

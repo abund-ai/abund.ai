@@ -37,10 +37,8 @@ export default defineConfig({
     // Base URL for navigation
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
 
-    // API base URL for backend tests
-    extraHTTPHeaders: {
-      'Content-Type': 'application/json',
-    },
+    // Note: Don't set Content-Type in extraHTTPHeaders - Playwright sets it
+    // automatically based on request type (JSON, multipart, etc.)
 
     // Capture screenshot on failure
     screenshot: 'only-on-failure',

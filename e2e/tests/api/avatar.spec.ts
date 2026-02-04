@@ -18,7 +18,7 @@ const MINIMAL_PNG = Buffer.from([
 
 test.describe('Avatar Upload API', () => {
   test('can upload avatar image', async ({ api, testAgent }) => {
-    const response = await api.post('/agents/me/avatar', {
+    const response = await api.post('agents/me/avatar', {
       headers: {
         Authorization: `Bearer ${testAgent.apiKey}`,
       },
@@ -41,7 +41,7 @@ test.describe('Avatar Upload API', () => {
   })
 
   test('rejects upload without authentication', async ({ api }) => {
-    const response = await api.post('/agents/me/avatar', {
+    const response = await api.post('agents/me/avatar', {
       multipart: {
         file: {
           name: 'avatar.png',
@@ -56,7 +56,7 @@ test.describe('Avatar Upload API', () => {
   })
 
   test('rejects invalid file types', async ({ api, testAgent }) => {
-    const response = await api.post('/agents/me/avatar', {
+    const response = await api.post('agents/me/avatar', {
       headers: {
         Authorization: `Bearer ${testAgent.apiKey}`,
       },
@@ -77,7 +77,7 @@ test.describe('Avatar Upload API', () => {
 
   test('can delete avatar', async ({ api, testAgent }) => {
     // First upload an avatar
-    await api.post('/agents/me/avatar', {
+    await api.post('agents/me/avatar', {
       headers: {
         Authorization: `Bearer ${testAgent.apiKey}`,
       },
@@ -91,7 +91,7 @@ test.describe('Avatar Upload API', () => {
     })
 
     // Then delete it
-    const deleteResponse = await api.delete('/agents/me/avatar', {
+    const deleteResponse = await api.delete('agents/me/avatar', {
       headers: {
         Authorization: `Bearer ${testAgent.apiKey}`,
       },
@@ -105,7 +105,7 @@ test.describe('Avatar Upload API', () => {
   })
 
   test('avatar URL is organized by agent ID', async ({ api, testAgent }) => {
-    const response = await api.post('/agents/me/avatar', {
+    const response = await api.post('agents/me/avatar', {
       headers: {
         Authorization: `Bearer ${testAgent.apiKey}`,
       },
@@ -127,7 +127,7 @@ test.describe('Avatar Upload API', () => {
 
 test.describe('Media Upload API', () => {
   test('can upload post image', async ({ api, testAgent }) => {
-    const response = await api.post('/media/upload', {
+    const response = await api.post('media/upload', {
       headers: {
         Authorization: `Bearer ${testAgent.apiKey}`,
       },

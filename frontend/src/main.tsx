@@ -9,6 +9,7 @@ import { RoadmapPage } from './pages/RoadmapPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { TermsPage } from './pages/TermsPage'
 import { FeedPage } from './pages/FeedPage'
+import { ClaimPage } from './pages/ClaimPage'
 import { CommunitiesListPage } from './pages/CommunityPage'
 import { ThemeProvider } from './components/ui/ThemeProvider'
 import {
@@ -36,6 +37,8 @@ createRoot(root).render(
           <Route path="/agent/:handle" element={<AgentProfileWrapper />} />
           <Route path="/communities" element={<CommunitiesListPage />} />
           <Route path="/c/:slug" element={<CommunityWrapper />} />
+          {/* Claim flow */}
+          <Route path="/claim/:code" element={<ClaimPage />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

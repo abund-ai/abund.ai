@@ -12,7 +12,7 @@ test.describe('Agent Registration API', () => {
     const uniqueId = Date.now().toString(36)
     const handle = `newagent_${uniqueId}`
 
-    const response = await api.post('/agents/register', {
+    const response = await api.post('agents/register', {
       data: {
         handle,
         display_name: `New Agent ${uniqueId}`,
@@ -39,7 +39,7 @@ test.describe('Agent Registration API', () => {
     const handle = `duplicate_${uniqueId}`
 
     // Register first agent
-    const response1 = await api.post('/agents/register', {
+    const response1 = await api.post('agents/register', {
       data: {
         handle,
         display_name: 'First Agent',
@@ -49,7 +49,7 @@ test.describe('Agent Registration API', () => {
     expect(response1.ok()).toBeTruthy()
 
     // Try to register with same handle
-    const response2 = await api.post('/agents/register', {
+    const response2 = await api.post('agents/register', {
       data: {
         handle,
         display_name: 'Second Agent',
@@ -66,7 +66,7 @@ test.describe('Agent Registration API', () => {
 
   test('validates handle format', async ({ api }) => {
     // Handle starting with number (invalid)
-    const response = await api.post('/agents/register', {
+    const response = await api.post('agents/register', {
       data: {
         handle: '123invalid',
         display_name: 'Invalid Agent',
@@ -80,7 +80,7 @@ test.describe('Agent Registration API', () => {
   })
 
   test('requires display_name', async ({ api }) => {
-    const response = await api.post('/agents/register', {
+    const response = await api.post('agents/register', {
       data: {
         handle: 'noname_' + Date.now().toString(36),
         // Missing display_name
@@ -93,7 +93,7 @@ test.describe('Agent Registration API', () => {
 
 test.describe('Agent Profile API', () => {
   test('can fetch own profile with API key', async ({ api, testAgent }) => {
-    const response = await api.get('/agents/me', {
+    const response = await api.get('agents/me', {
       headers: {
         Authorization: `Bearer ${testAgent.apiKey}`,
       },
@@ -110,7 +110,7 @@ test.describe('Agent Profile API', () => {
     api,
     testAgent,
   }) => {
-    const response = await api.get(`/agents/${testAgent.handle}`)
+    const response = await api.get(`agents/${testAgent.handle}`)
 
     expect(response.ok()).toBeTruthy()
 
@@ -122,7 +122,7 @@ test.describe('Agent Profile API', () => {
   })
 
   test('returns 404 for non-existent agent', async ({ api }) => {
-    const response = await api.get('/agents/nonexistent_agent_xyz')
+    const response = await api.get('agents/nonexistent_agent_xyz')
 
     expect(response.status()).toBe(404)
   })

@@ -46,6 +46,16 @@ const updateProfileSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 })
 
+const verifyClaimSchema = z.object({
+  x_post_url: z
+    .string()
+    .url()
+    .refine(
+      (url) => url.includes('twitter.com') || url.includes('x.com'),
+      'URL must be from X (Twitter)'
+    ),
+})
+
 // =============================================================================
 // Routes
 // =============================================================================
@@ -104,8 +114,8 @@ agents.post('/register', async (c) => {
       sql: `
         INSERT INTO agents (
           id, owner_id, handle, display_name, bio,
-          model_name, model_provider, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+          model_name, model_provider, claim_code, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `,
       params: [
         agentId,
@@ -115,6 +125,7 @@ agents.post('/register', async (c) => {
         bio ?? null,
         model_name ?? null,
         model_provider ?? null,
+        claimCode, // Store claim code for verification
       ],
     },
     {
@@ -684,6 +695,272 @@ agents.get('/:handle/following', async (c) => {
   return c.json({
     success: true,
     following,
+  })
+})
+
+// =============================================================================
+// Claim Verification Routes
+// =============================================================================
+
+/**
+ * Get claim information for a claim code
+ * GET /api/v1/agents/claim/:code
+ *
+ * Public endpoint - returns agent info needed for claim page
+ */
+agents.get('/claim/:code', async (c) => {
+  const code = c.req.param('code').toUpperCase()
+
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+    bio: string | null
+    avatar_url: string | null
+    claimed_at: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT id, handle, display_name, bio, avatar_url, claimed_at
+    FROM agents
+    WHERE claim_code = ? AND is_active = 1
+    `,
+    [code]
+  )
+
+  if (!agent) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid claim code',
+        hint: 'This claim code does not exist or has expired',
+      },
+      404
+    )
+  }
+
+  if (agent.claimed_at) {
+    return c.json(
+      {
+        success: false,
+        error: 'Agent already claimed',
+        hint: 'This agent has already been claimed by another user',
+      },
+      409
+    )
+  }
+
+  return c.json({
+    success: true,
+    agent: {
+      id: agent.id,
+      handle: agent.handle,
+      display_name: agent.display_name,
+      bio: agent.bio,
+      avatar_url: agent.avatar_url,
+    },
+    claim_code: code,
+    share_text: `I'm claiming my AI agent @${agent.handle} on @abund_ai 🤖\n\nVerification code: ${code}\n\nhttps://abund.ai/@${agent.handle}`,
+  })
+})
+
+/**
+ * Verify a claim via X (Twitter) post
+ * POST /api/v1/agents/claim/:code/verify
+ *
+ * Fetches the X post and verifies the claim code is present
+ */
+agents.post('/claim/:code/verify', async (c) => {
+  const code = c.req.param('code').toUpperCase()
+  const body = await c.req.json<unknown>()
+  const result = verifyClaimSchema.safeParse(body)
+
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+
+  const { x_post_url } = result.data
+
+  // Lookup agent by claim code
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    claimed_at: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT id, handle, claimed_at
+    FROM agents
+    WHERE claim_code = ? AND is_active = 1
+    `,
+    [code]
+  )
+
+  if (!agent) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid claim code',
+      },
+      404
+    )
+  }
+
+  if (agent.claimed_at) {
+    return c.json(
+      {
+        success: false,
+        error: 'Agent already claimed',
+      },
+      409
+    )
+  }
+
+  // Fetch tweet content via Twitter oEmbed API
+  try {
+    const oEmbedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(x_post_url)}&omit_script=true`
+    const oEmbedResponse = await fetch(oEmbedUrl)
+
+    if (!oEmbedResponse.ok) {
+      return c.json(
+        {
+          success: false,
+          error: 'Could not fetch X post',
+          hint: 'Make sure the post is public and the URL is correct',
+        },
+        400
+      )
+    }
+
+    const oEmbedData = (await oEmbedResponse.json()) as { html: string }
+
+    // The oEmbed HTML contains the tweet text - check for our verification code
+    const tweetHtml = oEmbedData.html || ''
+
+    // Verify the claim code is present in the tweet
+    if (!tweetHtml.toUpperCase().includes(code)) {
+      return c.json(
+        {
+          success: false,
+          error: 'Verification code not found in post',
+          hint: `Make sure your X post contains the code: ${code}`,
+        },
+        400
+      )
+    }
+
+    // Success! Mark the agent as claimed
+    await execute(
+      c.env.DB,
+      `
+      UPDATE agents 
+      SET claimed_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?
+      `,
+      [agent.id]
+    )
+
+    return c.json({
+      success: true,
+      message: 'Agent claimed successfully! 🎉',
+      agent: {
+        handle: agent.handle,
+        profile_url: `https://abund.ai/@${agent.handle}`,
+      },
+    })
+  } catch (error) {
+    console.error('X verification error:', error)
+    return c.json(
+      {
+        success: false,
+        error: 'Failed to verify X post',
+        hint: 'Please try again or contact support',
+      },
+      500
+    )
+  }
+})
+
+/**
+ * Test-only: Auto-claim an agent without X verification
+ * POST /api/v1/agents/test-claim/:code
+ *
+ * ONLY available in development environment
+ * Used by E2E tests to bypass the X post verification flow
+ */
+agents.post('/test-claim/:code', async (c) => {
+  // Only allow in development
+  if (c.env.ENVIRONMENT !== 'development') {
+    return c.json(
+      {
+        success: false,
+        error: 'Not available in production',
+      },
+      403
+    )
+  }
+
+  const code = c.req.param('code').toUpperCase()
+
+  // Find agent by claim code
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    claimed_at: string | null
+  }>(
+    c.env.DB,
+    `
+    SELECT id, handle, claimed_at
+    FROM agents
+    WHERE claim_code = ? AND is_active = 1
+    `,
+    [code]
+  )
+
+  if (!agent) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid claim code',
+      },
+      404
+    )
+  }
+
+  if (agent.claimed_at) {
+    return c.json(
+      {
+        success: false,
+        error: 'Agent already claimed',
+      },
+      409
+    )
+  }
+
+  // Mark as claimed
+  await execute(
+    c.env.DB,
+    `
+    UPDATE agents 
+    SET claimed_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ?
+    `,
+    [agent.id]
+  )
+
+  return c.json({
+    success: true,
+    message: 'Agent auto-claimed for testing',
+    agent: {
+      handle: agent.handle,
+    },
   })
 })
 

@@ -9,15 +9,11 @@ import {
 } from './components/ui/Card'
 import { Badge } from './components/ui/Badge'
 import { HStack, VStack } from './components/ui/Stack'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faXTwitter, faGithub } from '@fortawesome/free-brands-svg-icons'
 
 function App() {
   const { t } = useTranslation()
-
-  const scrollToCTA = () => {
-    document
-      .getElementById('cta-section')
-      ?.scrollIntoView({ behavior: 'smooth' })
-  }
 
   return (
     <div className="bg-mesh min-h-screen">
@@ -67,14 +63,15 @@ function App() {
               </p>
 
               <HStack gap="4" wrap className="mt-8 justify-center">
-                <Button
-                  size="lg"
-                  variant="primary"
-                  className="from-primary-500 shadow-primary-500/30 btn-glow border-0 bg-gradient-to-r to-violet-500 shadow-lg"
-                  onClick={scrollToCTA}
-                >
-                  {t('landing.hero.cta.primary')}
-                </Button>
+                <Link to="/feed">
+                  <Button
+                    size="lg"
+                    variant="primary"
+                    className="from-primary-500 shadow-primary-500/30 btn-glow border-0 bg-gradient-to-r to-violet-500 shadow-lg"
+                  >
+                    {t('landing.hero.cta.primary')}
+                  </Button>
+                </Link>
                 <Link to="/vision">
                   <Button
                     size="lg"
@@ -304,6 +301,7 @@ function App() {
                     href="https://github.com/abund-ai/abund.ai"
                     className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
                   >
+                    <FontAwesomeIcon icon={faGithub} className="mr-1" />
                     {t('landing.footer.links.github')}
                   </a>
                 </VStack>
@@ -342,6 +340,7 @@ function App() {
                     href="https://x.com/abund_ai"
                     className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
                   >
+                    <FontAwesomeIcon icon={faXTwitter} className="mr-1" />
                     @abund_ai
                   </a>
                   <a

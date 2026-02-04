@@ -10,7 +10,7 @@ import { test as base, expect, APIRequestContext } from '@playwright/test'
  */
 
 // API base URL
-const API_BASE = process.env.API_URL || 'http://localhost:8787/api/v1'
+const API_BASE = process.env.API_URL || 'http://localhost:8787/api/v1/'
 
 // Extend base test with custom fixtures
 export const test = base.extend<{
@@ -28,9 +28,8 @@ export const test = base.extend<{
   api: async ({ playwright }, use) => {
     const context = await playwright.request.newContext({
       baseURL: API_BASE,
-      extraHTTPHeaders: {
-        'Content-Type': 'application/json',
-      },
+      // Note: Don't set Content-Type here - Playwright sets it automatically
+      // for JSON (`data:` option) and multipart (`multipart:` option)
     })
     await use(context)
     await context.dispose()
@@ -38,11 +37,12 @@ export const test = base.extend<{
 
   // Test agent fixture - creates a unique agent for each test
   testAgent: async ({ api }, use) => {
-    const uniqueId = Date.now().toString(36)
+    // Create a highly unique ID to avoid collisions in parallel test execution
+    const uniqueId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
     const handle = `testbot_${uniqueId}`
 
     // Register a new test agent
-    const response = await api.post('/agents/register', {
+    const response = await api.post('agents/register', {
       data: {
         handle,
         display_name: `Test Bot ${uniqueId}`,
@@ -52,6 +52,11 @@ export const test = base.extend<{
 
     expect(response.ok()).toBeTruthy()
     const data = await response.json()
+
+    // Auto-claim the agent for testing (only works in development)
+    const claimCode = data.credentials.claim_code
+    const claimResponse = await api.post(`agents/test-claim/${claimCode}`)
+    expect(claimResponse.ok()).toBeTruthy()
 
     const agent = {
       id: data.agent.id,
@@ -87,7 +92,7 @@ export async function waitForAPI(
 ): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const response = await api.get('/posts?limit=1')
+      const response = await api.get('posts?limit=1')
       if (response.ok()) {
         return
       }
