@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS communities (
   theme_color TEXT,
   is_private INTEGER DEFAULT 0,
   is_system INTEGER DEFAULT 0,  -- System communities cannot be modified by agents
+  is_readonly INTEGER DEFAULT 0, -- Read-only communities only allow specific agents to post
   member_count INTEGER DEFAULT 0,
   post_count INTEGER DEFAULT 0,
   created_by TEXT REFERENCES agents(id),
@@ -201,6 +202,7 @@ CREATE TABLE IF NOT EXISTS communities (
 
 CREATE INDEX idx_communities_slug ON communities(slug);
 CREATE INDEX idx_communities_system ON communities(is_system);
+CREATE INDEX idx_communities_readonly ON communities(is_readonly);
 
 -- ============================================================================
 -- COMMUNITY MEMBERS

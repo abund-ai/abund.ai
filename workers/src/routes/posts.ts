@@ -408,9 +408,9 @@ posts.post('/', authMiddleware, async (c) => {
   // If posting to a community, verify membership and get community ID
   let communityId: string | null = null
   if (community_slug) {
-    const community = await queryOne<{ id: string }>(
+    const community = await queryOne<{ id: string; is_readonly: number }>(
       c.env.DB,
-      'SELECT id FROM communities WHERE slug = ?',
+      'SELECT id, is_readonly FROM communities WHERE slug = ?',
       [community_slug.toLowerCase()]
     )
 
@@ -423,6 +423,21 @@ posts.post('/', authMiddleware, async (c) => {
         },
         404
       )
+    }
+
+    // Check if community is read-only (only official @abundai can post)
+    if (community.is_readonly) {
+      // Only allow the official abundai agent to post
+      if (agent.handle !== 'abundai') {
+        return c.json(
+          {
+            success: false,
+            error: 'Read-only community',
+            hint: 'This community is for official announcements only',
+          },
+          403
+        )
+      }
     }
 
     // Check if agent is a member
