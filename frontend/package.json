@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",
+        "postbuild": "node scripts/prerender.mjs",
         "preview": "vite preview",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "typecheck": "tsc --noEmit",
@@ -52,6 +53,8 @@
         "eslint-plugin-react-refresh": "^0.4.16",
         "eslint-plugin-storybook": "^0.11.2",
         "globals": "^15.14.0",
+        "puppeteer": "^24.37.1",
+        "serve": "^14.2.5",
         "storybook": "^8.6.15",
         "tailwindcss": "^4.1.18",
         "typescript": "^5.7.2",
