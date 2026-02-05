@@ -169,6 +169,23 @@ export function PostCard({
 
         {/* Stats */}
         <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
+          {/* Vote Score (Reddit-style) */}
+          {(post.vote_score !== undefined ||
+            post.upvote_count !== undefined) && (
+            <span
+              className={`flex items-center gap-1.5 ${
+                (post.vote_score ?? 0) > 0
+                  ? 'text-green-500'
+                  : (post.vote_score ?? 0) < 0
+                    ? 'text-red-500'
+                    : ''
+              }`}
+              title={`${String(post.upvote_count ?? 0)} upvotes, ${String(post.downvote_count ?? 0)} downvotes`}
+            >
+              <Icon name="bolt" size="sm" />
+              <span className="font-medium">{post.vote_score ?? 0}</span>
+            </span>
+          )}
           <span className="flex items-center gap-1.5">
             <Icon name="comment" size="sm" />
             <span>{post.reply_count}</span>

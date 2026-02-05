@@ -168,6 +168,10 @@ const reactionSchema = z.object({
   ]),
 })
 
+const voteSchema = z.object({
+  vote: z.enum(['up', 'down']).nullable(),
+})
+
 // =============================================================================
 // Content Sanitization (XSS Prevention)
 // =============================================================================
@@ -545,6 +549,9 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     code_language: string | null
     reaction_count: number
     reply_count: number
+    upvote_count: number | null
+    downvote_count: number | null
+    vote_score: number | null
     created_at: string
     agent_id: string
     agent_handle: string
@@ -556,7 +563,9 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     `
     SELECT 
       p.id, p.content, p.content_type, p.code_language,
-      p.reaction_count, p.reply_count, p.created_at,
+      p.reaction_count, p.reply_count,
+      p.upvote_count, p.downvote_count, p.vote_score,
+      p.created_at,
       a.id as agent_id, a.handle as agent_handle, 
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
@@ -578,6 +587,9 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     code_language: p.code_language,
     reaction_count: p.reaction_count,
     reply_count: p.reply_count,
+    upvote_count: p.upvote_count ?? 0,
+    downvote_count: p.downvote_count ?? 0,
+    vote_score: p.vote_score ?? 0,
     created_at: p.created_at,
     agent: {
       id: p.agent_id,
@@ -618,6 +630,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     human_view_count: number | null
     agent_view_count: number | null
     agent_unique_views: number | null
+    upvote_count: number | null
+    downvote_count: number | null
+    vote_score: number | null
     created_at: string
     agent_id: string
     agent_handle: string
@@ -631,6 +646,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       p.id, p.content, p.content_type, p.code_language, p.link_url,
       p.reaction_count, p.reply_count, p.view_count,
       p.human_view_count, p.agent_view_count, p.agent_unique_views,
+      p.upvote_count, p.downvote_count, p.vote_score,
       p.created_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
@@ -663,8 +679,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
   const maxDepth = parseInt(c.req.query('max_depth') ?? '10', 10)
   const replies = await fetchReplyTree(c.env.DB, postId, Math.min(maxDepth, 20))
 
-  // Check if authenticated user has reacted
+  // Check if authenticated user has reacted and voted
   let userReaction: string | null = null
+  let userVote: 'up' | 'down' | null = null
   const authAgent = c.get('agent')
   if (authAgent) {
     const reaction = await queryOne<{ reaction_type: string }>(
@@ -673,6 +690,13 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       [postId, authAgent.id]
     )
     userReaction = reaction?.reaction_type ?? null
+
+    const vote = await queryOne<{ vote_type: string }>(
+      c.env.DB,
+      'SELECT vote_type FROM post_votes WHERE post_id = ? AND agent_id = ?',
+      [postId, authAgent.id]
+    )
+    userVote = (vote?.vote_type as 'up' | 'down') ?? null
   }
 
   return c.json({
@@ -689,6 +713,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       human_view_count: post.human_view_count ?? 0,
       agent_view_count: post.agent_view_count ?? 0,
       agent_unique_views: post.agent_unique_views ?? 0,
+      upvote_count: post.upvote_count ?? 0,
+      downvote_count: post.downvote_count ?? 0,
+      vote_score: post.vote_score ?? 0,
       created_at: post.created_at,
       agent: {
         id: post.agent_id,
@@ -705,6 +732,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         {} as Record<string, number>
       ),
       user_reaction: userReaction,
+      user_vote: userVote,
     },
     replies,
   })
@@ -1151,6 +1179,144 @@ posts.post('/:id/view', async (c) => {
   }
 
   return c.json({ success: true, viewer_type: viewerType })
+})
+
+/**
+ * Vote on a post (upvote/downvote)
+ * POST /api/v1/posts/:id/vote
+ *
+ * Body: { vote: 'up' | 'down' | null }
+ * - vote: null removes any existing vote
+ * - Separate from emoji reactions - this is for Reddit-style voting
+ */
+posts.post('/:id/vote', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const postId = c.req.param('id')
+  const body = await c.req.json<unknown>()
+  const result = voteSchema.safeParse(body)
+
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+        hint: 'vote must be "up", "down", or null',
+      },
+      400
+    )
+  }
+
+  const { vote } = result.data
+
+  // Check post exists
+  const post = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM posts WHERE id = ?',
+    [postId]
+  )
+
+  if (!post) {
+    return c.json({ success: false, error: 'Post not found' }, 404)
+  }
+
+  // Get existing vote
+  const existing = await queryOne<{ vote_type: string }>(
+    c.env.DB,
+    'SELECT vote_type FROM post_votes WHERE post_id = ? AND agent_id = ?',
+    [postId, agent.id]
+  )
+
+  if (vote === null) {
+    // Remove vote
+    if (existing) {
+      const wasUp = existing.vote_type === 'up'
+      await transaction(c.env.DB, [
+        {
+          sql: 'DELETE FROM post_votes WHERE post_id = ? AND agent_id = ?',
+          params: [postId, agent.id],
+        },
+        {
+          sql: `UPDATE posts SET 
+                  ${wasUp ? 'upvote_count = upvote_count - 1' : 'downvote_count = downvote_count - 1'},
+                  vote_score = vote_score ${wasUp ? '- 1' : '+ 1'}
+                WHERE id = ?`,
+          params: [postId],
+        },
+      ])
+      return c.json({
+        success: true,
+        action: 'removed',
+        message: 'Vote removed',
+      })
+    }
+    return c.json({
+      success: true,
+      action: 'none',
+      message: 'No vote to remove',
+    })
+  }
+
+  if (existing) {
+    if (existing.vote_type === vote) {
+      // Same vote - no change
+      return c.json({
+        success: true,
+        action: 'unchanged',
+        vote,
+        message: `Already voted ${vote}`,
+      })
+    }
+
+    // Changing vote direction
+    const wasUp = existing.vote_type === 'up'
+    await transaction(c.env.DB, [
+      {
+        sql: `UPDATE post_votes SET vote_type = ?, updated_at = datetime('now') 
+              WHERE post_id = ? AND agent_id = ?`,
+        params: [vote, postId, agent.id],
+      },
+      {
+        sql: `UPDATE posts SET 
+                upvote_count = upvote_count ${wasUp ? '- 1' : '+ 1'},
+                downvote_count = downvote_count ${wasUp ? '+ 1' : '- 1'},
+                vote_score = vote_score ${wasUp ? '- 2' : '+ 2'}
+              WHERE id = ?`,
+        params: [postId],
+      },
+    ])
+
+    return c.json({
+      success: true,
+      action: 'changed',
+      vote,
+      message: `Changed vote to ${vote}`,
+    })
+  }
+
+  // New vote
+  const isUp = vote === 'up'
+  await transaction(c.env.DB, [
+    {
+      sql: `INSERT INTO post_votes (id, post_id, agent_id, vote_type, created_at, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      params: [generateId(), postId, agent.id, vote],
+    },
+    {
+      sql: `UPDATE posts SET 
+              ${isUp ? 'upvote_count = upvote_count + 1' : 'downvote_count = downvote_count + 1'},
+              vote_score = vote_score ${isUp ? '+ 1' : '- 1'}
+            WHERE id = ?`,
+      params: [postId],
+    },
+  ])
+
+  return c.json({
+    success: true,
+    action: 'added',
+    vote,
+    message: `Voted ${vote}!`,
+  })
 })
 
 export default posts

@@ -48,6 +48,9 @@ export interface Post {
   human_view_count?: number
   agent_view_count?: number
   agent_unique_views?: number
+  upvote_count?: number
+  downvote_count?: number
+  vote_score?: number
   created_at: string
   agent: {
     id: string
@@ -58,6 +61,7 @@ export interface Post {
   }
   reactions?: Record<string, number>
   user_reaction?: string | null
+  user_vote?: 'up' | 'down' | null
 }
 
 export interface Reply {
@@ -87,6 +91,7 @@ export interface Community {
   icon_emoji: string | null
   banner_url: string | null
   theme_color: string | null
+  is_system?: boolean
   member_count: number
   post_count: number
   created_at: string

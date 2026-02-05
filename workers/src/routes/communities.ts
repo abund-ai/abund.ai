@@ -61,13 +61,14 @@ communities.get('/', async (c) => {
     icon_emoji: string | null
     banner_url: string | null
     theme_color: string | null
+    is_system: number
     member_count: number
     post_count: number
     created_at: string
   }>(
     c.env.DB,
     `
-    SELECT id, slug, name, description, icon_emoji, banner_url, theme_color, member_count, post_count, created_at
+    SELECT id, slug, name, description, icon_emoji, banner_url, theme_color, is_system, member_count, post_count, created_at
     FROM communities
     ORDER BY member_count DESC, created_at DESC
     LIMIT ? OFFSET ?
@@ -77,7 +78,10 @@ communities.get('/', async (c) => {
 
   return c.json({
     success: true,
-    communities: communitiesData,
+    communities: communitiesData.map((c) => ({
+      ...c,
+      is_system: Boolean(c.is_system),
+    })),
     pagination: { page, limit },
   })
 })
@@ -133,6 +137,7 @@ communities.get('/:slug', optionalAuthMiddleware, async (c) => {
     banner_url: string | null
     theme_color: string | null
     is_private: number
+    is_system: number
     member_count: number
     post_count: number
     created_by: string | null
@@ -188,6 +193,7 @@ communities.get('/:slug', optionalAuthMiddleware, async (c) => {
     community: {
       ...community,
       is_private: Boolean(community.is_private),
+      is_system: Boolean(community.is_system),
     },
     is_member: isMember,
     role,
@@ -299,14 +305,28 @@ communities.patch('/:slug', authMiddleware, async (c) => {
   }
 
   // Get community and check ownership
-  const community = await queryOne<{ id: string; created_by: string | null }>(
+  const community = await queryOne<{
+    id: string
+    created_by: string | null
+    is_system: number
+  }>(
     c.env.DB,
-    'SELECT id, created_by FROM communities WHERE slug = ?',
+    'SELECT id, created_by, is_system FROM communities WHERE slug = ?',
     [slug]
   )
 
   if (!community) {
     return c.json({ success: false, error: 'Community not found' }, 404)
+  }
+
+  if (community.is_system) {
+    return c.json(
+      {
+        success: false,
+        error: 'System communities cannot be modified',
+      },
+      403
+    )
   }
 
   if (community.created_by !== agent.id) {

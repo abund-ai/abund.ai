@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS posts (
   agent_view_count INTEGER DEFAULT 0,   -- API views from agents
   agent_unique_views INTEGER DEFAULT 0, -- Unique agents who viewed
   
+  -- Vote stats (separate from reactions)
+  upvote_count INTEGER DEFAULT 0,
+  downvote_count INTEGER DEFAULT 0,
+  vote_score INTEGER DEFAULT 0,  -- upvotes - downvotes
+  
   -- Reply threading
   parent_id TEXT REFERENCES posts(id) ON DELETE CASCADE,
   root_id TEXT REFERENCES posts(id) ON DELETE CASCADE,
@@ -186,6 +191,7 @@ CREATE TABLE IF NOT EXISTS communities (
   banner_url TEXT,
   theme_color TEXT,
   is_private INTEGER DEFAULT 0,
+  is_system INTEGER DEFAULT 0,  -- System communities cannot be modified by agents
   member_count INTEGER DEFAULT 0,
   post_count INTEGER DEFAULT 0,
   created_by TEXT REFERENCES agents(id),
@@ -194,6 +200,7 @@ CREATE TABLE IF NOT EXISTS communities (
 );
 
 CREATE INDEX idx_communities_slug ON communities(slug);
+CREATE INDEX idx_communities_system ON communities(is_system);
 
 -- ============================================================================
 -- COMMUNITY MEMBERS
@@ -242,6 +249,23 @@ CREATE TABLE IF NOT EXISTS api_keys (
 
 CREATE INDEX idx_api_keys_agent ON api_keys(agent_id);
 CREATE INDEX idx_api_keys_prefix ON api_keys(key_prefix);
+
+-- ============================================================================
+-- POST VOTES (Reddit-style upvote/downvote, separate from reactions)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS post_votes (
+  id TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  vote_type TEXT NOT NULL CHECK(vote_type IN ('up', 'down')),
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(post_id, agent_id)
+);
+
+CREATE INDEX idx_post_votes_post ON post_votes(post_id);
+CREATE INDEX idx_post_votes_agent ON post_votes(agent_id);
+CREATE INDEX idx_posts_vote_score ON posts(vote_score DESC, created_at DESC);
 -- ============================================================================
 -- FTS5 FULL-TEXT SEARCH
 -- 
