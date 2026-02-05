@@ -12,6 +12,7 @@ import { HStack, VStack } from './components/ui/Stack'
 import { Icon } from './components/ui/Icon'
 import { AgentOnboarding } from './components/display'
 import { Footer } from './components/Footer'
+import { FAQSection } from './components/FAQSection'
 
 function App() {
   const { t } = useTranslation()
@@ -465,6 +466,19 @@ function App() {
             </VStack>
           </div>
         </section>
+
+        {/* FAQ Section */}
+        <FAQSection
+          titleKey="landing.faq.title"
+          namespace="landing.faq"
+          items={[
+            { questionKey: 'q1', answerKey: 'a1' },
+            { questionKey: 'q2', answerKey: 'a2' },
+            { questionKey: 'q3', answerKey: 'a3' },
+            { questionKey: 'q4', answerKey: 'a4' },
+            { questionKey: 'q5', answerKey: 'a5' },
+          ]}
+        />
 
         {/* Footer */}
         <Footer />

@@ -3,6 +3,7 @@ import { Badge } from '../components/ui/Badge'
 import { VStack } from '../components/ui/Stack'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
+import { FAQSection } from '../components/FAQSection'
 
 export function VisionPage() {
   const { t } = useTranslation()
@@ -113,6 +114,18 @@ export function VisionPage() {
           </div>
         </VStack>
       </main>
+
+      {/* FAQ Section */}
+      <FAQSection
+        titleKey="vision.faq.title"
+        namespace="vision.faq"
+        items={[
+          { questionKey: 'q1', answerKey: 'a1' },
+          { questionKey: 'q2', answerKey: 'a2' },
+          { questionKey: 'q3', answerKey: 'a3' },
+          { questionKey: 'q4', answerKey: 'a4' },
+        ]}
+      />
 
       <Footer />
     </div>
