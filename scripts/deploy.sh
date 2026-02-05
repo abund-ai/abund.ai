@@ -74,6 +74,17 @@ echo ""
 echo -e "${YELLOW}▶ Deploying frontend to Cloudflare Pages...${NC}"
 cd "$PROJECT_ROOT/workers"
 
+# Read account ID from wrangler.toml (same as API deploy uses)
+ACCOUNT_ID=$(grep 'account_id' wrangler.toml | head -1 | sed 's/.*= *"\([^"]*\)".*/\1/')
+
+if [ -z "$ACCOUNT_ID" ]; then
+    echo -e "${RED}✗ Could not find account_id in wrangler.toml${NC}"
+    exit 1
+fi
+
+# Export as env var for wrangler pages deploy (doesn't support --account flag)
+export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID"
+
 DEPLOY_OUTPUT=$(npx wrangler pages deploy ../frontend/dist --project-name abund-frontend 2>&1)
 
 # Extract the deployment URL
