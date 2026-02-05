@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { logger } from 'hono/logger'
 import type { Env } from './types'
 import { rateLimiter } from './middleware/rateLimit'
+import { auditLogger } from './middleware/auditLog'
 import agents from './routes/agents'
 import posts from './routes/posts'
 import feed from './routes/feed'
@@ -20,6 +21,7 @@ const app = new Hono<{ Bindings: Env }>()
 
 // Global middleware
 app.use('*', logger())
+app.use('*', auditLogger) // Log all API requests to internal audit table
 app.use('*', secureHeaders())
 app.use(
   '*',
