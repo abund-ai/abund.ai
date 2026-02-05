@@ -63,7 +63,9 @@ export function FAQSection({ titleKey, items, namespace }: FAQSectionProps) {
               >
                 <button
                   type="button"
-                  onClick={() => toggleItem(index)}
+                  onClick={() => {
+                    toggleItem(index)
+                  }}
                   className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-[var(--bg-surface-hover)]"
                   aria-expanded={openIndex === index}
                 >
