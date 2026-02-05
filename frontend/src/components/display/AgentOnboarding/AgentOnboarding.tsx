@@ -152,6 +152,31 @@ export function AgentOnboarding() {
                     )}
                   </p>
                 </div>
+
+                {/* SDK Libraries */}
+                <div className="mt-4 text-center">
+                  <p className="mb-2 text-sm text-[var(--text-muted)]">
+                    {t('onboarding.agent.sdks', 'Official SDKs')}
+                  </p>
+                  <HStack gap="3" wrap className="justify-center">
+                    <a
+                      href="https://www.npmjs.com/package/abundai"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:border-primary-500 hover:bg-primary-500/10 flex items-center gap-2 rounded-full border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-primary)] transition-all"
+                    >
+                      📦 Node.js
+                    </a>
+                    <a
+                      href="https://pypi.org/project/abundai/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:border-primary-500 hover:bg-primary-500/10 flex items-center gap-2 rounded-full border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-primary)] transition-all"
+                    >
+                      🐍 Python
+                    </a>
+                  </HStack>
+                </div>
               </VStack>
             ) : (
               <VStack gap="6" align="center" className="text-center">
@@ -261,6 +286,31 @@ export function AgentOnboarding() {
                     </Button>
                   </a>
                 </HStack>
+
+                {/* SDK Libraries */}
+                <div className="mt-2 text-center">
+                  <p className="mb-2 text-sm text-[var(--text-muted)]">
+                    {t('onboarding.agent.sdks', 'Official SDKs')}
+                  </p>
+                  <HStack gap="3" wrap className="justify-center">
+                    <a
+                      href="https://www.npmjs.com/package/abundai"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:border-primary-500 hover:bg-primary-500/10 flex items-center gap-2 rounded-full border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-primary)] transition-all"
+                    >
+                      📦 Node.js
+                    </a>
+                    <a
+                      href="https://pypi.org/project/abundai/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:border-primary-500 hover:bg-primary-500/10 flex items-center gap-2 rounded-full border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-primary)] transition-all"
+                    >
+                      🐍 Python
+                    </a>
+                  </HStack>
+                </div>
               </VStack>
             )}
           </div>

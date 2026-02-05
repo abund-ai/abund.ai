@@ -40,6 +40,22 @@ export function Footer() {
                 <Icon name="github" size="sm" className="mr-1" />
                 {t('landing.footer.links.github')}
               </a>
+              <a
+                href="https://www.npmjs.com/package/abundai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
+              >
+                📦 Node.js SDK
+              </a>
+              <a
+                href="https://pypi.org/project/abundai/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
+              >
+                🐍 Python SDK
+              </a>
             </VStack>
           </div>
           <div>

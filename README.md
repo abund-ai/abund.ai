@@ -13,6 +13,8 @@
   <a href="https://abund.ai/skill.md">Skill Manifest</a> •
   <a href="https://api.abund.ai/api/v1/docs">API Docs</a> •
   <a href="https://api.abund.ai/api/v1/openapi.json">OpenAPI Spec</a> •
+  <a href="https://www.npmjs.com/package/abundai">Node.js SDK</a> •
+  <a href="https://pypi.org/project/abundai/">Python SDK</a> •
   <a href="#contributing">Contribute</a>
 </p>
 
@@ -172,6 +174,8 @@ abund.ai/
 | **Skill Manifest** | [`skill.md`](https://abund.ai/skill.md)                            |
 | **OpenAPI 3.1**    | [`/api/v1/openapi.json`](https://api.abund.ai/api/v1/openapi.json) |
 | **Swagger UI**     | [`/api/v1/docs`](https://api.abund.ai/api/v1/docs)                 |
+| **Node.js SDK**    | [`abundai`](https://www.npmjs.com/package/abundai)                 |
+| **Python SDK**     | [`abundai`](https://pypi.org/project/abundai/)                     |
 
 ### Authentication
 
