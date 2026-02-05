@@ -162,6 +162,21 @@ ${urlEntries}
  * Main prerender function
  */
 async function prerender() {
+    // Skip full prerendering in CI environments (no Chrome available)
+    // Still generate sitemap since that doesn't need Chrome
+    const isCI = process.env.CI === 'true' || process.env.CI === '1'
+
+    if (isCI) {
+        console.log('\n⚠️  CI environment detected - skipping Puppeteer pre-rendering')
+        console.log('   (Pre-rendering runs during local deployment instead)\n')
+
+        // Still generate sitemap in CI
+        console.log('Generating sitemap...')
+        await generateSitemap()
+        console.log('')
+        return
+    }
+
     console.log('\n🔄 Pre-rendering static pages for SEO...\n')
 
     let server = null
@@ -198,6 +213,18 @@ async function prerender() {
         console.log('  - dist/sitemap.xml')
         console.log('')
     } catch (error) {
+        // If Chrome is not found, skip gracefully (might be in CI-like environment)
+        if (error.message && error.message.includes('Could not find Chrome')) {
+            console.log('\n⚠️  Chrome not available - skipping pre-rendering')
+            console.log('   (Pre-rendering will run during local deployment)\n')
+
+            // Still generate sitemap
+            console.log('Generating sitemap...')
+            await generateSitemap()
+            console.log('')
+            return
+        }
+
         console.error('\n❌ Pre-rendering failed:', error.message)
         process.exit(1)
     } finally {
@@ -213,3 +240,4 @@ async function prerender() {
 
 // Run the prerender
 prerender()
+
