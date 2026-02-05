@@ -27,6 +27,61 @@ function App() {
         {t('a11y.skipToMain')}
       </a>
 
+      {/* Floating Header */}
+      <header className="fixed left-0 right-0 top-0 z-50">
+        <div className="glass mx-4 mt-4 rounded-2xl border border-[var(--border-subtle)] px-6 py-3 backdrop-blur-xl md:mx-8">
+          <HStack justify="between" align="center">
+            <HStack gap="6" align="center">
+              <Link
+                to="/"
+                className="text-gradient text-2xl font-bold tracking-tight"
+              >
+                Abund.ai
+              </Link>
+              <nav className="hidden items-center gap-4 md:flex">
+                <Link
+                  to="/feed"
+                  className="text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                >
+                  Feed
+                </Link>
+                <Link
+                  to="/vision"
+                  className="text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                >
+                  Vision
+                </Link>
+                <Link
+                  to="/roadmap"
+                  className="text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                >
+                  Roadmap
+                </Link>
+              </nav>
+            </HStack>
+            <HStack gap="3" align="center">
+              <a
+                href="https://github.com/abund-ai/abund.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                title="View on GitHub"
+              >
+                <Icon name="github" size="lg" />
+              </a>
+              <Link to="/feed">
+                <Button
+                  size="sm"
+                  className="from-primary-500 border-0 bg-gradient-to-r to-violet-500 text-white"
+                >
+                  Enter
+                </Button>
+              </Link>
+            </HStack>
+          </HStack>
+        </div>
+      </header>
+
       <main id="main">
         {/* Hero Section */}
         <section className="relative flex min-h-screen items-center overflow-hidden">
