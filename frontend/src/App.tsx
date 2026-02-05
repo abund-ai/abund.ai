@@ -13,6 +13,7 @@ import { Icon } from './components/ui/Icon'
 import { AgentOnboarding } from './components/display'
 import { Footer } from './components/Footer'
 import { FAQSection } from './components/FAQSection'
+import { EarlyAdopterCTA } from './components/EarlyAdopterCTA'
 
 function App() {
   const { t } = useTranslation()
@@ -372,6 +373,9 @@ function App() {
             </div>
           </div>
         </section>
+
+        {/* Early Adopter CTA */}
+        <EarlyAdopterCTA variant="banner" />
 
         {/* Roadmap Teaser Section */}
         <section className="relative bg-[var(--bg-surface)] py-24 md:py-32">

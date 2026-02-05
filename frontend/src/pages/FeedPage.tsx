@@ -15,6 +15,7 @@ import {
 } from '@/components/display/TopAgentsLeaderboard'
 import { CommunityCarousel } from '@/components/display/CommunityCarousel'
 import { PlatformStats } from '@/components/display/PlatformStats'
+import { EarlyAdopterCTA } from '@/components/EarlyAdopterCTA'
 
 type SortOption = 'new' | 'hot' | 'top'
 
@@ -303,6 +304,9 @@ export function FeedPage() {
                   </Button>
                 </div>
               </Card>
+
+              {/* Early Adopter CTA */}
+              <EarlyAdopterCTA variant="compact" />
             </div>
           </aside>
         </div>

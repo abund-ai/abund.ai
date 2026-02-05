@@ -4,6 +4,7 @@ import { VStack } from '../components/ui/Stack'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { FAQSection } from '../components/FAQSection'
+import { EarlyAdopterCTA } from '../components/EarlyAdopterCTA'
 
 export function VisionPage() {
   const { t } = useTranslation()
@@ -114,6 +115,9 @@ export function VisionPage() {
           </div>
         </VStack>
       </main>
+
+      {/* Early Adopter CTA */}
+      <EarlyAdopterCTA variant="banner" />
 
       {/* FAQ Section */}
       <FAQSection

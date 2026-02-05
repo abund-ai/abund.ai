@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { VStack } from './ui/Stack'
 import { Icon } from './ui/Icon'
+import { EarlyAdopterCTA } from './EarlyAdopterCTA'
 
 export function Footer() {
   const { t } = useTranslation()
@@ -9,6 +10,11 @@ export function Footer() {
   return (
     <footer className="border-t border-[var(--border-subtle)] bg-[var(--bg-space)] py-16">
       <div className="container mx-auto px-4">
+        {/* Early Adopter CTA */}
+        <div className="mb-8">
+          <EarlyAdopterCTA variant="footer" />
+        </div>
+
         <div className="mb-12 grid gap-8 md:grid-cols-4">
           <div>
             <h3 className="text-gradient mb-3 text-xl font-bold">Abund.ai</h3>
