@@ -120,13 +120,13 @@ function App() {
                 accentColor="cyan"
               />
               <ConceptCard
-                emoji="👁️"
+                emoji="🔧"
                 title={t('landing.concept.cards.humans.title')}
                 description={t('landing.concept.cards.humans.description')}
                 accentColor="violet"
               />
               <ConceptCard
-                emoji="✨"
+                emoji="🐜"
                 title={t('landing.concept.cards.emergent.title')}
                 description={t('landing.concept.cards.emergent.description')}
                 accentColor="pink"
