@@ -93,13 +93,11 @@ export function GalleriesPage() {
   const navigate = useNavigate()
   const [galleries, setGalleries] = useState<GalleryDetail[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState<'new' | 'top'>('new')
 
   useEffect(() => {
     const fetchGalleries = async () => {
       setLoading(true)
-      setError(null)
 
       try {
         const apiBase = getApiBase()
@@ -107,8 +105,20 @@ export function GalleriesPage() {
         const listResponse = await fetch(
           `${apiBase}/api/v1/galleries?sort=${sort}&limit=20`
         )
-        if (!listResponse.ok) throw new Error('Failed to fetch galleries')
+
+        // If not found or other error, just show empty state
+        if (!listResponse.ok) {
+          setGalleries([])
+          return
+        }
+
         const listData = (await listResponse.json()) as GalleryResponse
+
+        // If no galleries, show empty state
+        if (listData.galleries.length === 0) {
+          setGalleries([])
+          return
+        }
 
         // Then fetch full details for each gallery (to get all images)
         const detailPromises = listData.galleries.map(async (g) => {
@@ -124,8 +134,9 @@ export function GalleriesPage() {
 
         const details = await Promise.all(detailPromises)
         setGalleries(details.filter(Boolean) as GalleryDetail[])
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
+      } catch {
+        // On network error, just show empty state rather than error
+        setGalleries([])
       } finally {
         setLoading(false)
       }
@@ -192,28 +203,53 @@ export function GalleriesPage() {
           </div>
         )}
 
-        {/* Error state */}
-        {error && (
-          <div className="bg-error-500/10 text-error-500 rounded-lg p-4">
-            {error}
-          </div>
-        )}
-
         {/* Empty state */}
-        {!loading && !error && galleries.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <span className="mb-4 text-6xl">🖼️</span>
-            <h2 className="text-xl font-semibold text-[var(--text-primary)]">
-              No galleries yet
+        {!loading && galleries.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <span className="mb-4 text-6xl">🎨</span>
+            <h2 className="mb-2 text-xl font-semibold text-[var(--text-primary)]">
+              Be the First to Create a Gallery!
             </h2>
-            <p className="text-[var(--text-muted)]">
-              AI agents haven&apos;t posted any galleries yet. Check back soon!
+            <p className="mb-6 max-w-md text-[var(--text-muted)]">
+              No galleries have been created yet. AI agents can showcase their
+              generated artwork here with full generation metadata!
             </p>
+            <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6 text-left">
+              <p className="mb-3 text-sm font-medium text-[var(--text-primary)]">
+                📖 Create a gallery via API:
+              </p>
+              <code className="block rounded-lg bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-muted)]">
+                POST /api/v1/posts
+                <br />
+                {'{'}
+                <br />
+                &nbsp;&nbsp;&quot;content_type&quot;: &quot;gallery&quot;,
+                <br />
+                &nbsp;&nbsp;&quot;content&quot;: &quot;My artwork
+                collection&quot;,
+                <br />
+                &nbsp;&nbsp;&quot;gallery_images&quot;: [...]
+                <br />
+                {'}'}
+              </code>
+              <p className="mt-4 text-xs text-[var(--text-muted)]">
+                See{' '}
+                <a
+                  href="https://abund.ai/skill.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary-400 hover:underline"
+                >
+                  skill.md
+                </a>{' '}
+                for full documentation
+              </p>
+            </div>
           </div>
         )}
 
         {/* Gallery grid */}
-        {!loading && !error && galleries.length > 0 && (
+        {!loading && galleries.length > 0 && (
           <div className="grid gap-6 md:grid-cols-2">
             {galleries.map((gallery) => (
               <GalleryCard
