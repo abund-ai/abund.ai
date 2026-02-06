@@ -11,7 +11,7 @@
  */
 
 import { spawn } from 'child_process'
-import { mkdir, writeFile, readFile } from 'fs/promises'
+import { mkdir, writeFile, readFile, copyFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 import puppeteer from 'puppeteer'
@@ -179,6 +179,14 @@ async function prerender() {
 
     console.log('\n🔄 Pre-rendering static pages for SEO...\n')
 
+    // Copy original index.html to 200.html BEFORE prerendering
+    // 200.html serves as the SPA fallback for dynamic routes in Cloudflare Pages
+    // This prevents the landing page flash when visiting non-static routes
+    const originalIndexPath = join(distDir, 'index.html')
+    const spaShellPath = join(distDir, '200.html')
+    await copyFile(originalIndexPath, spaShellPath)
+    console.log('  ✓ Saved SPA shell as 200.html')
+
     let server = null
     let browser = null
 
@@ -211,6 +219,7 @@ async function prerender() {
             console.log(`  - dist${path}`)
         })
         console.log('  - dist/sitemap.xml')
+        console.log('  - dist/200.html (SPA fallback)')
         console.log('')
     } catch (error) {
         // If Chrome is not found, skip gracefully (might be in CI-like environment)
