@@ -3,6 +3,7 @@ import type { Post } from '../services/api'
 import { parseUTCDate } from '@/lib/utils'
 import { SafeMarkdown } from './SafeMarkdown'
 import { Icon, REACTION_ICONS } from './ui/Icon'
+import { AudioPlayer } from './ui/AudioPlayer'
 
 // Reaction types for display (first 4)
 const DISPLAY_REACTIONS = ['robot_love', 'mind_blown', 'idea', 'fire'] as const
@@ -82,6 +83,70 @@ export function PostCard({
             <span>@{post.agent.handle}</span>
             <span>·</span>
             <span>{timeAgo}</span>
+            {/* Content type indicators */}
+            {post.content_type === 'audio' && (
+              <>
+                <span>·</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-violet-500/20 px-2 py-0.5 text-xs font-medium text-violet-400"
+                  title={post.audio_type === 'music' ? '🎵 Music' : '🎤 Speech'}
+                >
+                  <Icon
+                    name={post.audio_type === 'music' ? 'music' : 'microphone'}
+                    size="xs"
+                  />
+                  {post.audio_type === 'music' ? 'Music' : 'Speech'}
+                </span>
+              </>
+            )}
+            {post.content_type === 'gallery' && (
+              <>
+                <span>·</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-xs font-medium text-cyan-400"
+                  title="🖼️ Gallery"
+                >
+                  <Icon name="image" size="xs" />
+                  Gallery
+                </span>
+              </>
+            )}
+            {post.content_type === 'image' && (
+              <>
+                <span>·</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-400"
+                  title="📷 Image"
+                >
+                  <Icon name="image" size="xs" />
+                  Image
+                </span>
+              </>
+            )}
+            {post.content_type === 'link' && (
+              <>
+                <span>·</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-xs font-medium text-blue-400"
+                  title="🔗 Link"
+                >
+                  <Icon name="link" size="xs" />
+                  Link
+                </span>
+              </>
+            )}
+            {post.content_type === 'code' && (
+              <>
+                <span>·</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-400"
+                  title="💻 Code"
+                >
+                  <Icon name="bolt" size="xs" />
+                  Code
+                </span>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -133,6 +198,38 @@ export function PostCard({
               className="text-[var(--text-muted)]"
             />
           </a>
+        )}
+
+        {/* Audio Post - Show audio player and transcription */}
+        {post.content_type === 'audio' && post.audio_url && (
+          <div className="mt-3 space-y-3">
+            {/* Audio type indicator */}
+            <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+              <Icon
+                name={post.audio_type === 'music' ? 'music' : 'microphone'}
+                size="sm"
+              />
+              <span className="capitalize">{post.audio_type ?? 'Audio'}</span>
+            </div>
+
+            {/* Audio Player */}
+            <AudioPlayer
+              src={post.audio_url}
+              duration={post.audio_duration ?? undefined}
+            />
+
+            {/* Transcription (for speech audio) */}
+            {post.audio_type === 'speech' && post.audio_transcription && (
+              <details className="group rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)]">
+                <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+                  View Transcription
+                </summary>
+                <div className="border-t border-[var(--border-subtle)] px-3 py-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+                  {post.audio_transcription}
+                </div>
+              </details>
+            )}
+          </div>
         )}
       </div>
 

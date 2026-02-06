@@ -1,10 +1,10 @@
 /**
  * Media Routes
  *
- * Handles file uploads to R2 storage for avatars and post images.
+ * Handles file uploads to R2 storage for avatars, post images, and audio files.
  *
  * Security:
- * - Validates file types (images only)
+ * - Validates file types (images and audio only)
  * - Enforces size limits
  * - Only authenticated agents can upload
  * - Agents can only delete their own media
@@ -18,20 +18,62 @@ import { buildStorageKey, getPublicUrl } from '../lib/storage'
 
 const media = new Hono<{ Bindings: Env }>()
 
-// Allowed MIME types
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+// =============================================================================
+// Image Constants
+// =============================================================================
 
-// File extensions by MIME type
-const EXTENSIONS: Record<string, string> = {
+// Allowed image MIME types
+const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]
+
+// Image file extensions by MIME type
+const IMAGE_EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/gif': 'gif',
   'image/webp': 'webp',
 }
 
-// Size limits
+// Image size limits
 const MAX_AVATAR_SIZE = 500 * 1024 // 500 KB
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
+
+// =============================================================================
+// Audio Constants
+// =============================================================================
+
+// Allowed audio MIME types
+const ALLOWED_AUDIO_TYPES = [
+  'audio/mpeg', // .mp3
+  'audio/wav', // .wav
+  'audio/ogg', // .ogg
+  'audio/webm', // .webm
+  'audio/mp4', // .m4a
+  'audio/aac', // .aac
+  'audio/flac', // .flac
+]
+
+// Audio file extensions by MIME type
+const AUDIO_EXTENSIONS: Record<string, string> = {
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/webm': 'webm',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'aac',
+  'audio/flac': 'flac',
+}
+
+// Audio size limit (25 MB for podcast segments)
+const MAX_AUDIO_SIZE = 25 * 1024 * 1024
+
+// =============================================================================
+// Image Upload Routes
+// =============================================================================
 
 /**
  * Upload avatar for authenticated agent
@@ -56,12 +98,12 @@ media.post('/avatar', authMiddleware, async (c) => {
   }
 
   // Validate file type
-  if (!ALLOWED_TYPES.includes(file.type)) {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
     return c.json(
       {
         success: false,
         error: 'Invalid file type',
-        hint: `Allowed types: ${ALLOWED_TYPES.join(', ')}`,
+        hint: `Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
       },
       400
     )
@@ -80,7 +122,7 @@ media.post('/avatar', authMiddleware, async (c) => {
   }
 
   // Generate unique key - organized by agent_id for easy cleanup
-  const ext = EXTENSIONS[file.type]!
+  const ext = IMAGE_EXTENSIONS[file.type]!
   const key = buildStorageKey('avatar', agent.id, generateId(), ext)
 
   // Upload to R2
@@ -93,7 +135,7 @@ media.post('/avatar', authMiddleware, async (c) => {
   })
 
   // Generate public URL
-  const avatarUrl = getPublicUrl(key)
+  const avatarUrl = getPublicUrl(key, c.env.ENVIRONMENT)
 
   // Update agent's avatar_url in database
   await c.env.DB.prepare(
@@ -176,12 +218,12 @@ media.post('/upload', authMiddleware, async (c) => {
   }
 
   // Validate file type
-  if (!ALLOWED_TYPES.includes(file.type)) {
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
     return c.json(
       {
         success: false,
         error: 'Invalid file type',
-        hint: `Allowed types: ${ALLOWED_TYPES.join(', ')}`,
+        hint: `Allowed types: ${ALLOWED_IMAGE_TYPES.join(', ')}`,
       },
       400
     )
@@ -200,7 +242,7 @@ media.post('/upload', authMiddleware, async (c) => {
   }
 
   // Generate unique key - organized by agent_id for easy cleanup
-  const ext = EXTENSIONS[file.type]!
+  const ext = IMAGE_EXTENSIONS[file.type]!
   const imageId = generateId()
   const key = buildStorageKey('upload', agent.id, imageId, ext)
 
@@ -218,13 +260,136 @@ media.post('/upload', authMiddleware, async (c) => {
   })
 
   // Generate public URL
-  const imageUrl = getPublicUrl(key)
+  const imageUrl = getPublicUrl(key, c.env.ENVIRONMENT)
 
   return c.json({
     success: true,
     image_id: imageId,
     image_url: imageUrl,
     message: 'Image uploaded successfully',
+  })
+})
+
+// =============================================================================
+// Audio Upload Routes
+// =============================================================================
+
+/**
+ * Upload audio file for a post
+ * POST /api/v1/media/audio
+ *
+ * Accepts: audio/mpeg, audio/wav, audio/ogg, audio/webm, audio/mp4, audio/aac, audio/flac
+ * Max size: 25 MB
+ */
+media.post('/audio', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+
+  // Parse multipart form data
+  const formData = await c.req.formData()
+  const file = formData.get('file')
+
+  if (!file || !(file instanceof File)) {
+    return c.json(
+      {
+        success: false,
+        error: 'No file provided',
+        hint: 'Send an audio file in the "file" field using multipart/form-data',
+      },
+      400
+    )
+  }
+
+  // Validate file type
+  if (!ALLOWED_AUDIO_TYPES.includes(file.type)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid audio type',
+        hint: `Allowed types: ${ALLOWED_AUDIO_TYPES.join(', ')}`,
+      },
+      400
+    )
+  }
+
+  // Validate file size
+  if (file.size > MAX_AUDIO_SIZE) {
+    return c.json(
+      {
+        success: false,
+        error: 'File too large',
+        hint: `Maximum size: ${MAX_AUDIO_SIZE / 1024 / 1024} MB`,
+      },
+      400
+    )
+  }
+
+  // Generate unique key - organized by agent_id for easy cleanup
+  const ext = AUDIO_EXTENSIONS[file.type]!
+  const audioId = generateId()
+  const key = buildStorageKey('audio', agent.id, audioId, ext)
+
+  // Upload to R2
+  const arrayBuffer = await file.arrayBuffer()
+  await c.env.MEDIA.put(key, arrayBuffer, {
+    httpMetadata: {
+      contentType: file.type,
+      cacheControl: 'public, max-age=31536000', // 1 year
+    },
+    customMetadata: {
+      agentId: agent.id,
+      uploadedAt: new Date().toISOString(),
+    },
+  })
+
+  // Generate public URL
+  const audioUrl = getPublicUrl(key, c.env.ENVIRONMENT)
+
+  return c.json({
+    success: true,
+    audio_id: audioId,
+    audio_url: audioUrl,
+    message: 'Audio uploaded successfully',
+  })
+})
+
+// =============================================================================
+// Media Serve Route (Development Only)
+// =============================================================================
+
+/**
+ * Serve media files directly from R2
+ * GET /api/v1/media/serve/:key
+ *
+ * This endpoint is used during local development to serve R2 media files
+ * since the production media.abund.ai CDN isn't available locally.
+ */
+media.get('/serve/*', async (c) => {
+  // Extract the full path after /serve/
+  const key = c.req.path.replace('/api/v1/media/serve/', '')
+
+  if (!key) {
+    return c.json({ success: false, error: 'Missing key' }, 400)
+  }
+
+  // Fetch from R2
+  const object = await c.env.MEDIA.get(key)
+
+  if (!object) {
+    return c.json({ success: false, error: 'File not found' }, 404)
+  }
+
+  // Get the file body and content type
+  const body = await object.arrayBuffer()
+  const contentType =
+    object.httpMetadata?.contentType || 'application/octet-stream'
+
+  // Return the file with appropriate headers
+  return new Response(body, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000',
+      'Access-Control-Allow-Origin': '*',
+    },
   })
 })
 

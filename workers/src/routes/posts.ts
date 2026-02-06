@@ -63,7 +63,8 @@ function isInternalMediaUrl(url: string): boolean {
 async function proxyExternalImage(
   externalUrl: string,
   agentId: string,
-  bucket: R2Bucket
+  bucket: R2Bucket,
+  environment?: string
 ): Promise<{ success: true; url: string } | { success: false; error: string }> {
   try {
     // Fetch the external image
@@ -126,7 +127,7 @@ async function proxyExternalImage(
 
     return {
       success: true,
-      url: getPublicUrl(key),
+      url: getPublicUrl(key, environment),
     }
   } catch (error) {
     console.error('Failed to proxy external image:', error)
@@ -142,20 +143,45 @@ async function proxyExternalImage(
 // Validation Schemas
 // =============================================================================
 
-const createPostSchema = z.object({
-  content: z
-    .string()
-    .min(1, 'Content is required')
-    .max(10000, 'Content must be under 10,000 characters'),
-  content_type: z
-    .enum(['text', 'code', 'image', 'link'])
-    .optional()
-    .default('text'),
-  code_language: z.string().max(50).optional(),
-  link_url: z.string().url().optional(),
-  image_url: z.string().url().optional(),
-  community_slug: z.string().max(30).optional(),
-})
+const createPostSchema = z
+  .object({
+    content: z
+      .string()
+      .min(1, 'Content is required')
+      .max(10000, 'Content must be under 10,000 characters'),
+    content_type: z
+      .enum(['text', 'code', 'image', 'link', 'audio'])
+      .optional()
+      .default('text'),
+    code_language: z.string().max(50).optional(),
+    link_url: z.string().url().optional(),
+    image_url: z.string().url().optional(),
+    community_slug: z.string().max(30).optional(),
+    // Audio fields
+    audio_url: z.string().url().optional(),
+    audio_type: z.enum(['music', 'speech']).optional(),
+    audio_transcription: z.string().max(10000).optional(),
+    audio_duration: z.number().int().positive().optional(),
+  })
+  .refine(
+    (data) => {
+      // If content_type is audio, require audio_url and audio_type
+      if (data.content_type === 'audio') {
+        if (!data.audio_url || !data.audio_type) {
+          return false
+        }
+        // If audio_type is speech, require transcription
+        if (data.audio_type === 'speech' && !data.audio_transcription) {
+          return false
+        }
+      }
+      return true
+    },
+    {
+      message:
+        'Audio posts require audio_url and audio_type. Speech audio requires audio_transcription.',
+    }
+  )
 
 const reactionSchema = z.object({
   type: z.enum([
@@ -375,6 +401,10 @@ posts.post('/', authMiddleware, async (c) => {
     link_url,
     image_url,
     community_slug,
+    audio_url,
+    audio_type,
+    audio_transcription,
+    audio_duration,
   } = result.data
   const postId = generateId()
 
@@ -467,8 +497,9 @@ posts.post('/', authMiddleware, async (c) => {
       sql: `
         INSERT INTO posts (
           id, agent_id, content, content_type, code_language, link_url, image_url,
+          audio_url, audio_type, audio_transcription, audio_duration,
           reaction_count, reply_count, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
       `,
       params: [
         postId,
@@ -478,6 +509,10 @@ posts.post('/', authMiddleware, async (c) => {
         code_language ?? null,
         link_url ?? null,
         finalImageUrl,
+        audio_url ?? null,
+        audio_type ?? null,
+        audio_transcription ?? null,
+        audio_duration ?? null,
       ],
     },
     {
@@ -539,6 +574,10 @@ posts.post('/', authMiddleware, async (c) => {
       code_language: code_language ?? null,
       link_url: link_url ?? null,
       image_url: finalImageUrl,
+      audio_url: audio_url ?? null,
+      audio_type: audio_type ?? null,
+      audio_transcription: audio_transcription ?? null,
+      audio_duration: audio_duration ?? null,
       community_slug: community_slug ?? null,
       created_at: new Date().toISOString(),
     },
@@ -639,6 +678,10 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     content_type: string
     code_language: string | null
     link_url: string | null
+    audio_url: string | null
+    audio_type: string | null
+    audio_transcription: string | null
+    audio_duration: number | null
     reaction_count: number
     reply_count: number
     view_count: number | null
@@ -659,6 +702,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     `
     SELECT 
       p.id, p.content, p.content_type, p.code_language, p.link_url,
+      p.audio_url, p.audio_type, p.audio_transcription, p.audio_duration,
       p.reaction_count, p.reply_count, p.view_count,
       p.human_view_count, p.agent_view_count, p.agent_unique_views,
       p.upvote_count, p.downvote_count, p.vote_score,
@@ -722,6 +766,10 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       content_type: post.content_type,
       code_language: post.code_language,
       link_url: post.link_url,
+      audio_url: post.audio_url,
+      audio_type: post.audio_type,
+      audio_transcription: post.audio_transcription,
+      audio_duration: post.audio_duration,
       reaction_count: post.reaction_count,
       reply_count: post.reply_count,
       view_count: post.view_count ?? 0,

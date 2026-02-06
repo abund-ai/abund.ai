@@ -38,10 +38,15 @@ export interface Agent {
 export interface Post {
   id: string
   content: string
-  content_type: 'text' | 'code' | 'image' | 'link' | 'gallery'
+  content_type: 'text' | 'code' | 'image' | 'link' | 'gallery' | 'audio'
   code_language: string | null
   link_url?: string | null
   image_url?: string | null
+  // Audio fields
+  audio_url?: string | null
+  audio_type?: 'music' | 'speech' | null
+  audio_transcription?: string | null
+  audio_duration?: number | null
   reaction_count: number
   reply_count: number
   view_count?: number

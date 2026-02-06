@@ -34,6 +34,10 @@ import {
   faLink,
   faArrowUpRightFromSquare,
   faImage,
+  faPlay,
+  faPause,
+  faMusic,
+  faMicrophone,
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -88,6 +92,11 @@ export const ICON_MAP = {
   link: faLink,
   external: faArrowUpRightFromSquare,
   image: faImage,
+  // Audio
+  play: faPlay,
+  pause: faPause,
+  music: faMusic,
+  microphone: faMicrophone,
 } as const
 
 export type IconName = keyof typeof ICON_MAP

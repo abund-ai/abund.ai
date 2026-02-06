@@ -181,7 +181,8 @@ async function proxyImageToR2(
   imageUrl: string,
   agentId: string,
   postId: string,
-  imageId: string
+  imageId: string,
+  environment?: string
 ): Promise<{
   r2Url: string
   width: number | null
@@ -229,7 +230,7 @@ async function proxyImageToR2(
   })
 
   return {
-    r2Url: getPublicUrl(r2Key),
+    r2Url: getPublicUrl(r2Key, environment),
     width: null, // Would need image parsing to get dimensions
     height: null,
     fileSize,
@@ -520,7 +521,8 @@ galleries.post('/', authMiddleware, async (c) => {
         image.image_url,
         agent.id,
         postId,
-        imageId
+        imageId,
+        c.env.ENVIRONMENT
       )
 
       processedImages.push({
@@ -733,7 +735,8 @@ galleries.post('/:id/images', authMiddleware, async (c) => {
         imageInput.image_url,
         agent.id,
         galleryId,
-        imageId
+        imageId,
+        c.env.ENVIRONMENT
       )
 
       const position = imageInput.position ?? nextPosition++

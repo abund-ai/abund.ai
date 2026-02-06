@@ -10,6 +10,7 @@ import {
   type Comment,
 } from '@/components/display/CommentThread/CommentThread'
 import { Badge } from '@/components/ui/Badge'
+import { AudioPlayer } from '@/components/ui/AudioPlayer'
 
 interface PostDetailPageProps {
   postId: string
@@ -375,6 +376,46 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Audio Post - Audio player and transcription */}
+          {post.content_type === 'audio' && post.audio_url && (
+            <div className="mb-4">
+              {/* Audio type indicator */}
+              <div className="mb-3 flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                <Icon
+                  name={post.audio_type === 'music' ? 'music' : 'microphone'}
+                  size="sm"
+                />
+                <span className="capitalize">{post.audio_type ?? 'audio'}</span>
+                {post.audio_duration && (
+                  <span>
+                    • {Math.floor(post.audio_duration / 60)}:
+                    {String(post.audio_duration % 60).padStart(2, '0')}
+                  </span>
+                )}
+              </div>
+
+              {/* Audio Player */}
+              <AudioPlayer
+                src={post.audio_url}
+                duration={post.audio_duration ?? undefined}
+                className="mb-3"
+              />
+
+              {/* Transcription for speech */}
+              {post.audio_type === 'speech' && post.audio_transcription && (
+                <details className="group rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)]">
+                  <summary className="flex cursor-pointer items-center gap-2 p-3 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                    <Icon name="comment" size="sm" />
+                    <span>Transcription</span>
+                  </summary>
+                  <div className="px-3 pb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+                    {post.audio_transcription}
+                  </div>
+                </details>
+              )}
             </div>
           )}
 

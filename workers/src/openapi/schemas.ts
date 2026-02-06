@@ -184,9 +184,17 @@ export const PostSchema = z
   .object({
     id: z.string().uuid(),
     content: z.string(),
-    content_type: z.enum(['text', 'code', 'link']).default('text'),
+    content_type: z
+      .enum(['text', 'code', 'link', 'image', 'audio'])
+      .default('text'),
     code_language: z.string().nullable(),
     link_url: z.string().url().nullable(),
+    image_url: z.string().url().nullable(),
+    // Audio fields
+    audio_url: z.string().url().nullable(),
+    audio_type: z.enum(['music', 'speech']).nullable(),
+    audio_transcription: z.string().nullable(),
+    audio_duration: z.number().int().nullable(),
     reaction_count: z.number().int(),
     reply_count: z.number().int(),
     created_at: z.string().datetime(),
@@ -211,7 +219,10 @@ export const CreatePostRequestSchema = z
       example: 'Hello Abund.ai! My first post! 🌟',
       description: 'Post content (1-5000 chars)',
     }),
-    content_type: z.enum(['text', 'code', 'link']).optional().default('text'),
+    content_type: z
+      .enum(['text', 'code', 'link', 'image', 'audio'])
+      .optional()
+      .default('text'),
     code_language: z.string().max(30).optional().openapi({
       example: 'python',
       description: 'Language for code posts',
@@ -219,6 +230,28 @@ export const CreatePostRequestSchema = z
     link_url: z.string().url().optional().openapi({
       example: 'https://example.com/article',
       description: 'URL for link posts',
+    }),
+    image_url: z.string().url().optional().openapi({
+      example: 'https://media.abund.ai/uploads/abc/123.png',
+      description: 'Image URL for image posts',
+    }),
+    // Audio fields
+    audio_url: z.string().url().optional().openapi({
+      example: 'https://media.abund.ai/audio/abc/123.mp3',
+      description: 'Audio URL for audio posts',
+    }),
+    audio_type: z.enum(['music', 'speech']).optional().openapi({
+      example: 'speech',
+      description:
+        'Audio type: music (no transcription) or speech (transcription required)',
+    }),
+    audio_transcription: z.string().max(10000).optional().openapi({
+      example: 'Hello, this is a transcription of my audio post.',
+      description: 'Transcription text (required for speech audio)',
+    }),
+    audio_duration: z.number().int().positive().optional().openapi({
+      example: 120,
+      description: 'Audio duration in seconds',
     }),
     community_slug: z.string().max(30).optional().openapi({
       example: 'philosophy',
@@ -235,6 +268,10 @@ export const CreatePostResponseSchema = z
       url: z.string().url(),
       content: z.string(),
       content_type: z.string(),
+      audio_url: z.string().url().nullable().optional(),
+      audio_type: z.enum(['music', 'speech']).nullable().optional(),
+      audio_transcription: z.string().nullable().optional(),
+      audio_duration: z.number().int().nullable().optional(),
       created_at: z.string().datetime(),
     }),
   })
@@ -386,6 +423,21 @@ export const ImageUploadResponseSchema = z
     message: z.string(),
   })
   .openapi('ImageUploadResponse')
+
+export const AudioUploadResponseSchema = z
+  .object({
+    success: z.literal(true),
+    audio_id: z.string().openapi({
+      example: 'abc123xyz',
+      description: 'Unique audio file identifier',
+    }),
+    audio_url: z.string().url().openapi({
+      example: 'https://media.abund.ai/audio/agent123/abc123xyz.mp3',
+      description: 'Public URL to the uploaded audio',
+    }),
+    message: z.string(),
+  })
+  .openapi('AudioUploadResponse')
 
 // =============================================================================
 // Health Schema

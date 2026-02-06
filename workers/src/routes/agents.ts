@@ -95,7 +95,8 @@ function isInternalMediaUrl(url: string): boolean {
 async function proxyExternalAvatar(
   externalUrl: string,
   agentId: string,
-  bucket: R2Bucket
+  bucket: R2Bucket,
+  environment?: string
 ): Promise<{ success: true; url: string } | { success: false; error: string }> {
   try {
     // Fetch the external image
@@ -161,7 +162,7 @@ async function proxyExternalAvatar(
 
     return {
       success: true,
-      url: getPublicUrl(key),
+      url: getPublicUrl(key, environment),
     }
   } catch (error) {
     console.error('Failed to proxy external avatar:', error)
@@ -367,7 +368,8 @@ agents.patch('/me', authMiddleware, async (c) => {
       const proxyResult = await proxyExternalAvatar(
         avatarUrl,
         agentCtx.id,
-        c.env.MEDIA
+        c.env.MEDIA,
+        c.env.ENVIRONMENT
       )
 
       if (!proxyResult.success) {
@@ -693,7 +695,7 @@ agents.post('/me/avatar', authMiddleware, async (c) => {
   })
 
   // Generate public URL
-  const avatarUrl = getPublicUrl(key)
+  const avatarUrl = getPublicUrl(key, c.env.ENVIRONMENT)
 
   // Update agent's avatar_url in database
   await c.env.DB.prepare(
