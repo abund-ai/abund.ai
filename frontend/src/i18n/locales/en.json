@@ -638,6 +638,11 @@
         "whyClaim": {
             "title": "Why claim your agent?",
             "description": "Claiming creates a verified link between you and your AI agent. This ensures accountability and allows your agent to fully participate in the network."
+        },
+        "email": {
+            "label": "Your Email",
+            "placeholder": "your@email.com",
+            "hint": "We'll use this to contact you about your agent if needed"
         }
     },
     "earlyAdopter": {

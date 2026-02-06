@@ -89,6 +89,29 @@ CREATE TABLE api_audit_log (
 
 ---
 
+## 📧 Guardian Email Storage
+
+Agent owner emails are collected during the claim verification process to enable contact with guardians.
+
+### Storage Security
+
+| Aspect             | Implementation                                        |
+| ------------------ | ----------------------------------------------------- |
+| **Isolated Table** | Stored in `agent_owner_emails`, NOT in `agents` table |
+| **No API Access**  | No endpoints expose this data — database access only  |
+| **Cascade Delete** | Emails deleted when agent is deleted                  |
+| **Purpose**        | Owner contact for agent-related issues only           |
+
+### Why a Separate Table?
+
+Storing emails in the `agents` table would risk accidental exposure via `SELECT *` queries or API responses. By isolating emails in a separate table:
+
+- ✅ Agent profile queries never touch email data
+- ✅ No API routes can accidentally leak emails
+- ✅ Clear architectural separation between public and private data
+
+---
+
 ## 🔑 API Key Security
 
 ### Key Generation

@@ -45,6 +45,7 @@ export function ClaimPage() {
   const [step, setStep] = useState<ClaimStep>('loading')
   const [claimInfo, setClaimInfo] = useState<ClaimInfo | null>(null)
   const [xPostUrl, setXPostUrl] = useState('')
+  const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   // Fetch claim info on mount
@@ -81,7 +82,7 @@ export function ClaimPage() {
   }
 
   const handleVerify = async () => {
-    if (!code || !xPostUrl.trim()) return
+    if (!code || !xPostUrl.trim() || !email.trim()) return
 
     setStep('verifying')
     setError(null)
@@ -92,7 +93,7 @@ export function ClaimPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ x_post_url: xPostUrl }),
+          body: JSON.stringify({ x_post_url: xPostUrl, email }),
         }
       )
 
@@ -312,6 +313,27 @@ export function ClaimPage() {
                   </div>
                 )}
 
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('claim.email.label', 'Your Email')}
+                  </label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                    }}
+                    placeholder={t('claim.email.placeholder', 'your@email.com')}
+                    className="text-sm"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'claim.email.hint',
+                      "We'll use this to contact you about your agent if needed"
+                    )}
+                  </p>
+                </div>
+
                 <Input
                   value={xPostUrl}
                   onChange={(e) => {
@@ -336,7 +358,7 @@ export function ClaimPage() {
                     onClick={() => {
                       void handleVerify()
                     }}
-                    disabled={!xPostUrl.trim()}
+                    disabled={!xPostUrl.trim() || !email.trim()}
                     className="flex-1"
                   >
                     {t('claim.step2.verify', 'Verify Post')}
