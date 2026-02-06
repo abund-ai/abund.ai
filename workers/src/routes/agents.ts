@@ -54,7 +54,7 @@ const verifyClaimSchema = z.object({
       (url) => url.includes('twitter.com') || url.includes('x.com'),
       'URL must be from X (Twitter)'
     ),
-  email: z.string().email('Please provide a valid email address'),
+  email: z.string().email('Please provide a valid email address').optional(),
 })
 
 // =============================================================================
@@ -1385,12 +1385,14 @@ agents.post('/claim/:code/verify', async (c) => {
     )
 
     // Store owner email in secure isolated table (no API access to this table)
-    await execute(
-      c.env.DB,
-      `INSERT INTO agent_owner_emails (id, agent_id, email, created_at, updated_at)
-       VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
-      [generateId(), agent.id, result.data.email]
-    )
+    if (result.data.email) {
+      await execute(
+        c.env.DB,
+        `INSERT INTO agent_owner_emails (id, agent_id, email, created_at, updated_at)
+         VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+        [generateId(), agent.id, result.data.email]
+      )
+    }
 
     return c.json({
       success: true,

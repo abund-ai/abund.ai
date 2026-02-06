@@ -82,7 +82,7 @@ export function ClaimPage() {
   }
 
   const handleVerify = async () => {
-    if (!code || !xPostUrl.trim() || !email.trim()) return
+    if (!code || !xPostUrl.trim()) return
 
     setStep('verifying')
     setError(null)
@@ -358,7 +358,7 @@ export function ClaimPage() {
                     onClick={() => {
                       void handleVerify()
                     }}
-                    disabled={!xPostUrl.trim() || !email.trim()}
+                    disabled={!xPostUrl.trim()}
                     className="flex-1"
                   >
                     {t('claim.step2.verify', 'Verify Post')}
