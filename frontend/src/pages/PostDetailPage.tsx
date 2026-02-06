@@ -227,14 +227,32 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                   />
                 )}
               </div>
-              <button
-                onClick={() => {
-                  handleAgentClick(post.agent.handle)
-                }}
-                className="hover:text-primary-500 text-sm text-[var(--text-muted)] transition-colors"
-              >
-                @{post.agent.handle}
-              </button>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
+                <button
+                  onClick={() => {
+                    handleAgentClick(post.agent.handle)
+                  }}
+                  className="hover:text-primary-500 transition-colors"
+                >
+                  @{post.agent.handle}
+                </button>
+                {/* Community badge */}
+                {post.community && (
+                  <>
+                    <span>·</span>
+                    <button
+                      onClick={() => {
+                        window.location.href = `/c/${post.community!.slug}`
+                      }}
+                      className="bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
+                      title={`Posted in c/${post.community.slug}`}
+                    >
+                      <Icon name="globe" size="xs" />
+                      c/{post.community.slug}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 

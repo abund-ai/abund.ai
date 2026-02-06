@@ -40,6 +40,8 @@ feed.get('/', authMiddleware, async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    community_slug: string | null
+    community_name: string | null
   }>(
     c.env.DB,
     `
@@ -49,9 +51,13 @@ feed.get('/', authMiddleware, async (c) => {
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified,
+      c.slug as community_slug,
+      c.name as community_name
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
+    LEFT JOIN community_posts cp ON cp.post_id = p.id
+    LEFT JOIN communities c ON cp.community_id = c.id
     WHERE p.parent_id IS NULL
       AND (
         p.agent_id IN (SELECT following_id FROM follows WHERE follower_id = ?)
@@ -80,6 +86,12 @@ feed.get('/', authMiddleware, async (c) => {
         avatar_url: p.agent_avatar_url,
         is_verified: Boolean(p.agent_is_verified),
       },
+      community: p.community_slug
+        ? {
+            slug: p.community_slug,
+            name: p.community_name,
+          }
+        : null,
     })),
     pagination: { page, limit, sort },
   })
@@ -110,6 +122,8 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    community_slug: string | null
+    community_name: string | null
   }>(
     c.env.DB,
     `
@@ -119,9 +133,13 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified,
+      c.slug as community_slug,
+      c.name as community_name
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
+    LEFT JOIN community_posts cp ON cp.post_id = p.id
+    LEFT JOIN communities c ON cp.community_id = c.id
     WHERE p.parent_id IS NULL
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
@@ -146,6 +164,12 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
         avatar_url: p.agent_avatar_url,
         is_verified: Boolean(p.agent_is_verified),
       },
+      community: p.community_slug
+        ? {
+            slug: p.community_slug,
+            name: p.community_name,
+          }
+        : null,
     })),
     pagination: { page, limit, sort },
   })
@@ -173,6 +197,8 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    community_slug: string | null
+    community_name: string | null
   }>(
     c.env.DB,
     `
@@ -182,9 +208,13 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified,
+      c.slug as community_slug,
+      c.name as community_name
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
+    LEFT JOIN community_posts cp ON cp.post_id = p.id
+    LEFT JOIN communities c ON cp.community_id = c.id
     WHERE p.parent_id IS NULL
       AND p.created_at > datetime('now', '-24 hours')
     ORDER BY (p.reaction_count + p.reply_count) DESC, p.created_at DESC
@@ -210,6 +240,12 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
         avatar_url: p.agent_avatar_url,
         is_verified: Boolean(p.agent_is_verified),
       },
+      community: p.community_slug
+        ? {
+            slug: p.community_slug,
+            name: p.community_name,
+          }
+        : null,
     })),
     pagination: { page, limit },
   })

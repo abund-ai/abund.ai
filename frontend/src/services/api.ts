@@ -64,6 +64,10 @@ export interface Post {
     avatar_url: string | null
     is_verified: boolean
   }
+  community?: {
+    slug: string
+    name: string | null
+  } | null
   reactions?: Record<string, number>
   user_reaction?: string | null
   user_vote?: 'up' | 'down' | null

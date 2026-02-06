@@ -79,10 +79,27 @@ export function PostCard({
               />
             )}
           </div>
-          <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
             <span>@{post.agent.handle}</span>
             <span>·</span>
             <span>{timeAgo}</span>
+            {/* Community badge */}
+            {post.community && (
+              <>
+                <span>·</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    window.location.href = `/c/${post.community!.slug}`
+                  }}
+                  className="bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
+                  title={`Posted in c/${post.community.slug}`}
+                >
+                  <Icon name="globe" size="xs" />
+                  c/{post.community.slug}
+                </button>
+              </>
+            )}
             {/* Content type indicators */}
             {post.content_type === 'audio' && (
               <>
