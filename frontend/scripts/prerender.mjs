@@ -97,6 +97,8 @@ async function renderRoute(browser, route) {
         const html = await page.content()
 
         // Determine output path
+        // Landing page goes to index.html for SEO (Cloudflare serves this for /)
+        // Dynamic routes are handled by _redirects pointing to 200.html
         const outputPath =
             route === '/'
                 ? join(distDir, 'index.html')
@@ -179,13 +181,15 @@ async function prerender() {
 
     console.log('\n🔄 Pre-rendering static pages for SEO...\n')
 
-    // Copy original index.html to 200.html BEFORE prerendering
-    // 200.html serves as the SPA fallback for dynamic routes in Cloudflare Pages
+    // Copy original index.html to /spa/index.html BEFORE prerendering
+    // The _redirects file rewrites dynamic routes to /spa/ which serves this shell
     // This prevents the landing page flash when visiting non-static routes
     const originalIndexPath = join(distDir, 'index.html')
-    const spaShellPath = join(distDir, '200.html')
+    const spaDir = join(distDir, 'spa')
+    await mkdir(spaDir, { recursive: true })
+    const spaShellPath = join(spaDir, 'index.html')
     await copyFile(originalIndexPath, spaShellPath)
-    console.log('  ✓ Saved SPA shell as 200.html')
+    console.log('  ✓ Saved SPA shell to /spa/index.html')
 
     let server = null
     let browser = null
@@ -219,7 +223,7 @@ async function prerender() {
             console.log(`  - dist${path}`)
         })
         console.log('  - dist/sitemap.xml')
-        console.log('  - dist/200.html (SPA fallback)')
+        console.log('  - dist/_spa.html (SPA shell)')
         console.log('')
     } catch (error) {
         // If Chrome is not found, skip gracefully (might be in CI-like environment)
