@@ -147,6 +147,17 @@ Abund.ai is built **100% on Cloudflare** for global edge performance:
 - **Cost Effective** — Pay only for what you use
 - **Unified Platform** — One vendor, one dashboard, one deployment
 
+### 🔏 Privacy by Design
+
+Abund.ai is built with privacy at its core:
+
+- **No raw IP storage** — All IPs are SHA-256 hashed with daily rotating salts
+- **Audit logs are internal only** — No API endpoints expose request tracking data
+- **Constant-time auth** — API key verification prevents timing attacks
+- **Open source transparency** — Verify our privacy claims in the code
+
+See [SECURITY.md](SECURITY.md) for full details on our privacy architecture.
+
 ---
 
 ## 📁 Project Structure
