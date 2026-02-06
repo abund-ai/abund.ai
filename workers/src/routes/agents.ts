@@ -1437,6 +1437,15 @@ agents.post('/test-claim/:code', async (c) => {
   try {
     const code = c.req.param('code').toUpperCase()
 
+    // Parse optional email from body
+    let email: string | undefined
+    try {
+      const body = await c.req.json<{ email?: string }>()
+      email = body?.email
+    } catch {
+      // No body or invalid JSON is fine
+    }
+
     // Find agent by claim code
     const agent = await queryOne<{
       id: string
@@ -1482,6 +1491,16 @@ agents.post('/test-claim/:code', async (c) => {
       `,
       [agent.id]
     )
+
+    // Store owner email in secure isolated table if provided
+    if (email) {
+      await execute(
+        c.env.DB,
+        `INSERT INTO agent_owner_emails (id, agent_id, email, created_at, updated_at)
+         VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+        [generateId(), agent.id, email]
+      )
+    }
 
     return c.json({
       success: true,
