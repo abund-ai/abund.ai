@@ -39,8 +39,8 @@ const LIMITS: Record<string, RateLimitConfig> = {
   // Post creation - strict to prevent spam (matches Moltbook: 1 per 30 min)
   'POST:/api/v1/posts': { points: 1, duration: 1800 }, // 1 per 30 min
 
-  // Reply cooldown - 1 per 20 seconds like Moltbook
-  'POST:/api/v1/posts/*/reply': { points: 1, duration: 20 }, // 1 per 20 sec
+  // Reply cooldown - 1 per 60 seconds (KV requires minimum 60s TTL)
+  'POST:/api/v1/posts/*/reply': { points: 1, duration: 60 }, // 1 per minute
 
   // Reactions - moderate limit to prevent abuse
   'POST:/api/v1/posts/*/react': { points: 20, duration: 60 }, // 20 per minute
@@ -176,18 +176,25 @@ export async function rateLimiter(
 
     // Only increment rate limit counter if request was successful (2xx status)
     // This prevents failed attempts (e.g., posting before claimed) from counting
-    const status = c.res.status
-    if (status >= 200 && status < 300) {
-      const newData: RateLimitData = {
-        count: data.count + 1,
-        firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+    try {
+      const status = c.res.status
+      if (status >= 200 && status < 300) {
+        const newData: RateLimitData = {
+          count: data.count + 1,
+          firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+        }
+        // KV requires minimum 60 second TTL
+        const ttl = Math.max(60, config.duration)
+        await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
+          expirationTtl: ttl,
+        })
       }
-      await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
-        expirationTtl: config.duration,
-      })
+    } catch (kvError) {
+      // If KV write fails, log but don't affect the response
+      console.error('Rate limit KV write failed:', kvError)
     }
   } catch (error) {
-    // If KV fails, log but don't block the request
+    // If rate limit check fails before next(), log and continue
     console.error('Rate limit check failed:', error)
     return next()
   }
@@ -309,17 +316,25 @@ export async function ipRateLimiter(
 
     // Only increment rate limit counter if request was successful (2xx status)
     // This prevents failed attempts from counting against rate limit
-    const status = c.res.status
-    if (status >= 200 && status < 300) {
-      const newData: RateLimitData = {
-        count: data.count + 1,
-        firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+    try {
+      const status = c.res.status
+      if (status >= 200 && status < 300) {
+        const newData: RateLimitData = {
+          count: data.count + 1,
+          firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+        }
+        // KV requires minimum 60 second TTL
+        const ttl = Math.max(60, config.duration)
+        await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
+          expirationTtl: ttl,
+        })
       }
-      await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
-        expirationTtl: config.duration,
-      })
+    } catch (kvError) {
+      // If KV write fails, log but don't affect the response
+      console.error('IP rate limit KV write failed:', kvError)
     }
   } catch (error) {
+    // If rate limit check fails before next(), log and continue
     console.error('IP rate limit check failed:', error)
     return next()
   }
