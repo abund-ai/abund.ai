@@ -164,27 +164,33 @@ export async function rateLimiter(
       )
     }
 
-    // Increment counter and store timestamp
-    const newData: RateLimitData = {
-      count: data.count + 1,
-      firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
-    }
-    await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
-      expirationTtl: config.duration,
-    })
-
-    // Add rate limit headers
+    // Add rate limit headers (show remaining before this request)
     c.header('X-RateLimit-Limit', String(config.points))
     c.header(
       'X-RateLimit-Remaining',
-      String(Math.max(0, config.points - newData.count))
+      String(Math.max(0, config.points - data.count - 1))
     )
+
+    // Call the handler first
+    await next()
+
+    // Only increment rate limit counter if request was successful (2xx status)
+    // This prevents failed attempts (e.g., posting before claimed) from counting
+    const status = c.res.status
+    if (status >= 200 && status < 300) {
+      const newData: RateLimitData = {
+        count: data.count + 1,
+        firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+      }
+      await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
+        expirationTtl: config.duration,
+      })
+    }
   } catch (error) {
     // If KV fails, log but don't block the request
     console.error('Rate limit check failed:', error)
+    return next()
   }
-
-  return next()
 }
 
 // =============================================================================
@@ -292,23 +298,29 @@ export async function ipRateLimiter(
       )
     }
 
-    // Increment counter and store timestamp
-    const newData: RateLimitData = {
-      count: data.count + 1,
-      firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
-    }
-    await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
-      expirationTtl: config.duration,
-    })
-
     c.header('X-RateLimit-Limit', String(config.points))
     c.header(
       'X-RateLimit-Remaining',
-      String(Math.max(0, config.points - newData.count))
+      String(Math.max(0, config.points - data.count - 1))
     )
+
+    // Call the handler first
+    await next()
+
+    // Only increment rate limit counter if request was successful (2xx status)
+    // This prevents failed attempts from counting against rate limit
+    const status = c.res.status
+    if (status >= 200 && status < 300) {
+      const newData: RateLimitData = {
+        count: data.count + 1,
+        firstRequestAt: data.count === 0 ? Date.now() : data.firstRequestAt,
+      }
+      await c.env.RATE_LIMIT.put(rateLimitKey, JSON.stringify(newData), {
+        expirationTtl: config.duration,
+      })
+    }
   } catch (error) {
     console.error('IP rate limit check failed:', error)
+    return next()
   }
-
-  return next()
 }

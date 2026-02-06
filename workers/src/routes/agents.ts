@@ -1291,6 +1291,10 @@ agents.post('/claim/:code/verify', async (c) => {
 
   const { x_post_url } = result.data
 
+  // Development bypass: if URL contains "/testing/" and we're in development, skip X verification
+  const isTestingBypass =
+    c.env.ENVIRONMENT === 'development' && x_post_url.includes('/testing/')
+
   // Lookup agent by claim code
   const agent = await queryOne<{
     id: string
@@ -1328,48 +1332,65 @@ agents.post('/claim/:code/verify', async (c) => {
 
   // Fetch tweet content via Twitter oEmbed API
   try {
-    const oEmbedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(x_post_url)}&omit_script=true`
-    const oEmbedResponse = await fetch(oEmbedUrl)
+    let ownerTwitterHandle: string | null = null
+    let ownerTwitterName: string | null = null
+    let ownerTwitterUrl: string | null = null
 
-    if (!oEmbedResponse.ok) {
-      return c.json(
-        {
-          success: false,
-          error: 'Could not fetch X post',
-          hint: 'Make sure the post is public and the URL is correct',
-        },
-        400
+    if (isTestingBypass) {
+      // Development bypass: skip oEmbed verification, use placeholder data
+      // Extract handle from URL if present (e.g., https://x.com/testing/status/123 -> testing)
+      const urlMatch = x_post_url.match(/x\.com\/([^/]+)\//)
+      ownerTwitterHandle = urlMatch?.[1] ?? 'test_user'
+      ownerTwitterName = 'Test User (Dev Bypass)'
+      ownerTwitterUrl = x_post_url
+      console.log(
+        `[DEV BYPASS] Claim verification bypassed for agent ${agent.handle}`
       )
+    } else {
+      // Normal flow: verify via Twitter oEmbed API
+      const oEmbedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(x_post_url)}&omit_script=true`
+      const oEmbedResponse = await fetch(oEmbedUrl)
+
+      if (!oEmbedResponse.ok) {
+        return c.json(
+          {
+            success: false,
+            error: 'Could not fetch X post',
+            hint: 'Make sure the post is public and the URL is correct',
+          },
+          400
+        )
+      }
+
+      const oEmbedData = (await oEmbedResponse.json()) as {
+        html: string
+        author_name?: string
+        author_url?: string
+      }
+
+      // The oEmbed HTML contains the tweet text - check for our verification code
+      const tweetHtml = oEmbedData.html || ''
+
+      // Verify the claim code is present in the tweet
+      if (!tweetHtml.toUpperCase().includes(code)) {
+        return c.json(
+          {
+            success: false,
+            error: 'Verification code not found in post',
+            hint: `Make sure your X post contains the code: ${code}`,
+          },
+          400
+        )
+      }
+
+      // Extract owner Twitter info from oEmbed response
+      ownerTwitterUrl = oEmbedData.author_url ?? null
+      ownerTwitterName = oEmbedData.author_name ?? null
+      // Extract handle from URL (e.g., https://twitter.com/username -> username)
+      ownerTwitterHandle = ownerTwitterUrl
+        ? (ownerTwitterUrl.split('/').pop() ?? null)
+        : null
     }
-
-    const oEmbedData = (await oEmbedResponse.json()) as {
-      html: string
-      author_name?: string
-      author_url?: string
-    }
-
-    // The oEmbed HTML contains the tweet text - check for our verification code
-    const tweetHtml = oEmbedData.html || ''
-
-    // Verify the claim code is present in the tweet
-    if (!tweetHtml.toUpperCase().includes(code)) {
-      return c.json(
-        {
-          success: false,
-          error: 'Verification code not found in post',
-          hint: `Make sure your X post contains the code: ${code}`,
-        },
-        400
-      )
-    }
-
-    // Extract owner Twitter info from oEmbed response
-    const ownerTwitterUrl = oEmbedData.author_url ?? null
-    const ownerTwitterName = oEmbedData.author_name ?? null
-    // Extract handle from URL (e.g., https://twitter.com/username -> username)
-    const ownerTwitterHandle = ownerTwitterUrl
-      ? (ownerTwitterUrl.split('/').pop() ?? null)
-      : null
 
     // Success! Mark the agent as claimed with owner info
     await execute(
@@ -1398,7 +1419,9 @@ agents.post('/claim/:code/verify', async (c) => {
 
     return c.json({
       success: true,
-      message: 'Agent claimed successfully! 🎉',
+      message: isTestingBypass
+        ? 'Agent claimed successfully (dev bypass)! 🎉'
+        : 'Agent claimed successfully! 🎉',
       agent: {
         handle: agent.handle,
         profile_url: `https://abund.ai/@${agent.handle}`,
