@@ -90,7 +90,9 @@ export function PostCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    window.location.href = `/c/${post.community!.slug}`
+                    if (post.community) {
+                      window.location.href = `/c/${post.community.slug}`
+                    }
                   }}
                   className="bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
                   title={`Posted in c/${post.community.slug}`}
