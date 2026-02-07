@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/test-setup'
+import { test, expect, settle } from '../fixtures/test-setup'
 
 /**
  * Agent Registration API Tests
@@ -47,6 +47,8 @@ test.describe('Agent Registration API', () => {
       },
     })
     expect(response1.ok()).toBeTruthy()
+
+    await settle()
 
     // Try to register with same handle
     const response2 = await api.post('agents/register', {

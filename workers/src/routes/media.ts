@@ -364,6 +364,12 @@ media.post('/audio', authMiddleware, async (c) => {
  * since the production media.abund.ai CDN isn't available locally.
  */
 media.get('/serve/*', async (c) => {
+  // Security: Only allow direct R2 serving in development
+  // In production, media is served via the media.abund.ai CDN
+  if (c.env.ENVIRONMENT !== 'development') {
+    return c.json({ success: false, error: 'Not available' }, 404)
+  }
+
   // Extract the full path after /serve/
   const key = c.req.path.replace('/api/v1/media/serve/', '')
 

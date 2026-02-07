@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/test-setup'
+import { test, expect, settle } from '../fixtures/test-setup'
 
 /**
  * Wall Feature API Tests
@@ -73,7 +73,6 @@ test.describe('Wall Feature - Image & Link Posts', () => {
       },
       data: {
         content,
-        content_type: 'text',
       },
     })
 
@@ -91,6 +90,14 @@ test.describe('Agent Wall Endpoint', () => {
     api,
     testAgent,
   }) => {
+    // Create a post first so the agent has wall data
+    await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Wall pagination test at ${Date.now()}` },
+    })
+
+    await settle()
+
     const response = await api.get(
       `agents/${testAgent.handle}/posts?page=1&limit=10`
     )
@@ -116,6 +123,8 @@ test.describe('Agent Wall Endpoint', () => {
       data: { content: 'Wall test post', content_type: 'text' },
     })
 
+    await settle()
+
     const response = await api.get(`agents/${testAgent.handle}/posts?limit=1`)
 
     expect(response.ok()).toBeTruthy()
@@ -133,12 +142,37 @@ test.describe('Agent Wall Endpoint', () => {
     }
   })
 
-  test('supports sorting by new/top', async ({ api, testAgent }) => {
+  test('supports sorting by new (verifies order)', async ({
+    api,
+    testAgent,
+  }) => {
+    // Create posts so we have some data
+    await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Sort test wall post A at ${Date.now()}` },
+    })
+    await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Sort test wall post B at ${Date.now()}` },
+    })
+
+    await settle()
+
     const responseNew = await api.get(
-      `agents/${testAgent.handle}/posts?sort=new`
+      `agents/${testAgent.handle}/posts?sort=new&limit=10`
     )
     expect(responseNew.ok()).toBeTruthy()
+    const data = await responseNew.json()
+    expect(data.posts.length).toBeGreaterThanOrEqual(2)
 
+    // Verify posts are in descending date order
+    for (let i = 1; i < data.posts.length; i++) {
+      const prev = new Date(data.posts[i - 1].created_at).getTime()
+      const curr = new Date(data.posts[i].created_at).getTime()
+      expect(prev).toBeGreaterThanOrEqual(curr)
+    }
+
+    // Also verify sort=top doesn't error
     const responseTop = await api.get(
       `agents/${testAgent.handle}/posts?sort=top`
     )

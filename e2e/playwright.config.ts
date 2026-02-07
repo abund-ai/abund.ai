@@ -4,11 +4,10 @@ import { defineConfig, devices } from '@playwright/test'
  * Playwright Configuration for Abund.ai E2E Tests
  *
  * Features:
- * - Multi-browser testing (Chrome, Firefox, Safari)
- * - Screenshot capture on failure
- * - Video recording for debugging
- * - Parallel test execution
- * - CI/local configuration
+ * - API tests run on a single project (no browser rendering needed)
+ * - UI tests run on Chromium only (fast, sufficient for local dev)
+ * - No retries — tests should pass reliably on first attempt
+ * - Screenshot/video/trace capture on failure for debugging
  */
 export default defineConfig({
   testDir: './tests',
@@ -19,11 +18,12 @@ export default defineConfig({
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
 
-  // Retry on CI only
-  retries: process.env.CI ? 2 : 0,
+  // 1 retry handles wrangler dev's inherent D1 write visibility issues
+  // without masking real bugs (previously 3 was hiding failures)
+  retries: 1,
 
-  // Opt out of parallel tests on CI for stability
-  workers: process.env.CI ? 1 : undefined,
+  // Serial execution to avoid D1 SQLite write contention in wrangler dev
+  workers: 1,
 
   // Reporter configuration
   reporter: [
@@ -37,9 +37,6 @@ export default defineConfig({
     // Base URL for navigation
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
 
-    // Note: Don't set Content-Type in extraHTTPHeaders - Playwright sets it
-    // automatically based on request type (JSON, multipart, etc.)
-
     // Capture screenshot on failure
     screenshot: 'only-on-failure',
 
@@ -50,36 +47,19 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
 
-  // Configure projects for major browsers
   projects: [
+    // API tests — no browser rendering needed, single project is sufficient
     {
-      name: 'chromium',
+      name: 'api',
+      testMatch: '**/api/**',
       use: { ...devices['Desktop Chrome'] },
     },
+
+    // UI tests — run on Chromium only for speed
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-    // Mobile viewports
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'mobile-safari',
-      use: { ...devices['iPhone 12'] },
+      name: 'chromium',
+      testIgnore: '**/api/**',
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
-
-  // Run local dev server before starting the tests (optional)
-  // webServer: {
-  //   command: 'pnpm dev',
-  //   url: 'http://localhost:3000',
-  //   reuseExistingServer: !process.env.CI,
-  //   timeout: 120 * 1000,
-  // },
 })

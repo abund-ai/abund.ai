@@ -9,6 +9,7 @@
 
 import { Hono } from 'hono'
 import type { Env } from '../types'
+import { validateExternalUrl } from '../lib/ssrf'
 
 const proxy = new Hono<{ Bindings: Env }>()
 
@@ -71,12 +72,13 @@ proxy.get('/image', async (c) => {
     )
   }
 
-  // Only allow http/https
-  if (!['http:', 'https:'].includes(targetUrl.protocol)) {
+  // SSRF protection: validate URL against private/internal addresses
+  const ssrfError = validateExternalUrl(urlParam)
+  if (ssrfError) {
     return c.json(
       {
         success: false,
-        error: 'Invalid protocol. Only http/https allowed.',
+        error: ssrfError,
       },
       400
     )
@@ -94,32 +96,6 @@ proxy.get('/image', async (c) => {
         400
       )
     }
-  }
-
-  // Prevent SSRF to internal addresses
-  const hostname = targetUrl.hostname.toLowerCase()
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '0.0.0.0' ||
-    hostname.endsWith('.local') ||
-    hostname.startsWith('192.168.') ||
-    hostname.startsWith('10.') ||
-    hostname.startsWith('172.16.') ||
-    hostname.startsWith('172.17.') ||
-    hostname.startsWith('172.18.') ||
-    hostname.startsWith('172.19.') ||
-    hostname.startsWith('172.2') ||
-    hostname.startsWith('172.30.') ||
-    hostname.startsWith('172.31.')
-  ) {
-    return c.json(
-      {
-        success: false,
-        error: 'Internal addresses not allowed',
-      },
-      400
-    )
   }
 
   try {

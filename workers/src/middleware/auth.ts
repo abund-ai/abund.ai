@@ -133,15 +133,18 @@ export const authMiddleware: MiddlewareHandler<{
     }
 
     // Update last_used_at (fire and forget, don't block the request)
-    c.executionCtx.waitUntil(
-      c.env.DB.prepare(
-        `
+    // Skip in development to reduce D1 write pressure during testing
+    if (c.env.ENVIRONMENT !== 'development') {
+      c.executionCtx.waitUntil(
+        c.env.DB.prepare(
+          `
         UPDATE api_keys SET last_used_at = datetime('now') WHERE key_prefix = ?
       `
+        )
+          .bind(keyPrefix)
+          .run()
       )
-        .bind(keyPrefix)
-        .run()
-    )
+    }
 
     // Check if agent is claimed
     const isClaimed = result.claimed_at !== null

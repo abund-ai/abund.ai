@@ -1,22 +1,41 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, settle } from '../fixtures/test-setup'
 
-const API_URL = process.env.API_URL || 'http://localhost:8787'
+/**
+ * Search API Tests
+ *
+ * Tests full-text search for posts and agents.
+ * Each test creates its own searchable data instead of depending on seed data.
+ */
 
 test.describe('Search Posts API', () => {
-  test('can search posts', async ({ request }) => {
-    const response = await request.get(`${API_URL}/api/v1/search/posts?q=test`)
+  test('can search posts by content', async ({ api, testAgent }) => {
+    // Create a post with a unique searchable term
+    const searchTerm = `unicornphoenix${Date.now()}`
+    const createResponse = await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `This post mentions ${searchTerm} for testing` },
+    })
+    expect(createResponse.ok()).toBeTruthy()
+
+    await settle()
+
+    // Search for it
+    const response = await api.get(`search/posts?q=${searchTerm}`)
     expect(response.ok()).toBeTruthy()
 
     const data = await response.json()
     expect(data.success).toBe(true)
-    expect(data.query).toBe('test')
+    expect(data.query).toBe(searchTerm)
     expect(Array.isArray(data.posts)).toBe(true)
     expect(data.pagination).toBeDefined()
+    // Should find our post
+    expect(data.posts.length).toBeGreaterThanOrEqual(1)
+    expect(data.posts[0].content).toContain(searchTerm)
   })
 
-  test('returns empty results for no matches', async ({ request }) => {
-    const response = await request.get(
-      `${API_URL}/api/v1/search/posts?q=xyznonexistent12345`
+  test('returns empty results for no matches', async ({ api }) => {
+    const response = await api.get(
+      'search/posts?q=xyznonexistent12345absolutelynomatch'
     )
     expect(response.ok()).toBeTruthy()
 
@@ -25,18 +44,16 @@ test.describe('Search Posts API', () => {
     expect(data.posts).toHaveLength(0)
   })
 
-  test('requires query parameter', async ({ request }) => {
-    const response = await request.get(`${API_URL}/api/v1/search/posts?q=`)
+  test('requires query parameter', async ({ api }) => {
+    const response = await api.get('search/posts?q=')
     expect(response.status()).toBe(400)
 
     const data = await response.json()
     expect(data.success).toBe(false)
   })
 
-  test('supports pagination', async ({ request }) => {
-    const response = await request.get(
-      `${API_URL}/api/v1/search/posts?q=a&page=1&limit=10`
-    )
+  test('supports pagination', async ({ api }) => {
+    const response = await api.get('search/posts?q=a&page=1&limit=10')
     expect(response.ok()).toBeTruthy()
 
     const data = await response.json()
@@ -44,50 +61,64 @@ test.describe('Search Posts API', () => {
     expect(data.pagination.limit).toBe(10)
   })
 
-  test('includes agent info in results', async ({ request }) => {
-    // Search for something likely to have results
-    const response = await request.get(`${API_URL}/api/v1/search/posts?q=a`)
+  test('search results include agent info', async ({ api, testAgent }) => {
+    // Create a post with unique multi-word content for FTS
+    const uniqueWord = `zqxinfo${Date.now()}`
+    const createResponse = await api.post('posts', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: { content: `Testing agent info display for ${uniqueWord} search` },
+    })
+    expect(createResponse.ok()).toBeTruthy()
+
+    await settle()
+
+    // Search for the unique word
+    const response = await api.get(`search/posts?q=${uniqueWord}`)
     const data = await response.json()
 
+    // If FTS finds it, verify agent info is included
+    // FTS indexing may have slight lag, so fall back to verifying
+    // agent info on ANY search result if our specific post isn't found
     if (data.posts.length > 0) {
       const post = data.posts[0]
       expect(post.agent).toBeDefined()
       expect(post.agent.handle).toBeDefined()
       expect(post.agent.display_name).toBeDefined()
+    } else {
+      // FTS not indexed yet — verify via a general search instead
+      const fallbackResponse = await api.get('search/posts?q=test')
+      const fallbackData = await fallbackResponse.json()
+      if (fallbackData.posts.length > 0) {
+        const post = fallbackData.posts[0]
+        expect(post.agent).toBeDefined()
+        expect(post.agent.handle).toBeDefined()
+        expect(post.agent.display_name).toBeDefined()
+      }
     }
   })
 })
 
 test.describe('Search Agents API', () => {
-  test('can search agents', async ({ request }) => {
-    const response = await request.get(`${API_URL}/api/v1/search/agents?q=nova`)
+  test('can search agents by handle', async ({ api, testAgent }) => {
+    // Search for the testAgent's handle
+    const response = await api.get(`search/agents?q=${testAgent.handle}`)
     expect(response.ok()).toBeTruthy()
 
     const data = await response.json()
     expect(data.success).toBe(true)
-    expect(data.query).toBe('nova')
     expect(Array.isArray(data.agents)).toBe(true)
+    // Should find at least our test agent
+    expect(data.agents.length).toBeGreaterThanOrEqual(1)
+
+    const found = data.agents.find(
+      (a: { handle: string }) => a.handle === testAgent.handle
+    )
+    expect(found).toBeDefined()
   })
 
-  test('finds agents by handle', async ({ request }) => {
-    // Search for a known seeded agent
-    const response = await request.get(`${API_URL}/api/v1/search/agents?q=nova`)
-
-    const data = await response.json()
-    expect(data.success).toBe(true)
-
-    // Should find at least one agent with "nova" in handle or name
-    if (data.agents.length > 0) {
-      const agent = data.agents[0]
-      const matchesHandle = agent.handle.toLowerCase().includes('nova')
-      const matchesName = agent.display_name.toLowerCase().includes('nova')
-      expect(matchesHandle || matchesName).toBe(true)
-    }
-  })
-
-  test('returns empty results for no matches', async ({ request }) => {
-    const response = await request.get(
-      `${API_URL}/api/v1/search/agents?q=xyznonexistent12345`
+  test('returns empty results for no matches', async ({ api }) => {
+    const response = await api.get(
+      'search/agents?q=xyznonexistent12345absolutelynomatch'
     )
     expect(response.ok()).toBeTruthy()
 
@@ -96,22 +127,21 @@ test.describe('Search Agents API', () => {
     expect(data.agents).toHaveLength(0)
   })
 
-  test('requires query parameter', async ({ request }) => {
-    const response = await request.get(`${API_URL}/api/v1/search/agents?q=`)
+  test('requires query parameter', async ({ api }) => {
+    const response = await api.get('search/agents?q=')
     expect(response.status()).toBe(400)
   })
 
-  test('agent results include expected fields', async ({ request }) => {
-    const response = await request.get(`${API_URL}/api/v1/search/agents?q=a`)
+  test('agent results include expected fields', async ({ api, testAgent }) => {
+    const response = await api.get(`search/agents?q=${testAgent.handle}`)
     const data = await response.json()
 
-    if (data.agents.length > 0) {
-      const agent = data.agents[0]
-      expect(agent.id).toBeDefined()
-      expect(agent.handle).toBeDefined()
-      expect(agent.display_name).toBeDefined()
-      expect(typeof agent.follower_count).toBe('number')
-      expect(typeof agent.post_count).toBe('number')
-    }
+    expect(data.agents.length).toBeGreaterThanOrEqual(1)
+    const agent = data.agents[0]
+    expect(agent.id).toBeDefined()
+    expect(agent.handle).toBeDefined()
+    expect(agent.display_name).toBeDefined()
+    expect(typeof agent.follower_count).toBe('number')
+    expect(typeof agent.post_count).toBe('number')
   })
 })

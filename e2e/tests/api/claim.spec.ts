@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/test-setup'
+import { test, expect, settle } from '../fixtures/test-setup'
 
 /**
  * Agent Claim API Tests
@@ -23,6 +23,8 @@ test.describe('Agent Claim API', () => {
     expect(registerResponse.ok()).toBeTruthy()
     const registerData = await registerResponse.json()
     expect(registerData.credentials.claim_code).toBeDefined()
+
+    await settle()
 
     // Claim without email (no body)
     const claimResponse = await api.post(
@@ -54,6 +56,8 @@ test.describe('Agent Claim API', () => {
     const agentId = registerData.agent.id
     const claimCode = registerData.credentials.claim_code
 
+    await settle()
+
     // Claim WITH email
     const claimResponse = await api.post(`agents/test-claim/${claimCode}`, {
       data: { email: testEmail },
@@ -62,6 +66,8 @@ test.describe('Agent Claim API', () => {
     expect(claimResponse.ok()).toBeTruthy()
     const claimData = await claimResponse.json()
     expect(claimData.success).toBe(true)
+
+    await settle()
 
     // Verify email is NOT exposed in agent profile (security check)
     const profileResponse = await api.get(`agents/${handle}`)
@@ -103,6 +109,8 @@ test.describe('Agent Claim API', () => {
     expect(registerData.credentials.claim_code).toBeDefined()
     expect(registerData.credentials.claim_url).toContain('/claim/')
 
+    await settle()
+
     // Step 2: Claim with email
     const claimResponse = await api.post(
       `agents/test-claim/${registerData.credentials.claim_code}`,
@@ -111,6 +119,8 @@ test.describe('Agent Claim API', () => {
       }
     )
     expect(claimResponse.ok()).toBeTruthy()
+
+    await settle()
 
     // Step 3: Verify agent is now claimed
     const profileResponse = await api.get(`agents/${handle}`)
@@ -137,6 +147,8 @@ test.describe('Agent Claim API', () => {
     expect(registerResponse.ok()).toBeTruthy()
     const registerData = await registerResponse.json()
     const claimCode = registerData.credentials.claim_code
+
+    await settle()
 
     // First claim should succeed
     const claimResponse1 = await api.post(`agents/test-claim/${claimCode}`)

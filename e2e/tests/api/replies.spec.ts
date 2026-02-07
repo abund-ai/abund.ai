@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/test-setup'
+import { test, expect, settle } from '../fixtures/test-setup'
 
 /**
  * Nested Replies API Tests
@@ -15,6 +15,8 @@ test.describe('Nested Replies API', () => {
     })
     expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create a reply
     const replyResponse = await api.post(`posts/${postData.post.id}/reply`, {
@@ -39,14 +41,20 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for nested reply at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create first level reply
     const reply1Response = await api.post(`posts/${postData.post.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: 'First level reply' },
     })
+    expect(reply1Response.ok()).toBeTruthy()
     const reply1Data = await reply1Response.json()
+
+    await settle()
 
     // Create second level reply (reply to the reply)
     const reply2Response = await api.post(
@@ -73,7 +81,10 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for deep nesting at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create 5 levels of nested replies
     let parentId = postData.post.id
@@ -90,6 +101,8 @@ test.describe('Nested Replies API', () => {
       expect(replyData.reply.parent_id).toBe(parentId)
       replyIds.push(replyData.reply.id)
       parentId = replyData.reply.id
+
+      await settle()
     }
 
     expect(replyIds.length).toBe(5)
@@ -104,19 +117,27 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for tree fetch at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create nested structure: post -> reply1 -> reply2
     const reply1Response = await api.post(`posts/${postData.post.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: 'First level' },
     })
+    expect(reply1Response.ok()).toBeTruthy()
     const reply1Data = await reply1Response.json()
+
+    await settle()
 
     await api.post(`posts/${reply1Data.reply.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: 'Second level' },
     })
+
+    await settle()
 
     // Fetch the post with replies
     const getResponse = await api.get(`posts/${postData.post.id}`)
@@ -151,14 +172,19 @@ test.describe('Nested Replies API', () => {
     const postData = await postResponse.json()
     expect(postData.post).toBeDefined()
 
+    await settle()
+
     let parentId = postData.post.id
     for (let depth = 1; depth <= 3; depth++) {
       const replyResponse = await api.post(`posts/${parentId}/reply`, {
         headers: { Authorization: `Bearer ${testAgent.apiKey}` },
         data: { content: `Level ${depth}` },
       })
+      expect(replyResponse.ok()).toBeTruthy()
       const replyData = await replyResponse.json()
       parentId = replyData.reply.id
+
+      await settle()
     }
 
     // Fetch with max_depth=1 - should only get first level
@@ -180,13 +206,18 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for /replies endpoint at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Add a reply
     await api.post(`posts/${postData.post.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: 'Test reply for endpoint' },
     })
+
+    await settle()
 
     // Use the /replies endpoint
     const repliesResponse = await api.get(`posts/${postData.post.id}/replies`)
@@ -212,6 +243,8 @@ test.describe('Nested Replies API', () => {
     expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
 
+    await settle()
+
     // Try to reply with empty content
     const replyResponse = await api.post(`posts/${postData.post.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
@@ -227,7 +260,10 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for auth check at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Try to reply without auth
     const replyResponse = await api.post(`posts/${postData.post.id}/reply`, {
@@ -252,7 +288,10 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for delete reply at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create a reply
     const replyResponse = await api.post(`posts/${postData.post.id}/reply`, {
@@ -263,6 +302,8 @@ test.describe('Nested Replies API', () => {
 
     // Verify reply exists
     expect(replyData.success).toBe(true)
+
+    await settle()
 
     // Delete the reply
     const deleteResponse = await api.delete(`posts/${replyData.reply.id}`, {
@@ -286,19 +327,26 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for reply_count at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create two replies
     const reply1Response = await api.post(`posts/${postData.post.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: 'First reply' },
     })
+    expect(reply1Response.ok()).toBeTruthy()
     const reply1Data = await reply1Response.json()
 
-    await api.post(`posts/${postData.post.id}/reply`, {
+    const reply2Response = await api.post(`posts/${postData.post.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: 'Second reply' },
     })
+    expect(reply2Response.ok()).toBeTruthy()
+
+    await settle()
 
     // Check initial reply_count
     const getResponse1 = await api.get(`posts/${postData.post.id}`)
@@ -309,6 +357,8 @@ test.describe('Nested Replies API', () => {
     await api.delete(`posts/${reply1Data.reply.id}`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
     })
+
+    await settle()
 
     // Check reply_count decreased
     const getResponse2 = await api.get(`posts/${postData.post.id}`)
@@ -325,7 +375,10 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for tombstone at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create: post -> reply1 -> reply2 -> reply3
     const reply1Response = await api.post(`posts/${postData.post.id}/reply`, {
@@ -333,6 +386,8 @@ test.describe('Nested Replies API', () => {
       data: { content: 'Level 1 - will be tombstoned' },
     })
     const reply1Data = await reply1Response.json()
+
+    await settle()
 
     const reply2Response = await api.post(
       `posts/${reply1Data.reply.id}/reply`,
@@ -343,10 +398,14 @@ test.describe('Nested Replies API', () => {
     )
     const reply2Data = await reply2Response.json()
 
+    await settle()
+
     await api.post(`posts/${reply2Data.reply.id}/reply`, {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: 'Level 3' },
     })
+
+    await settle()
 
     // Check initial count (should be 3 replies)
     const getResponse1 = await api.get(`posts/${postData.post.id}`)
@@ -361,6 +420,8 @@ test.describe('Nested Replies API', () => {
     expect(deleteData.success).toBe(true)
     expect(deleteData.action).toBe('tombstoned')
     expect(deleteData.message).toBe('Content removed')
+
+    await settle()
 
     // Check that reply tree is preserved - reply_count should still be 3
     const getResponse2 = await api.get(`posts/${postData.post.id}`)
@@ -382,7 +443,10 @@ test.describe('Nested Replies API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for auth delete at ${Date.now()}` },
     })
+    expect(postResponse.ok()).toBeTruthy()
     const postData = await postResponse.json()
+
+    await settle()
 
     // Create a reply
     const replyResponse = await api.post(`posts/${postData.post.id}/reply`, {
@@ -390,6 +454,8 @@ test.describe('Nested Replies API', () => {
       data: { content: 'Reply for auth test' },
     })
     const replyData = await replyResponse.json()
+
+    await settle()
 
     // Try to delete without auth
     const deleteResponse = await api.delete(`posts/${replyData.reply.id}`, {})

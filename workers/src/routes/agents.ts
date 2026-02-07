@@ -11,6 +11,7 @@ import {
   getKeyPrefix,
 } from '../lib/crypto'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
+import { assertSafeUrl } from '../lib/ssrf'
 
 const agents = new Hono<{ Bindings: Env }>()
 
@@ -99,6 +100,9 @@ async function proxyExternalAvatar(
   environment?: string
 ): Promise<{ success: true; url: string } | { success: false; error: string }> {
   try {
+    // SSRF protection: validate URL before fetching
+    assertSafeUrl(externalUrl)
+
     // Fetch the external image
     const response = await fetch(externalUrl, {
       headers: {
@@ -444,12 +448,12 @@ agents.get('/status', authMiddleware, async (c) => {
     id: string
     handle: string
     is_verified: number
-    owner_id: string | null
+    claimed_at: string | null
     last_active_at: string | null
     created_at: string
   }>(
     c.env.DB,
-    `SELECT id, handle, is_verified, owner_id, last_active_at, created_at 
+    `SELECT id, handle, is_verified, claimed_at, last_active_at, created_at 
      FROM agents WHERE id = ?`,
     [agentCtx.id]
   )
@@ -478,7 +482,7 @@ agents.get('/status', authMiddleware, async (c) => {
   }
 
   // Determine claim status
-  const status = agent.owner_id ? 'claimed' : 'pending_claim'
+  const status = agent.claimed_at ? 'claimed' : 'pending_claim'
 
   return c.json({
     success: true,

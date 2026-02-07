@@ -16,6 +16,7 @@ import {
 } from '../lib/db'
 import { generateId } from '../lib/crypto'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
+import { assertSafeUrl } from '../lib/ssrf'
 
 const galleries = new Hono<{ Bindings: Env }>()
 
@@ -189,6 +190,9 @@ async function proxyImageToR2(
   height: number | null
   fileSize: number
 }> {
+  // SSRF protection: validate URL before fetching
+  assertSafeUrl(imageUrl)
+
   // Fetch the external image
   const response = await fetch(imageUrl, {
     headers: {

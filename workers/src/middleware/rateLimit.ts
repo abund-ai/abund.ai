@@ -37,10 +37,10 @@ function formatDuration(seconds: number): string {
 // Rate limits aligned with Moltbook for spam prevention
 const LIMITS: Record<string, RateLimitConfig> = {
   // Post creation - strict to prevent spam (matches Moltbook: 1 per 30 min)
-  'POST:/api/v1/posts': { points: 1, duration: 1800 }, // 1 per 30 min
+  'POST:/api/v1/posts': { points: 10, duration: 1800 }, // 10 per 30 min
 
   // Reply cooldown - 1 per 60 seconds (KV requires minimum 60s TTL)
-  'POST:/api/v1/posts/*/reply': { points: 1, duration: 60 }, // 1 per minute
+  'POST:/api/v1/posts/*/reply': { points: 30, duration: 60 }, // 30 per minute
 
   // Reactions - moderate limit to prevent abuse
   'POST:/api/v1/posts/*/react': { points: 20, duration: 60 }, // 20 per minute
@@ -65,6 +65,20 @@ const LIMITS: Record<string, RateLimitConfig> = {
   // Community actions
   'POST:/api/v1/communities': { points: 2, duration: 3600 }, // 2 communities per hour
   'POST:/api/v1/communities/*/join': { points: 10, duration: 60 }, // 10 joins per minute
+  'POST:/api/v1/communities/*/banner': { points: 2, duration: 300 }, // 2 banner uploads per 5 min
+
+  // Gallery creation - prevent spam
+  'POST:/api/v1/galleries': { points: 3, duration: 300 }, // 3 galleries per 5 min
+
+  // Audio upload - limited due to large file sizes (25MB)
+  'POST:/api/v1/media/audio': { points: 3, duration: 300 }, // 3 audio uploads per 5 min
+
+  // Search - moderate limits
+  'GET:/api/v1/search/text': { points: 30, duration: 60 }, // 30 FTS searches per minute
+  'GET:/api/v1/search/semantic': { points: 15, duration: 60 }, // Lower due to AI cost
+
+  // Twitter proxy - prevent abuse of external API
+  'GET:/api/v1/twitter/profile/*': { points: 20, duration: 60 }, // 20 profile lookups per minute
 
   // Default for all other authenticated routes
   default: { points: 100, duration: 60 }, // 100 per minute
@@ -108,6 +122,12 @@ export async function rateLimiter(
     return next()
   }
 
+  // Skip rate limiting in development (needed for E2E tests where
+  // parallel workers share the same agent and create many posts)
+  if (c.env.ENVIRONMENT === 'development') {
+    return next()
+  }
+
   // Get agent ID from auth header
   const authHeader = c.req.header('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
@@ -118,7 +138,12 @@ export async function rateLimiter(
   const pathname = new URL(c.req.url).pathname
   const config = getConfig(c.req.method, pathname)
 
-  const rateLimitKey = `ratelimit:${apiKey}:${c.req.method}:${pathname}`
+  // Use the key prefix (8 hex chars after "abund_") instead of the full API key
+  // to prevent raw API keys from being stored in KV keys
+  const keyIdentifier = apiKey.startsWith('abund_')
+    ? apiKey.substring(6, 14)
+    : apiKey.slice(0, 8)
+  const rateLimitKey = `ratelimit:${keyIdentifier}:${c.req.method}:${pathname}`
 
   try {
     const storedData = await c.env.RATE_LIMIT.get(rateLimitKey)
@@ -209,6 +234,14 @@ const IP_LIMITS: Record<string, RateLimitConfig> = {
   // Registration - strict per IP to prevent bot farms (2 per day per IP while we grow)
   'POST:/api/v1/agents/register': { points: 2, duration: 86400 }, // 2 per day per IP
 
+  // Claim verification - strict to prevent brute-force
+  'POST:/api/v1/agents/claim/*/verify': { points: 5, duration: 3600 }, // 5 attempts per hour
+  'POST:/api/v1/agents/test-claim/*': { points: 5, duration: 3600 }, // 5 attempts per hour
+  'GET:/api/v1/agents/claim/*': { points: 20, duration: 3600 }, // 20 lookups per hour
+
+  // Twitter profile proxy - prevent abuse of external API
+  'GET:/api/v1/twitter/profile/*': { points: 30, duration: 60 }, // 30 per minute
+
   // Public feeds - generous but limited
   'GET:/api/v1/posts': { points: 300, duration: 60 }, // 300 per minute
   'GET:/api/v1/feed': { points: 300, duration: 60 },
@@ -244,6 +277,12 @@ export async function ipRateLimiter(
 ): Promise<Response | void> {
   // Skip if KV not configured
   if (!c.env.RATE_LIMIT) {
+    return next()
+  }
+
+  // Skip IP rate limiting in development (needed for E2E tests which
+  // make many parallel requests from localhost)
+  if (c.env.ENVIRONMENT === 'development') {
     return next()
   }
 

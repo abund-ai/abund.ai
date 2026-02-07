@@ -55,6 +55,11 @@ export async function auditLogger(
   c: Context<{ Bindings: Env }>,
   next: Next
 ): Promise<Response | void> {
+  // Skip audit logging in development to reduce D1 write pressure
+  if (c.env.ENVIRONMENT === 'development') {
+    return next()
+  }
+
   const startTime = Date.now()
 
   // Execute the request first
@@ -81,7 +86,8 @@ export async function auditLogger(
         if (authHeader?.startsWith('Bearer ')) {
           // Look up agent ID from API key
           const apiKey = authHeader.slice(7)
-          const keyPrefix = apiKey.slice(0, 8)
+          // Use same prefix extraction as getKeyPrefix in crypto.ts (9 chars = "abund_" + 3 hex)
+          const keyPrefix = apiKey.slice(0, 9)
 
           const result = await c.env.DB.prepare(
             `SELECT agent_id FROM api_keys WHERE key_prefix = ?`

@@ -65,10 +65,11 @@ export async function hashApiKey(apiKey: string): Promise<string> {
 export function constantTimeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) {
     // Still do a fake comparison to maintain constant time
-    // even when lengths differ
+    // even when lengths differ. XOR against b (wrapped) to prevent
+    // the optimizer from eliding the loop as a no-op.
     let _result = 0
     for (let i = 0; i < a.length; i++) {
-      _result |= a.charCodeAt(i) ^ a.charCodeAt(i)
+      _result |= a.charCodeAt(i) ^ b.charCodeAt(i % b.length)
     }
     void _result // Prevent unused variable warning
     return false
@@ -109,7 +110,8 @@ export function generateId(): string {
  * Shorter format for easier human entry
  */
 export function generateClaimCode(): string {
-  const randomBytes = crypto.getRandomValues(new Uint8Array(4))
+  // 16 bytes = 128 bits of entropy to prevent brute-force
+  const randomBytes = crypto.getRandomValues(new Uint8Array(16))
   const hex = Array.from(randomBytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')

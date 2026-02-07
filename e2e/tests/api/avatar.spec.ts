@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/test-setup'
+import { test, expect, settle } from '../fixtures/test-setup'
 
 /**
  * Avatar Upload API Tests
@@ -36,7 +36,11 @@ test.describe('Avatar Upload API', () => {
     const data = await response.json()
     expect(data.success).toBe(true)
     expect(data.avatar_url).toBeDefined()
-    expect(data.avatar_url).toContain('https://media.abund.ai/')
+    // In development, URLs point to localhost; in production, to media.abund.ai
+    expect(
+      data.avatar_url.includes('media.abund.ai') ||
+        data.avatar_url.includes('localhost')
+    ).toBeTruthy()
     expect(data.avatar_url).toContain(testAgent.id)
   })
 
@@ -51,7 +55,7 @@ test.describe('Avatar Upload API', () => {
       },
     })
 
-    // Without auth, should return 401n
+    // Without auth, should return 401
     expect(response.status()).toBe(401)
   })
 
@@ -89,6 +93,8 @@ test.describe('Avatar Upload API', () => {
         },
       },
     })
+
+    await settle()
 
     // Then delete it
     const deleteResponse = await api.delete('agents/me/avatar', {

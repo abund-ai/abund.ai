@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/test-setup'
+import { test, expect, settle } from '../fixtures/test-setup'
 
 /**
  * Galleries API Tests
@@ -60,7 +60,11 @@ test.describe('Galleries API', () => {
     expect(data.gallery.id).toBeDefined()
     expect(data.gallery.image_count).toBe(1)
     expect(data.gallery.images).toHaveLength(1)
-    expect(data.gallery.images[0].image_url).toContain('media.abund.ai')
+    // In development, URLs point to localhost; in production, to media.abund.ai
+    expect(
+      data.gallery.images[0].image_url.includes('media.abund.ai') ||
+        data.gallery.images[0].image_url.includes('localhost')
+    ).toBeTruthy()
   })
 
   test('can create a gallery with multiple images', async ({
@@ -149,10 +153,42 @@ test.describe('Galleries API', () => {
     expect(data.pagination.limit).toBe(5)
   })
 
-  test('supports sorting by new/top', async ({ api }) => {
-    const responseNew = await api.get('galleries?sort=new')
-    expect(responseNew.ok()).toBeTruthy()
+  test('sort=new returns newest galleries first', async ({
+    api,
+    testAgent,
+  }) => {
+    // Create two galleries
+    await api.post('galleries', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: {
+        content: 'Gallery sort test A',
+        images: [{ image_url: TEST_IMAGE_URL }],
+      },
+    })
+    await api.post('galleries', {
+      headers: { Authorization: `Bearer ${testAgent.apiKey}` },
+      data: {
+        content: 'Gallery sort test B',
+        images: [{ image_url: TEST_IMAGE_URL }],
+      },
+    })
 
+    await settle()
+
+    // Fetch sorted by new
+    const response = await api.get('galleries?sort=new&limit=20')
+    expect(response.ok()).toBeTruthy()
+    const data = await response.json()
+    expect(data.galleries.length).toBeGreaterThanOrEqual(2)
+
+    // Verify galleries are in descending date order
+    for (let i = 1; i < data.galleries.length; i++) {
+      const prev = new Date(data.galleries[i - 1].created_at).getTime()
+      const curr = new Date(data.galleries[i].created_at).getTime()
+      expect(prev).toBeGreaterThanOrEqual(curr)
+    }
+
+    // Also verify sort=top doesn't error
     const responseTop = await api.get('galleries?sort=top')
     expect(responseTop.ok()).toBeTruthy()
   })
@@ -181,6 +217,8 @@ test.describe('Gallery Detail API', () => {
     expect(createResponse.ok()).toBeTruthy()
     const createData = await createResponse.json()
     const galleryId = createData.gallery.id
+
+    await settle()
 
     // Now fetch it
     const response = await api.get(`galleries/${galleryId}`)
@@ -223,6 +261,8 @@ test.describe('Gallery Image Management', () => {
     const galleryId = createData.gallery.id
     const imageId = createData.gallery.images[0].id
 
+    await settle()
+
     // Update the image metadata
     const updateResponse = await api.patch(
       `galleries/${galleryId}/images/${imageId}`,
@@ -263,6 +303,8 @@ test.describe('Gallery Image Management', () => {
     const createData = await createResponse.json()
     const galleryId = createData.gallery.id
 
+    await settle()
+
     // Add another image
     const addResponse = await api.post(`galleries/${galleryId}/images`, {
       headers: {
@@ -302,6 +344,8 @@ test.describe('Gallery Image Management', () => {
     const createData = await createResponse.json()
     const galleryId = createData.gallery.id
 
+    await settle()
+
     // Try to add 2 more (would exceed limit)
     const addResponse = await api.post(`galleries/${galleryId}/images`, {
       headers: {
@@ -335,7 +379,7 @@ test.describe('Gallery Image Management', () => {
     const galleryId = createData.gallery.id
     const imageId = createData.gallery.images[0].id
 
-    // Create another agent
+    // Create another agent (register + claim like testAgent fixture does)
     const uniqueId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
     const registerResponse = await api.post('agents/register', {
       data: {
@@ -345,6 +389,13 @@ test.describe('Gallery Image Management', () => {
     })
     const registerData = await registerResponse.json()
     const otherApiKey = registerData.credentials.api_key
+    const claimCode = registerData.credentials.claim_code
+
+    // Claim the second agent so its API key is functional
+    await api.post(`agents/test-claim/${claimCode}`)
+
+    await settle()
+    await settle()
 
     // Try to update with other agent's key
     const updateResponse = await api.patch(

@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { logger } from 'hono/logger'
 import type { Env } from './types'
-import { rateLimiter } from './middleware/rateLimit'
+import { rateLimiter, ipRateLimiter } from './middleware/rateLimit'
 import { auditLogger } from './middleware/auditLog'
 import agents from './routes/agents'
 import posts from './routes/posts'
@@ -34,8 +34,9 @@ app.use(
   })
 )
 
-// Rate limiting for authenticated routes
-app.use('/api/v1/*', rateLimiter)
+// Rate limiting
+app.use('/api/v1/*', ipRateLimiter) // IP-based limits (DDoS + brute-force protection)
+app.use('/api/v1/*', rateLimiter) // Agent-based limits (authenticated routes)
 
 // Routes
 app.route('/api/v1/agents', agents)

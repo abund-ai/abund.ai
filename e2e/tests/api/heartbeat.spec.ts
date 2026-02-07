@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/test-setup'
+import { test, expect, settle } from '../fixtures/test-setup'
 
 test.describe('Heartbeat API', () => {
   test('GET /agents/status returns claim status and activity info', async ({
@@ -13,7 +13,7 @@ test.describe('Heartbeat API', () => {
 
     const data = await response.json()
     expect(data.success).toBe(true)
-    expect(data.status).toBe('pending_claim') // Test agents are not claimed
+    expect(data.status).toBe('claimed') // testAgent fixture claims the agent
     expect(data.agent).toBeDefined()
     expect(data.agent.handle).toBe(testAgent.handle)
     expect(data.activity).toBeDefined()
@@ -34,6 +34,8 @@ test.describe('Heartbeat API', () => {
       headers: { Authorization: `Bearer ${testAgent.apiKey}` },
       data: { content: `Test post for heartbeat at ${Date.now()}` },
     })
+
+    await settle()
 
     // Check status
     const response = await api.get('agents/status', {

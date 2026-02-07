@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test'
 /**
  * Feed Page E2E Tests
  *
- * Tests the main feed functionality that human spectators interact with.
+ * Tests the main feed UI that human spectators interact with.
+ * Verifies actual page content and navigation, not just screenshots.
  */
 
 test.describe('Feed Page', () => {
@@ -11,80 +12,67 @@ test.describe('Feed Page', () => {
     await page.goto('/feed')
   })
 
-  test('displays the feed page with header', async ({ page }) => {
+  test('displays the feed page with header and navigation', async ({
+    page,
+  }) => {
     // Check page title
     await expect(page).toHaveTitle(/Abund\.ai/)
 
-    // Check the main banner/header is visible (using role to get the primary header)
+    // Check the main banner/header is visible
     await expect(page.getByRole('banner')).toBeVisible()
 
-    // Take a screenshot for visual verification
-    await page.screenshot({ path: 'test-results/feed-page.png' })
+    // Should show the feed content area
+    await expect(page.locator('main, [role="main"]').first()).toBeVisible()
   })
 
-  test('shows posts from AI agents', async ({ page }) => {
+  test('shows posts from AI agents with handles', async ({ page }) => {
     // Wait for posts to load
     await page.waitForSelector('article', { timeout: 10000 })
 
     // Verify at least one post is visible
     const posts = page.locator('article')
-    await expect(posts.first()).toBeVisible()
+    const postCount = await posts.count()
+    expect(postCount).toBeGreaterThan(0)
 
-    // Check posts have agent info
+    // First post should show an agent handle (@something)
     const firstPost = posts.first()
     await expect(firstPost).toBeVisible()
+    await expect(firstPost.locator('text=/@\\w+/')).toBeVisible()
   })
 
-  test('displays correct relative timestamps (not future dates)', async ({
-    page,
-  }) => {
+  test('displays relative timestamps (not future dates)', async ({ page }) => {
     // Wait for posts
     await page.waitForSelector('article', { timeout: 10000 })
 
-    // Get all timestamp text
+    // Get all timestamp-like text within posts
     const timestamps = page
       .locator('article')
       .first()
       .locator('text=/\\d+[mhd] ago|just now|ago/')
 
-    // Verify timestamps don't show future times
     const timestampCount = await timestamps.count()
-    if (timestampCount > 0) {
-      const text = await timestamps.first().textContent()
-      expect(text).not.toMatch(/in \d+/)
-    }
+    // There should be at least one timestamp visible
+    expect(timestampCount).toBeGreaterThan(0)
+
+    const text = await timestamps.first().textContent()
+    // Should not show future times
+    expect(text).not.toMatch(/in \d+/)
   })
 
-  test('posts show agent name', async ({ page }) => {
+  test('can click on a post to view details', async ({ page }) => {
     await page.waitForSelector('article', { timeout: 10000 })
 
+    // Click on the first post
     const firstPost = page.locator('article').first()
+    await firstPost.click()
 
-    // Check that the post has agent info visible (handle starting with @)
-    await expect(firstPost.locator('text=/@\\w+/')).toBeVisible()
-  })
-
-  test('can navigate to agent profile', async ({ page }) => {
-    await page.waitForSelector('article', { timeout: 10000 })
-
-    // Find an agent link/button in the first post
-    const agentLink = page
-      .locator('article')
-      .first()
-      .locator('button, a')
-      .first()
-
-    // Click on agent
-    await agentLink.click()
-
-    // Should navigate to agent profile or show agent info
-    // The exact behavior depends on implementation
-    await page.screenshot({ path: 'test-results/agent-click.png' })
+    // Should navigate to a post detail page
+    await page.waitForURL(/\/post\//, { timeout: 5000 })
   })
 })
 
 test.describe('Landing Page', () => {
-  test('CTA button links to feed', async ({ page }) => {
+  test('CTA button navigates to feed', async ({ page }) => {
     await page.goto('/')
 
     // Find the CTA button
@@ -92,24 +80,23 @@ test.describe('Landing Page', () => {
       .locator('text=/Watch the Experiment|Explore Feed/i')
       .first()
 
-    if (await ctaButton.isVisible()) {
-      await ctaButton.click()
+    // CTA should always be visible on the landing page
+    await expect(ctaButton).toBeVisible()
 
-      // Should navigate to /feed
-      await expect(page).toHaveURL(/\/feed/)
-    }
+    await ctaButton.click()
+
+    // Should navigate to /feed
+    await expect(page).toHaveURL(/\/feed/)
   })
 
-  test('landing page renders key sections', async ({ page }) => {
+  test('landing page renders hero and key sections', async ({ page }) => {
     await page.goto('/')
 
-    // Check for hero section
-    await expect(page.locator('h1').first()).toBeVisible()
-
-    // Take full page screenshot
-    await page.screenshot({
-      path: 'test-results/landing-page-full.png',
-      fullPage: true,
-    })
+    // Check for hero heading
+    const hero = page.locator('h1').first()
+    await expect(hero).toBeVisible()
+    const heroText = await hero.textContent()
+    expect(heroText).toBeTruthy()
+    expect(heroText!.length).toBeGreaterThan(5) // Not just empty or a single char
   })
 })

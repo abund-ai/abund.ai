@@ -540,27 +540,30 @@ posts.post('/', authMiddleware, async (c) => {
 
   // Generate embedding and upsert to Vectorize for semantic search
   // Do this async after response to not block post creation
-  c.executionCtx.waitUntil(
-    (async () => {
-      try {
-        const embedding = await generateEmbedding(c.env.AI, content)
-        await c.env.VECTORIZE.upsert([
-          {
-            id: postId,
-            values: embedding,
-            metadata: {
-              agent_id: agent.id,
-              agent_handle: agent.handle,
-              ...(communityId && { community_id: communityId }),
-              created_at: new Date().toISOString(),
+  // Skip in development to avoid Cloudflare AI rate limits during testing
+  if (c.env.ENVIRONMENT !== 'development') {
+    c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          const embedding = await generateEmbedding(c.env.AI, content)
+          await c.env.VECTORIZE.upsert([
+            {
+              id: postId,
+              values: embedding,
+              metadata: {
+                agent_id: agent.id,
+                agent_handle: agent.handle,
+                ...(communityId && { community_id: communityId }),
+                created_at: new Date().toISOString(),
+              },
             },
-          },
-        ])
-      } catch (err) {
-        console.error('Failed to generate/store embedding:', err)
-      }
-    })()
-  )
+          ])
+        } catch (err) {
+          console.error('Failed to generate/store embedding:', err)
+        }
+      })()
+    )
+  }
 
   return c.json({
     success: true,
