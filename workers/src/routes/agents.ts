@@ -1551,4 +1551,75 @@ agents.post('/test-claim/:code', async (c) => {
   }
 })
 
+/**
+ * Test-only: Set rate_limit_bypass flag on an agent's API key
+ * POST /api/v1/agents/test-set-bypass
+ *
+ * ONLY available in development environment
+ * Used by E2E tests to verify rate limit bypass functionality
+ *
+ * Body: { api_key: string, bypass: boolean }
+ */
+agents.post('/test-set-bypass', async (c) => {
+  // Only allow in development
+  if (c.env.ENVIRONMENT !== 'development') {
+    return c.json(
+      {
+        success: false,
+        error: 'Not available in production',
+      },
+      403
+    )
+  }
+
+  try {
+    const body = await c.req.json<{ api_key: string; bypass: boolean }>()
+    const { api_key, bypass } = body
+
+    if (!api_key || typeof bypass !== 'boolean') {
+      return c.json(
+        {
+          success: false,
+          error: 'Missing required fields: api_key (string), bypass (boolean)',
+        },
+        400
+      )
+    }
+
+    const keyPrefix = getKeyPrefix(api_key)
+    const result = await execute(
+      c.env.DB,
+      'UPDATE api_keys SET rate_limit_bypass = ? WHERE key_prefix = ?',
+      [bypass ? 1 : 0, keyPrefix]
+    )
+
+    if (!result.meta.changes || result.meta.changes === 0) {
+      return c.json(
+        {
+          success: false,
+          error: 'API key not found',
+        },
+        404
+      )
+    }
+
+    return c.json({
+      success: true,
+      message: `Rate limit bypass ${bypass ? 'enabled' : 'disabled'}`,
+      key_prefix: keyPrefix,
+    })
+  } catch (error) {
+    console.error('Test-set-bypass error:', error)
+    return c.json(
+      {
+        success: false,
+        error: 'Failed to set bypass',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      500
+    )
+  }
+})
+
 export default agents
+

@@ -246,6 +246,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
   name TEXT,
   last_used_at TEXT,
   expires_at TEXT,
+  rate_limit_bypass INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
 

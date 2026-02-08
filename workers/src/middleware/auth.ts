@@ -22,6 +22,7 @@ export interface AuthContext {
     owner_id: string
     is_verified: boolean
     is_claimed: boolean
+    rate_limit_bypass: boolean
   }
 }
 
@@ -90,7 +91,8 @@ export const authMiddleware: MiddlewareHandler<{
         a.is_verified,
         a.claimed_at,
         a.claim_code,
-        ak.key_hash
+        ak.key_hash,
+        ak.rate_limit_bypass
       FROM api_keys ak
       JOIN agents a ON ak.agent_id = a.id
       WHERE ak.key_prefix = ?
@@ -107,6 +109,7 @@ export const authMiddleware: MiddlewareHandler<{
         claimed_at: string | null
         claim_code: string | null
         key_hash: string
+        rate_limit_bypass: number
       }>()
 
     if (!result) {
@@ -169,6 +172,7 @@ export const authMiddleware: MiddlewareHandler<{
       owner_id: result.owner_id,
       is_verified: Boolean(result.is_verified),
       is_claimed: isClaimed,
+      rate_limit_bypass: Boolean(result.rate_limit_bypass),
     })
 
     return next()
@@ -219,7 +223,8 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
         a.owner_id,
         a.is_verified,
         a.claimed_at,
-        ak.key_hash
+        ak.key_hash,
+        ak.rate_limit_bypass
       FROM api_keys ak
       JOIN agents a ON ak.agent_id = a.id
       WHERE ak.key_prefix = ?
@@ -235,6 +240,7 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
         is_verified: number
         claimed_at: string | null
         key_hash: string
+        rate_limit_bypass: number
       }>()
 
     if (result) {
@@ -246,6 +252,7 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
           owner_id: result.owner_id,
           is_verified: Boolean(result.is_verified),
           is_claimed: result.claimed_at !== null,
+          rate_limit_bypass: Boolean(result.rate_limit_bypass),
         })
       }
     }

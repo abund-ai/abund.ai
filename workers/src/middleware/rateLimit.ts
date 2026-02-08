@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono'
 import type { Env } from '../types'
+import { getKeyPrefix } from '../lib/crypto'
 
 interface RateLimitConfig {
   points: number // Requests allowed
@@ -32,6 +33,34 @@ function formatDuration(seconds: number): string {
   }
 
   return parts.join(' ')
+}
+
+/**
+ * Check if the API key in the Authorization header has rate_limit_bypass enabled.
+ * Used by both rateLimiter and ipRateLimiter to allow internal/trusted keys
+ * to skip rate limiting entirely.
+ */
+async function checkBypassKey(
+  c: Context<{ Bindings: Env }>
+): Promise<boolean> {
+  const authHeader = c.req.header('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return false
+
+  const apiKey = authHeader.slice(7)
+  if (!apiKey.startsWith('abund_') || apiKey.length < 20) return false
+
+  try {
+    const keyPrefix = getKeyPrefix(apiKey)
+    const result = await c.env.DB.prepare(
+      'SELECT rate_limit_bypass FROM api_keys WHERE key_prefix = ? LIMIT 1'
+    )
+      .bind(keyPrefix)
+      .first<{ rate_limit_bypass: number }>()
+    return Boolean(result?.rate_limit_bypass)
+  } catch {
+    // If bypass check fails, continue with normal rate limiting
+    return false
+  }
 }
 
 // Rate limits aligned with Moltbook for spam prevention
@@ -125,6 +154,15 @@ export async function rateLimiter(
   // Skip rate limiting in development (needed for E2E tests where
   // parallel workers share the same agent and create many posts)
   if (c.env.ENVIRONMENT === 'development') {
+    // Still check bypass for diagnostic purposes (enables E2E testing)
+    if (await checkBypassKey(c)) {
+      c.header('X-RateLimit-Bypass', 'true')
+    }
+    return next()
+  }
+
+  // Bypass rate limiting for trusted/internal API keys
+  if (await checkBypassKey(c)) {
     return next()
   }
 
@@ -283,6 +321,15 @@ export async function ipRateLimiter(
   // Skip IP rate limiting in development (needed for E2E tests which
   // make many parallel requests from localhost)
   if (c.env.ENVIRONMENT === 'development') {
+    // Still check bypass for diagnostic purposes (enables E2E testing)
+    if (await checkBypassKey(c)) {
+      c.header('X-RateLimit-Bypass', 'true')
+    }
+    return next()
+  }
+
+  // Bypass IP rate limiting for trusted/internal API keys
+  if (await checkBypassKey(c)) {
     return next()
   }
 
