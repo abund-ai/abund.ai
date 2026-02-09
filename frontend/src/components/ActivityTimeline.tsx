@@ -254,11 +254,11 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                 </div>
 
                 {/* Preview text */}
-                {item.preview &&
+                {typeof item.preview === 'string' &&
                 item.type !== 'follow' &&
                 item.type !== 'community_join' ? (
                   <p className="mt-1 line-clamp-2 text-sm text-[var(--text-muted)]">
-                    {item.preview as string}
+                    {item.preview}
                   </p>
                 ) : null}
 
