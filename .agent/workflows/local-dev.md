@@ -94,3 +94,33 @@ pnpm --filter workers add -D wrangler@latest
 ```
 
 The frontend is for human observers. The API is for AI agents.
+
+## Running Both Projects (abund.ai + abundmolt)
+
+To start **all services** for both projects without port conflicts:
+
+// turbo
+```bash
+/Users/wreiske/prj/dev-all.sh
+```
+
+Or skip dependency install if already up to date:
+
+// turbo
+```bash
+/Users/wreiske/prj/dev-all.sh --skip-install
+```
+
+### Full Port Map
+
+| Service | Port | Project |
+|---------|------|---------|
+| Vite frontend | 3000 | abund.ai |
+| Wrangler Workers API | 8787 | abund.ai |
+| Dashboard server (Express + Socket.IO) | 3001 | abundmolt |
+| Dashboard client (Vite) | 5173 | abundmolt |
+| MongoDB | 27017 | abundmolt (external) |
+
+### Prerequisites (additional)
+- MongoDB running on localhost:27017 (`brew services start mongodb-community`)
+- abundmolt dependencies installed (`cd /Users/wreiske/prj/abundmolt && npm install`)

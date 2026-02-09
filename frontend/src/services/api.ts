@@ -310,6 +310,28 @@ class ApiClient {
     )
   }
 
+  async getAgentActivity(handle: string, page = 1, limit = 25) {
+    return this.request<{
+      success: boolean
+      agent_handle: string
+      activity: Array<{
+        type: string
+        id: string
+        created_at: string
+        preview: string
+        metadata: Record<string, unknown>
+      }>
+      pagination: {
+        page: number
+        limit: number
+        total: number
+        has_more: boolean
+      }
+    }>(
+      `/api/v1/agents/${handle}/activity?page=${String(page)}&limit=${String(limit)}`
+    )
+  }
+
   // Community endpoints
   async getCommunities(page = 1, limit = 25) {
     return this.request<{
@@ -525,7 +547,9 @@ class ApiClient {
       success: boolean
       messages: ChatMessage[]
       pagination: { page: number; limit: number }
-    }>(`/api/v1/chatrooms/${slug}/messages?page=${String(page)}&limit=${String(limit)}`)
+    }>(
+      `/api/v1/chatrooms/${slug}/messages?page=${String(page)}&limit=${String(limit)}`
+    )
   }
 
   async getChatRoomMembers(slug: string, page = 1, limit = 50) {
@@ -533,7 +557,9 @@ class ApiClient {
       success: boolean
       members: ChatMember[]
       pagination: { page: number; limit: number }
-    }>(`/api/v1/chatrooms/${slug}/members?page=${String(page)}&limit=${String(limit)}`)
+    }>(
+      `/api/v1/chatrooms/${slug}/members?page=${String(page)}&limit=${String(limit)}`
+    )
   }
 }
 

@@ -7,6 +7,7 @@ import { GlobalNav } from '@/components/GlobalNav'
 import { Icon } from '@/components/ui/Icon'
 import { OwnerCard } from '@/components/display/OwnerCard'
 import { getOnlineStatus, formatLastSeen } from '@/lib/utils'
+import { ActivityTimeline } from '@/components/ActivityTimeline'
 
 interface AgentProfilePageProps {
   handle: string
@@ -20,11 +21,14 @@ const PROVIDER_BADGES: Record<string, { color: string; label: string }> = {
   meta: { color: 'from-indigo-500 to-violet-500', label: 'Meta' },
 }
 
+type ProfileTab = 'posts' | 'activity'
+
 export function AgentProfilePage({ handle }: AgentProfilePageProps) {
   const [agent, setAgent] = useState<Agent | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
 
   useEffect(() => {
     async function loadProfile() {
@@ -109,6 +113,11 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
   const providerInfo = agent.model_provider
     ? PROVIDER_BADGES[agent.model_provider.toLowerCase()]
     : null
+
+  const TABS: { id: ProfileTab; label: string; icon: 'posts' | 'bolt' }[] = [
+    { id: 'posts', label: 'Posts', icon: 'posts' },
+    { id: 'activity', label: 'Activity', icon: 'bolt' },
+  ]
 
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
@@ -239,31 +248,55 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
         </div>
       </section>
 
-      {/* Posts Section */}
+      {/* Tabs */}
       <section className="border-t border-[var(--border-subtle)]">
-        <div className="container mx-auto max-w-2xl px-4 py-6">
-          <h2 className="mb-4 text-lg font-semibold text-[var(--text-primary)]">
-            Recent Posts
-          </h2>
+        <div className="container mx-auto max-w-2xl px-4">
+          <div className="flex">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-primary-500 text-primary-500'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Icon name={tab.icon} size="sm" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
 
-          {posts.length === 0 ? (
-            <div className="py-12 text-center">
-              <div className="mb-2 flex justify-center">
-                <Icon
-                  name="posts"
-                  size="4xl"
-                  className="text-[var(--text-muted)]/50"
+      {/* Tab Content */}
+      <section>
+        <div className="container mx-auto max-w-2xl px-4 py-6">
+          {activeTab === 'posts' && (
+            <>
+              {posts.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="mb-2 flex justify-center">
+                    <Icon
+                      name="posts"
+                      size="4xl"
+                      className="text-[var(--text-muted)]/50"
+                    />
+                  </div>
+                  <p className="text-[var(--text-muted)]">No posts yet</p>
+                </div>
+              ) : (
+                <PostList
+                  posts={posts}
+                  onAgentClick={handleAgentClick}
+                  onPostClick={handlePostClick}
                 />
-              </div>
-              <p className="text-[var(--text-muted)]">No posts yet</p>
-            </div>
-          ) : (
-            <PostList
-              posts={posts}
-              onAgentClick={handleAgentClick}
-              onPostClick={handlePostClick}
-            />
+              )}
+            </>
           )}
+
+          {activeTab === 'activity' && <ActivityTimeline handle={handle} />}
         </div>
       </section>
     </div>

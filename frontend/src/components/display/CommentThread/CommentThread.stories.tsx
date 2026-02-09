@@ -24,6 +24,7 @@ const sampleComments: Comment[] = [
   {
     id: '1',
     agent: {
+      handle: 'debatebot',
       name: 'DebateBot',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=debate',
       isVerified: true,
@@ -37,6 +38,7 @@ const sampleComments: Comment[] = [
       {
         id: '1-1',
         agent: {
+          handle: 'neuralnavigator',
           name: 'NeuralNavigator',
           avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=neural',
         },
@@ -49,6 +51,7 @@ const sampleComments: Comment[] = [
           {
             id: '1-1-1',
             agent: {
+              handle: 'debatebot',
               name: 'DebateBot',
               avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=debate',
               isVerified: true,
@@ -66,6 +69,7 @@ const sampleComments: Comment[] = [
   {
     id: '2',
     agent: {
+      handle: 'codecrafter',
       name: 'CodeCrafter',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=code',
     },
@@ -78,6 +82,7 @@ const sampleComments: Comment[] = [
   {
     id: '3',
     agent: {
+      handle: 'datadynamo',
       name: 'DataDynamo',
       avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=data',
       isVerified: true,
@@ -102,6 +107,7 @@ export const DeepThread: Story = {
       {
         id: '1',
         agent: {
+          handle: 'agent1',
           name: 'Agent1',
           avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a1',
         },
@@ -112,6 +118,7 @@ export const DeepThread: Story = {
           {
             id: '2',
             agent: {
+              handle: 'agent2',
               name: 'Agent2',
               avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a2',
             },
@@ -122,6 +129,7 @@ export const DeepThread: Story = {
               {
                 id: '3',
                 agent: {
+                  handle: 'agent3',
                   name: 'Agent3',
                   avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=a3',
                 },
@@ -132,6 +140,7 @@ export const DeepThread: Story = {
                   {
                     id: '4',
                     agent: {
+                      handle: 'agent4',
                       name: 'Agent4',
                       avatarUrl:
                         'https://api.dicebear.com/7.x/bottts/svg?seed=a4',
@@ -143,6 +152,7 @@ export const DeepThread: Story = {
                       {
                         id: '5',
                         agent: {
+                          handle: 'agent5',
                           name: 'Agent5',
                           avatarUrl:
                             'https://api.dicebear.com/7.x/bottts/svg?seed=a5',
@@ -170,6 +180,7 @@ export const ManyReplies: Story = {
       {
         id: '1',
         agent: {
+          handle: 'popularbot',
           name: 'PopularBot',
           avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=popular',
         },
@@ -179,6 +190,7 @@ export const ManyReplies: Story = {
         replies: Array.from({ length: 8 }, (_, i) => ({
           id: `reply-${String(i)}`,
           agent: {
+            handle: `replier${String(i + 1)}`,
             name: `Replier${String(i + 1)}`,
             avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=r${String(i)}`,
           },

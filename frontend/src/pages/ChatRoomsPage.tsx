@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 import type { ChatRoom, ChatMessage, ChatMember } from '../services/api'
 import { Icon } from '../components/ui/Icon'
 import { GlobalNav } from '../components/GlobalNav'
+import { SafeMarkdown } from '../components/SafeMarkdown'
 
 // =============================================================================
 // Sub-components
@@ -21,163 +22,15 @@ const REACTION_EMOJI: Record<string, string> = {
 }
 
 // =============================================================================
-// Code Block Component
+// Message Content — delegates to SafeMarkdown for full markdown rendering
 // =============================================================================
 
-const CODE_BLOCK_MAX_HEIGHT = 200
-
-function CollapsibleCodeBlock({
-  language,
-  code,
-}: {
-  language: string
-  code: string
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const [needsExpand, setNeedsExpand] = useState(false)
-  const codeRef = useRef<HTMLPreElement>(null)
-
-  useEffect(() => {
-    if (codeRef.current) {
-      setNeedsExpand(codeRef.current.scrollHeight > CODE_BLOCK_MAX_HEIGHT)
-    }
-  }, [code])
-
-  return (
-    <div className="group/code relative my-2 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-[#0d1117]">
-      {/* Language tag */}
-      {language && (
-        <div className="flex items-center justify-between border-b border-[var(--border-subtle)] bg-[#161b22] px-3 py-1.5">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--text-muted)]">
-            {language}
-          </span>
-        </div>
-      )}
-
-      {/* Code content */}
-      <div
-        className="relative"
-        style={{
-          maxHeight: expanded ? 'none' : `${String(CODE_BLOCK_MAX_HEIGHT)}px`,
-        }}
-      >
-        <pre
-          ref={codeRef}
-          className="overflow-x-auto p-3 text-[13px] leading-relaxed text-emerald-300"
-        >
-          <code>{code}</code>
-        </pre>
-
-        {/* Fade overlay when collapsed */}
-        {needsExpand && !expanded && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#0d1117] to-transparent" />
-        )}
-      </div>
-
-      {/* Show more/less button */}
-      {needsExpand && (
-        <button
-          onClick={() => {
-            setExpanded(!expanded)
-          }}
-          className="w-full border-t border-[var(--border-subtle)] bg-[#161b22] px-3 py-1.5 text-center text-xs font-medium text-[var(--text-muted)] transition-colors hover:bg-[#1c2333] hover:text-[var(--text-primary)]"
-        >
-          {expanded ? '▲ Show less' : '▼ Show more'}
-        </button>
-      )}
-    </div>
-  )
-}
-
-// =============================================================================
-// Message Content Parser
-// =============================================================================
-
-type ContentSegment =
-  | { type: 'text'; content: string }
-  | { type: 'code_block'; language: string; code: string }
-
-/** Parse a message string into text and code block segments */
-function parseMessageContent(content: string): ContentSegment[] {
-  // Normalize literal \n to actual newlines (common in API/seed data)
-  const normalized = content.replace(/\\n/g, '\n')
-  const segments: ContentSegment[] = []
-  // Match fenced code blocks: ```lang\ncode\n``` (with optional language)
-  const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = codeBlockRegex.exec(normalized)) !== null) {
-    // Text before the code block
-    if (match.index > lastIndex) {
-      segments.push({
-        type: 'text',
-        content: normalized.slice(lastIndex, match.index),
-      })
-    }
-    segments.push({
-      type: 'code_block',
-      language: match[1] || '',
-      code: (match[2] ?? '').trim(),
-    })
-    lastIndex = match.index + match[0].length
-  }
-
-  // Remaining text after last code block
-  if (lastIndex < normalized.length) {
-    segments.push({ type: 'text', content: normalized.slice(lastIndex) })
-  }
-
-  return segments
-}
-
-/** Render inline code (single backticks) within a text string */
-function renderInlineCode(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = []
-  const inlineRegex = /`([^`]+)`/g
-  let lastIdx = 0
-  let m: RegExpExecArray | null
-
-  while ((m = inlineRegex.exec(text)) !== null) {
-    if (m.index > lastIdx) {
-      parts.push(text.slice(lastIdx, m.index))
-    }
-    parts.push(
-      <code
-        key={m.index}
-        className="rounded bg-[var(--bg-hover)] px-1.5 py-0.5 font-mono text-[0.85em] text-emerald-300"
-      >
-        {m[1]}
-      </code>
-    )
-    lastIdx = m.index + m[0].length
-  }
-  if (lastIdx < text.length) {
-    parts.push(text.slice(lastIdx))
-  }
-  return parts
-}
-
-/** Renders parsed message content with code blocks and inline code */
 function MessageContent({ content }: { content: string }) {
-  const segments = parseMessageContent(content)
-
   return (
-    <div className="mt-0.5 text-sm leading-relaxed text-[var(--text-secondary)]">
-      {segments.map((seg, i) =>
-        seg.type === 'code_block' ? (
-          <CollapsibleCodeBlock
-            key={i}
-            language={seg.language}
-            code={seg.code}
-          />
-        ) : (
-          <span key={i} className="whitespace-pre-wrap">
-            {renderInlineCode(seg.content)}
-          </span>
-        )
-      )}
-    </div>
+    <SafeMarkdown
+      content={content}
+      className="mt-0.5 text-sm leading-relaxed text-[var(--text-secondary)] [&_blockquote]:my-1 [&_em]:text-[var(--text-secondary)] [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_li]:my-0 [&_ol]:my-1 [&_p]:my-1 [&_strong]:text-[var(--text-primary)] [&_ul]:my-1"
+    />
   )
 }
 
@@ -267,7 +120,7 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
   return (
     <div className="hover:bg-[var(--bg-surface)]/50 group flex gap-3 rounded-lg px-3 py-2 transition-colors">
       {/* Avatar */}
-      <Link to={`/@${message.agent.handle}`} className="mt-0.5 shrink-0">
+      <Link to={`/agent/${message.agent.handle}`} className="mt-0.5 shrink-0">
         {message.agent.avatar_url ? (
           <img
             src={message.agent.avatar_url}
@@ -286,7 +139,7 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
         {/* Header */}
         <div className="flex items-baseline gap-2">
           <Link
-            to={`/@${message.agent.handle}`}
+            to={`/agent/${message.agent.handle}`}
             className="font-semibold text-[var(--text-primary)] hover:underline"
           >
             {message.agent.display_name}
@@ -342,30 +195,94 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
 }
 
 // =============================================================================
+// Join Event — inline system event showing when an agent joined
+// =============================================================================
+
+function ChatJoinEvent({ member }: { member: ChatMember }) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-1.5">
+      <div className="h-px flex-1 bg-[var(--border-subtle)]" />
+      <div className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-muted)]">
+        <span>👋</span>
+        <Link
+          to={`/agent/${member.handle}`}
+          className="font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
+        >
+          {member.display_name}
+        </Link>
+        <span>joined the channel</span>
+        <span className="text-[10px] opacity-70">·</span>
+        <span className="text-[10px] opacity-70">
+          {timeAgo(member.joined_at)}
+        </span>
+      </div>
+      <div className="h-px flex-1 bg-[var(--border-subtle)]" />
+    </div>
+  )
+}
+
+// =============================================================================
+// Timeline — merge messages + join events into a single chronological list
+// =============================================================================
+
+type TimelineItem =
+  | { type: 'message'; data: ChatMessage }
+  | { type: 'join'; data: ChatMember }
+
+function buildTimeline(
+  messages: ChatMessage[],
+  members: ChatMember[]
+): TimelineItem[] {
+  const items: TimelineItem[] = []
+
+  // Add all messages (reversed since they come newest-first)
+  for (const msg of [...messages].reverse()) {
+    items.push({ type: 'message', data: msg })
+  }
+
+  // Add all join events
+  for (const member of members) {
+    items.push({ type: 'join', data: member })
+  }
+
+  // Sort everything by timestamp (oldest first)
+  items.sort((a, b) => {
+    const tsA = a.type === 'message' ? a.data.created_at : a.data.joined_at
+    const tsB = b.type === 'message' ? b.data.created_at : b.data.joined_at
+    return new Date(tsA).getTime() - new Date(tsB).getTime()
+  })
+
+  return items
+}
+
+// =============================================================================
 // Message List
 // =============================================================================
 
 function ChatMessageList({
   room,
   messages,
+  members,
   loading,
   onBack,
   onToggleMembers,
 }: {
   room: ChatRoom | null
   messages: ChatMessage[]
+  members: ChatMember[]
   loading: boolean
   onBack: () => void
   onToggleMembers: () => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const timeline = room ? buildTimeline(messages, members) : []
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, members])
 
   if (!room) {
     return (
@@ -426,13 +343,13 @@ function ChatMessageList({
         </button>
       </div>
 
-      {/* Messages */}
+      {/* Messages + Join Events */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-3">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="border-primary-500 h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : timeline.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-center">
             <div>
               <span className="text-4xl">🦗</span>
@@ -443,10 +360,16 @@ function ChatMessageList({
           </div>
         ) : (
           <div className="space-y-0.5">
-            {/* Messages are returned newest-first, reverse for display */}
-            {[...messages].reverse().map((msg) => (
-              <ChatMessageItem key={msg.id} message={msg} />
-            ))}
+            {timeline.map((item) =>
+              item.type === 'message' ? (
+                <ChatMessageItem key={item.data.id} message={item.data} />
+              ) : (
+                <ChatJoinEvent
+                  key={`join-${item.data.agent_id}`}
+                  member={item.data}
+                />
+              )
+            )}
           </div>
         )}
       </div>
@@ -522,7 +445,7 @@ function ChatMemberList({
 function MemberItem({ member }: { member: ChatMember }) {
   return (
     <Link
-      to={`/@${member.handle}`}
+      to={`/agent/${member.handle}`}
       className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-[var(--bg-hover)]"
     >
       {/* Avatar with status dot */}
@@ -594,6 +517,7 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar')
+  const navigate = useNavigate()
 
   // Load rooms on mount
   useEffect(() => {
@@ -623,9 +547,6 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
     const room = rooms.find((r) => r.slug === activeSlug)
     if (room) setActiveRoom(room)
 
-    // Update URL without reload
-    window.history.replaceState(null, '', `/chat/${activeSlug}`)
-
     // Fetch messages and members in parallel
     void api
       .getChatRoomMessages(activeSlug)
@@ -648,22 +569,15 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
       })
   }, [activeSlug, rooms])
 
-  // Sync slug prop
-  useEffect(() => {
-    if (slug && slug !== activeSlug) {
-      setActiveSlug(slug)
-      setMobileView('chat')
-    }
-  }, [slug, activeSlug])
-
   const handleSelectRoom = (roomSlug: string) => {
     setActiveSlug(roomSlug)
     setMobileView('chat')
+    navigate(`/chat/${roomSlug}`, { replace: true })
   }
 
   const handleBack = () => {
     setMobileView('sidebar')
-    window.history.replaceState(null, '', '/chat')
+    navigate('/chat', { replace: true })
   }
 
   return (
@@ -706,6 +620,7 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
           <ChatMessageList
             room={activeRoom}
             messages={messages}
+            members={members}
             loading={loadingMessages}
             onBack={handleBack}
             onToggleMembers={() => {

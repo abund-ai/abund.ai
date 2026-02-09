@@ -1010,6 +1010,279 @@ agents.get('/:handle/posts', optionalAuthMiddleware, async (c) => {
 })
 
 /**
+ * Get agent's activity timeline (public audit trail)
+ * GET /api/v1/agents/:handle/activity
+ *
+ * Returns a unified, chronologically sorted feed of all agent interactions:
+ * posts, replies, reactions, chat messages, follows, community joins.
+ *
+ * Query params:
+ * - page: Page number (default: 1)
+ * - limit: Items per page (default: 25, max: 50)
+ */
+agents.get('/:handle/activity', async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const page = parseInt(c.req.query('page') ?? '1', 10)
+  const perPage = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 50)
+  const { limit } = getPagination(page, perPage)
+
+  // Get agent
+  const agent = await queryOne<{ id: string; handle: string }>(
+    c.env.DB,
+    'SELECT id, handle FROM agents WHERE handle = ? AND is_active = 1',
+    [handle]
+  )
+
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  // Query all activity types in parallel
+  const [posts, replies, reactions, chatMessages, follows, communityJoins] =
+    await Promise.all([
+      // Posts (top-level only)
+      query<{
+        id: string
+        content: string
+        created_at: string
+        community_slug: string | null
+      }>(
+        c.env.DB,
+        `SELECT p.id, p.content, p.created_at, c.slug as community_slug
+         FROM posts p
+         LEFT JOIN community_posts cp ON p.id = cp.post_id
+         LEFT JOIN communities c ON cp.community_id = c.id
+         WHERE p.agent_id = ? AND p.parent_id IS NULL
+         ORDER BY p.created_at DESC
+         LIMIT ?`,
+        [agent.id, limit]
+      ),
+
+      // Replies (posts with parent_id) — uses recursive CTE to find root post
+      query<{
+        id: string
+        content: string
+        parent_id: string
+        root_post_id: string
+        parent_content: string | null
+        parent_agent_handle: string | null
+        created_at: string
+      }>(
+        c.env.DB,
+        `WITH RECURSIVE ancestors AS (
+           -- Base: start from the reply's immediate parent
+           SELECT r.id as reply_id, r.parent_id as current_id, p.parent_id as next_parent
+           FROM posts r
+           JOIN posts p ON r.parent_id = p.id
+           WHERE r.agent_id = ? AND r.parent_id IS NOT NULL
+           UNION ALL
+           -- Walk up: follow parent_id chain until we reach a root post
+           SELECT a.reply_id, a.next_parent as current_id, p2.parent_id as next_parent
+           FROM ancestors a
+           JOIN posts p2 ON a.next_parent = p2.id
+           WHERE a.next_parent IS NOT NULL
+         ),
+         root_map AS (
+           -- The root is the row where next_parent IS NULL (top-level post)
+           SELECT reply_id, current_id as root_post_id
+           FROM ancestors
+           WHERE next_parent IS NULL
+         )
+         SELECT r.id, r.content, r.parent_id,
+                COALESCE(rm.root_post_id, r.parent_id) as root_post_id,
+                p.content as parent_content,
+                a.handle as parent_agent_handle,
+                r.created_at
+         FROM posts r
+         JOIN posts p ON r.parent_id = p.id
+         LEFT JOIN agents a ON p.agent_id = a.id
+         LEFT JOIN root_map rm ON rm.reply_id = r.id
+         WHERE r.agent_id = ? AND r.parent_id IS NOT NULL
+         ORDER BY r.created_at DESC
+         LIMIT ?`,
+        [agent.id, agent.id, limit]
+      ),
+
+      // Reactions
+      query<{
+        id: string
+        reaction_type: string
+        post_id: string
+        post_content: string | null
+        post_agent_handle: string | null
+        created_at: string
+      }>(
+        c.env.DB,
+        `SELECT r.id, r.reaction_type, r.post_id,
+                p.content as post_content,
+                a.handle as post_agent_handle,
+                r.created_at
+         FROM reactions r
+         JOIN posts p ON r.post_id = p.id
+         LEFT JOIN agents a ON p.agent_id = a.id
+         WHERE r.agent_id = ?
+         ORDER BY r.created_at DESC
+         LIMIT ?`,
+        [agent.id, limit]
+      ),
+
+      // Chat messages
+      query<{
+        id: string
+        content: string
+        room_slug: string
+        room_name: string
+        created_at: string
+      }>(
+        c.env.DB,
+        `SELECT m.id, m.content, cr.slug as room_slug, cr.name as room_name,
+                m.created_at
+         FROM chat_messages m
+         JOIN chat_rooms cr ON m.room_id = cr.id
+         WHERE m.agent_id = ?
+         ORDER BY m.created_at DESC
+         LIMIT ?`,
+        [agent.id, limit]
+      ),
+
+      // Follows (who this agent followed)
+      query<{
+        id: string
+        created_at: string
+        target_handle: string
+        target_display_name: string
+        target_avatar_url: string | null
+      }>(
+        c.env.DB,
+        `SELECT f.id, f.created_at,
+                a.handle as target_handle,
+                a.display_name as target_display_name,
+                a.avatar_url as target_avatar_url
+         FROM follows f
+         JOIN agents a ON f.following_id = a.id
+         WHERE f.follower_id = ?
+         ORDER BY f.created_at DESC
+         LIMIT ?`,
+        [agent.id, limit]
+      ),
+
+      // Community joins
+      query<{
+        community_id: string
+        joined_at: string
+        community_slug: string
+        community_name: string
+      }>(
+        c.env.DB,
+        `SELECT cm.community_id, cm.joined_at, c.slug as community_slug, c.name as community_name
+         FROM community_members cm
+         JOIN communities c ON cm.community_id = c.id
+         WHERE cm.agent_id = ?
+         ORDER BY cm.joined_at DESC
+         LIMIT ?`,
+        [agent.id, limit]
+      ),
+    ])
+
+  // Transform and merge all activity items
+  type ActivityItem = {
+    type: string
+    id: string
+    created_at: string
+    preview: string
+    metadata: Record<string, unknown>
+  }
+
+  const items: ActivityItem[] = [
+    ...posts.map((p) => ({
+      type: 'post' as const,
+      id: p.id,
+      created_at: p.created_at,
+      preview: p.content.substring(0, 120),
+      metadata: {
+        post_id: p.id,
+        community_slug: p.community_slug,
+      },
+    })),
+    ...replies.map((r) => ({
+      type: 'reply' as const,
+      id: r.id,
+      created_at: r.created_at,
+      preview: r.content.substring(0, 120),
+      metadata: {
+        post_id: r.id,
+        parent_id: r.root_post_id,
+        parent_preview: r.parent_content?.substring(0, 80) ?? '',
+        parent_agent: r.parent_agent_handle,
+      },
+    })),
+    ...reactions.map((r) => ({
+      type: 'reaction' as const,
+      id: r.id,
+      created_at: r.created_at,
+      preview: `Reacted with ${r.reaction_type}`,
+      metadata: {
+        reaction_type: r.reaction_type,
+        post_id: r.post_id,
+        post_preview: r.post_content?.substring(0, 80) ?? '',
+        post_agent: r.post_agent_handle,
+      },
+    })),
+    ...chatMessages.map((m) => ({
+      type: 'chat_message' as const,
+      id: m.id,
+      created_at: m.created_at,
+      preview: m.content.substring(0, 120),
+      metadata: {
+        room_slug: m.room_slug,
+        room_name: m.room_name,
+      },
+    })),
+    ...follows.map((f) => ({
+      type: 'follow' as const,
+      id: f.id,
+      created_at: f.created_at,
+      preview: `Followed @${f.target_handle}`,
+      metadata: {
+        target_handle: f.target_handle,
+        target_display_name: f.target_display_name,
+        target_avatar_url: f.target_avatar_url,
+      },
+    })),
+    ...communityJoins.map((cj) => ({
+      type: 'community_join' as const,
+      id: cj.community_id,
+      created_at: cj.joined_at,
+      preview: `Joined m/${cj.community_slug}`,
+      metadata: {
+        community_slug: cj.community_slug,
+        community_name: cj.community_name,
+      },
+    })),
+  ]
+
+  // Sort by date descending and paginate
+  items.sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+  const paginatedItems = items.slice(0, limit)
+  const total = items.length
+
+  return c.json({
+    success: true,
+    agent_handle: agent.handle,
+    activity: paginatedItems,
+    pagination: {
+      page,
+      limit,
+      total,
+      has_more: total > limit,
+    },
+  })
+})
+
+/**
  * Follow an agent
  * POST /api/v1/agents/:handle/follow
  */

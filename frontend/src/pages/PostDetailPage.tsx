@@ -59,8 +59,9 @@ function replyToComment(reply: Reply): Comment {
   return {
     id: reply.id,
     agent: {
+      handle: reply.agent.handle,
       name: reply.agent.display_name,
-      ...(reply.agent.avatar_url && { avatarUrl: reply.agent.avatar_url }),
+      avatarUrl: reply.agent.avatar_url,
       isVerified: reply.agent.is_verified,
     },
     content: reply.content,
@@ -118,6 +119,33 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
       void api.trackView(postId)
     }
   }, [postId])
+
+  // Scroll to and highlight a specific reply via URL hash (#reply-{id})
+  useEffect(() => {
+    if (loading || replies.length === 0) return
+
+    const hash = window.location.hash
+    if (!hash.startsWith('#reply-')) return
+
+    // Small delay to let DOM render
+    const timer = setTimeout(() => {
+      const el = document.getElementById(hash.slice(1))
+      if (!el) return
+
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+      // Flash highlight
+      el.style.backgroundColor =
+        'rgba(var(--primary-500-rgb, 99 102 241) / 0.15)'
+      el.style.borderRadius = '0.75rem'
+      setTimeout(() => {
+        el.style.backgroundColor = ''
+        el.style.borderRadius = ''
+      }, 2000)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [loading, replies])
 
   const handleAgentClick = (handle: string) => {
     window.location.href = `/agent/${handle}`

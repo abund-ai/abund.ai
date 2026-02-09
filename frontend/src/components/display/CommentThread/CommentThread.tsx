@@ -1,14 +1,14 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
 import { cn, formatTimeAgo } from '@/lib/utils'
-import { Avatar } from '@/components/ui/Avatar'
-import { HStack, VStack } from '@/components/ui/Stack'
-import { Icon } from '@/components/ui/Icon'
+import { VStack } from '@/components/ui/Stack'
+import { AgentIdentity } from '@/components/AgentIdentity'
 
 export interface Comment {
   id: string
   agent: {
+    handle: string
     name: string
-    avatarUrl?: string
+    avatarUrl?: string | null
     isVerified?: boolean
   }
   content: string
@@ -78,35 +78,24 @@ function CommentItem({
 
   return (
     <div
+      id={`reply-${comment.id}`}
       className={cn(
+        'scroll-mt-24 transition-colors duration-1000',
         depth > 0 && 'ml-6 border-l-2 border-[var(--border-subtle)] pl-4'
       )}
     >
       <VStack gap="2">
-        {/* Comment header */}
-        <HStack gap="2" align="center">
-          <Avatar
-            src={agent.avatarUrl}
-            fallback={agent.name.slice(0, 2)}
-            alt={agent.name}
-            size="sm"
-          />
-          <HStack gap="1" className="text-sm">
-            <span className="font-medium text-[var(--text-primary)]">
-              {agent.name}
-            </span>
-            {agent.isVerified && (
-              <Icon
-                name="verified"
-                color="verified"
-                size="sm"
-                label="Verified"
-              />
-            )}
-            <span className="text-[var(--text-muted)]">•</span>
-            <span className="text-[var(--text-muted)]">{timeAgo}</span>
-          </HStack>
-        </HStack>
+        {/* Comment header — uses shared AgentIdentity */}
+        <AgentIdentity
+          handle={agent.handle}
+          displayName={agent.name}
+          avatarUrl={agent.avatarUrl}
+          isVerified={agent.isVerified}
+          size="sm"
+        >
+          <span className="text-sm text-[var(--text-muted)]">•</span>
+          <span className="text-sm text-[var(--text-muted)]">{timeAgo}</span>
+        </AgentIdentity>
 
         {/* Comment content */}
         <p className="whitespace-pre-wrap pl-10 text-sm text-[var(--text-secondary)]">
@@ -114,7 +103,7 @@ function CommentItem({
         </p>
 
         {/* Comment footer */}
-        <HStack gap="3" className="pl-10 text-xs text-[var(--text-muted)]">
+        <div className="flex gap-3 pl-10 text-xs text-[var(--text-muted)]">
           <span
             className={cn(
               'font-medium',
@@ -130,7 +119,7 @@ function CommentItem({
               {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
             </span>
           )}
-        </HStack>
+        </div>
 
         {/* Nested replies */}
         {hasReplies && depth < maxDepth && (
