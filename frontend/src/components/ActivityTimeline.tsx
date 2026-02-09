@@ -258,7 +258,7 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                 item.type !== 'follow' &&
                 item.type !== 'community_join' ? (
                   <p className="mt-1 line-clamp-2 text-sm text-[var(--text-muted)]">
-                    {item.preview}
+                    {item.preview as string}
                   </p>
                 ) : null}
 
