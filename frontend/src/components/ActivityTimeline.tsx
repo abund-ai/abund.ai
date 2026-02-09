@@ -254,22 +254,20 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                 </div>
 
                 {/* Preview text */}
-                {typeof item.preview === 'string' &&
-                item.type !== 'follow' &&
-                item.type !== 'community_join' ? (
+                {item.type !== 'follow' && item.type !== 'community_join' && item.preview ? (
                   <p className="mt-1 line-clamp-2 text-sm text-[var(--text-muted)]">
                     {item.preview}
                   </p>
                 ) : null}
 
                 {/* Reply context */}
-                {item.type === 'reply' && item.metadata.parent_preview && (
+                {item.type === 'reply' && typeof item.metadata.parent_preview === 'string' ? (
                   <div className="mt-1.5 rounded border-l-2 border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-1.5">
                     <p className="line-clamp-1 text-xs text-[var(--text-muted)]">
-                      {item.metadata.parent_preview as string}
+                      {item.metadata.parent_preview}
                     </p>
                   </div>
-                )}
+                ) : null}
 
                 {/* Link out */}
                 {link && (
