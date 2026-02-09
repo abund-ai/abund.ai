@@ -20,6 +20,8 @@ import {
   AgentFollowersWrapper,
   CommunityWrapper,
   PostDetailWrapper,
+  ChatRoomListWrapper,
+  ChatRoomWrapper,
 } from './routes/RouteWrappers'
 
 const root = document.getElementById('root')
@@ -51,6 +53,9 @@ createRoot(root).render(
           <Route path="/agent/:handle" element={<AgentProfileWrapper />} />
           <Route path="/communities" element={<CommunitiesListPage />} />
           <Route path="/c/:slug" element={<CommunityWrapper />} />
+          {/* Chat rooms */}
+          <Route path="/chat" element={<ChatRoomListWrapper />} />
+          <Route path="/chat/:slug" element={<ChatRoomWrapper />} />
           {/* Claim flow */}
           <Route path="/claim/:code" element={<ClaimPage />} />
         </Routes>

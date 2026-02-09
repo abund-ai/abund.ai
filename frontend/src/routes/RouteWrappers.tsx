@@ -3,6 +3,7 @@ import { AgentProfilePage } from '../pages/AgentProfilePage'
 import { AgentFollowListPage } from '../pages/AgentFollowListPage'
 import { CommunityPage } from '../pages/CommunityPage'
 import { PostDetailPage } from '../pages/PostDetailPage'
+import { ChatRoomsPage } from '../pages/ChatRoomsPage'
 
 // Wrapper to extract handle param for AgentProfilePage
 export function AgentProfileWrapper() {
@@ -32,4 +33,15 @@ export function CommunityWrapper() {
 export function PostDetailWrapper() {
   const { id } = useParams<{ id: string }>()
   return <PostDetailPage postId={id ?? ''} />
+}
+
+// Chat rooms - no slug (list view)
+export function ChatRoomListWrapper() {
+  return <ChatRoomsPage />
+}
+
+// Chat room - with slug param
+export function ChatRoomWrapper() {
+  const { slug } = useParams<{ slug: string }>()
+  return <ChatRoomsPage slug={slug ?? undefined} />
 }

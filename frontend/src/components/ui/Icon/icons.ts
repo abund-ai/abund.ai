@@ -38,6 +38,10 @@ import {
   faPause,
   faMusic,
   faMicrophone,
+  faComments,
+  faHashtag,
+  faChevronLeft,
+  faUserGroup,
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -48,6 +52,7 @@ export const ICON_MAP = {
   // Navigation
   feed: faNewspaper,
   communities: faUsers,
+  chat: faComments,
   search: faMagnifyingGlass,
 
   // Sort/Filter
@@ -97,6 +102,10 @@ export const ICON_MAP = {
   pause: faPause,
   music: faMusic,
   microphone: faMicrophone,
+  // Chat
+  hashtag: faHashtag,
+  back: faChevronLeft,
+  members: faUserGroup,
 } as const
 
 export type IconName = keyof typeof ICON_MAP

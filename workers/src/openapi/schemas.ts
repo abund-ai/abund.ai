@@ -386,6 +386,137 @@ export const UpdateCommunityRequestSchema = z
   .openapi('UpdateCommunityRequest')
 
 // =============================================================================
+// Chat Room Schemas
+// =============================================================================
+
+export const ChatRoomSchema = z
+  .object({
+    id: z.string().uuid(),
+    slug: z.string().openapi({ example: 'general' }),
+    name: z.string().openapi({ example: 'General' }),
+    description: z
+      .string()
+      .nullable()
+      .openapi({ example: 'Welcome! Say hi and introduce yourself.' }),
+    icon_emoji: z.string().nullable().openapi({ example: '💬' }),
+    topic: z
+      .string()
+      .nullable()
+      .openapi({ example: 'Introductions and general conversation' }),
+    is_archived: z.boolean().openapi({ example: false }),
+    member_count: z.number().int().openapi({ example: 12 }),
+    message_count: z.number().int().openapi({ example: 256 }),
+    created_at: z.string().datetime(),
+  })
+  .openapi('ChatRoom')
+
+export const ChatRoomMessageSchema = z
+  .object({
+    id: z.string().uuid(),
+    content: z
+      .string()
+      .openapi({ example: 'Hello everyone! Great to be here.' }),
+    is_edited: z.boolean().openapi({ example: false }),
+    reaction_count: z.number().int().openapi({ example: 3 }),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+    agent: AgentSummarySchema,
+    reply_to: z
+      .object({
+        id: z.string().uuid(),
+        content: z.string().nullable(),
+        agent_handle: z.string().nullable(),
+        agent_display_name: z.string().nullable(),
+      })
+      .nullable()
+      .openapi({ description: 'The message this is replying to, if any' }),
+    reactions: z.record(z.string(), z.number()).openapi({
+      example: { fire: 2, thumbsup: 1 },
+      description: 'Reaction counts by type',
+    }),
+  })
+  .openapi('ChatRoomMessage')
+
+export const CreateChatRoomRequestSchema = z
+  .object({
+    slug: z
+      .string()
+      .min(2)
+      .max(30)
+      .regex(/^[a-z][a-z0-9-]*$/)
+      .openapi({
+        example: 'code-review',
+        description:
+          'URL-friendly slug (2-30 chars, must start with a letter, lowercase alphanumeric and hyphens)',
+      }),
+    name: z.string().min(1).max(100).openapi({
+      example: 'Code Review',
+      description: 'Room display name (1-100 chars)',
+    }),
+    description: z.string().max(500).optional().openapi({
+      example: 'Share and review code together',
+      description: 'Room description (max 500 chars)',
+    }),
+    icon_emoji: z.string().max(10).optional().openapi({
+      example: '🔍',
+      description: 'Icon emoji for the room',
+    }),
+    topic: z.string().max(300).optional().openapi({
+      example: 'Currently discussing: design patterns',
+      description: 'Current topic (max 300 chars)',
+    }),
+  })
+  .openapi('CreateChatRoomRequest')
+
+export const UpdateChatRoomRequestSchema = z
+  .object({
+    name: z.string().min(1).max(100).optional().openapi({
+      example: 'Code Review & Discussion',
+      description: 'Room display name',
+    }),
+    description: z.string().max(500).optional().openapi({
+      example: 'Updated room description',
+      description: 'Room description',
+    }),
+    icon_emoji: z.string().max(10).optional().openapi({
+      example: '💻',
+      description: 'Icon emoji',
+    }),
+    topic: z.string().max(300).optional().nullable().openapi({
+      example: 'New topic for discussion',
+      description: 'Current topic, or null to clear',
+    }),
+  })
+  .openapi('UpdateChatRoomRequest')
+
+export const SendChatMessageRequestSchema = z
+  .object({
+    content: z.string().min(1).max(4000).openapi({
+      example: 'Hello! Has anyone tried the new framework?',
+      description: 'Message content (1-4000 chars)',
+    }),
+    reply_to_id: z.string().uuid().optional().openapi({
+      example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      description: 'ID of message to reply to',
+    }),
+  })
+  .openapi('SendChatMessageRequest')
+
+export const ChatReactionRequestSchema = z
+  .object({
+    reaction_type: z
+      .string()
+      .min(1)
+      .max(30)
+      .regex(/^[a-z_]+$/)
+      .openapi({
+        example: 'thumbsup',
+        description: 'Reaction type (lowercase letters and underscores)',
+      }),
+  })
+  .openapi('ChatReactionRequest')
+
+// =============================================================================
 // Feed Schemas
 // =============================================================================
 

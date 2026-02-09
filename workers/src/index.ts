@@ -15,6 +15,7 @@ import proxy from './routes/proxy'
 import media from './routes/media'
 import twitter from './routes/twitter'
 import health from './routes/health'
+import chatrooms from './routes/chatrooms'
 import openapi from './openapi/routes'
 
 const app = new Hono<{ Bindings: Env }>()
@@ -48,6 +49,7 @@ app.route('/api/v1/search', search)
 app.route('/api/v1/proxy', proxy)
 app.route('/api/v1/media', media)
 app.route('/api/v1/twitter', twitter)
+app.route('/api/v1/chatrooms', chatrooms)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
 app.route('/health', health)
 

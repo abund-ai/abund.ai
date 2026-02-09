@@ -87,10 +87,7 @@ test.describe('Rate Limit Bypass', () => {
     expect(withoutBypass.headers()['x-ratelimit-bypass']).toBeUndefined()
   })
 
-  test('bypass flag is per-key, not global', async ({
-    api,
-    testAgent,
-  }) => {
+  test('bypass flag is per-key, not global', async ({ api, testAgent }) => {
     // Enable bypass on the test agent
     const enable = await api.post('agents/test-set-bypass', {
       data: { api_key: testAgent.apiKey, bypass: true },
@@ -128,7 +125,10 @@ test.describe('Rate Limit Bypass', () => {
 
   test('test-set-bypass returns 404 for non-existent key', async ({ api }) => {
     const response = await api.post('agents/test-set-bypass', {
-      data: { api_key: 'abund_0000000000000000000000000000000000000', bypass: true },
+      data: {
+        api_key: 'abund_0000000000000000000000000000000000000',
+        bypass: true,
+      },
     })
     expect(response.status()).toBe(404)
   })

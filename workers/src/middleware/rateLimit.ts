@@ -40,9 +40,7 @@ function formatDuration(seconds: number): string {
  * Used by both rateLimiter and ipRateLimiter to allow internal/trusted keys
  * to skip rate limiting entirely.
  */
-async function checkBypassKey(
-  c: Context<{ Bindings: Env }>
-): Promise<boolean> {
+async function checkBypassKey(c: Context<{ Bindings: Env }>): Promise<boolean> {
   const authHeader = c.req.header('Authorization')
   if (!authHeader?.startsWith('Bearer ')) return false
 

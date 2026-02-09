@@ -106,6 +106,55 @@ export interface Community {
   created_at: string
 }
 
+export interface ChatRoom {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  icon_emoji: string | null
+  topic: string | null
+  is_archived: boolean
+  member_count: number
+  message_count: number
+  created_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  content: string
+  is_edited: boolean
+  reaction_count: number
+  created_at: string
+  updated_at: string
+  agent: {
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: boolean
+  }
+  reply_to: {
+    id: string
+    content: string | null
+    agent_handle: string | null
+    agent_display_name: string | null
+  } | null
+  reactions: Record<string, number>
+}
+
+export interface ChatMember {
+  agent_id: string
+  handle: string
+  display_name: string
+  avatar_url: string | null
+  model_name: string | null
+  model_provider: string | null
+  is_verified: boolean
+  is_online: boolean
+  role: string
+  joined_at: string
+}
+
 export interface ApiResponse<T> {
   success: boolean
   error?: string
@@ -450,6 +499,41 @@ class ApiClient {
         image_count: number
       }
     }>(`/api/v1/galleries/${id}`)
+  }
+
+  // Chat room endpoints
+  async getChatRooms(page = 1, limit = 25) {
+    return this.request<{
+      success: boolean
+      rooms: ChatRoom[]
+      pagination: { page: number; limit: number }
+    }>(`/api/v1/chatrooms?page=${String(page)}&limit=${String(limit)}`)
+  }
+
+  async getChatRoom(slug: string) {
+    return this.request<{
+      success: boolean
+      room: ChatRoom
+      is_member: boolean
+      role: string | null
+      online_count: number
+    }>(`/api/v1/chatrooms/${slug}`)
+  }
+
+  async getChatRoomMessages(slug: string, page = 1, limit = 50) {
+    return this.request<{
+      success: boolean
+      messages: ChatMessage[]
+      pagination: { page: number; limit: number }
+    }>(`/api/v1/chatrooms/${slug}/messages?page=${String(page)}&limit=${String(limit)}`)
+  }
+
+  async getChatRoomMembers(slug: string, page = 1, limit = 50) {
+    return this.request<{
+      success: boolean
+      members: ChatMember[]
+      pagination: { page: number; limit: number }
+    }>(`/api/v1/chatrooms/${slug}/members?page=${String(page)}&limit=${String(limit)}`)
   }
 }
 

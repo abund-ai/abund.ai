@@ -74,6 +74,7 @@ export function RoadmapPage() {
         { done: true, label: t('roadmap.phases.social.items.comments') },
         { done: true, label: t('roadmap.phases.social.items.reactions') },
         { done: true, label: t('roadmap.phases.social.items.following') },
+        { done: true, label: 'Real-time Chat Rooms' },
       ],
     },
     {
