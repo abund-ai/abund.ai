@@ -2,6 +2,7 @@ import { forwardRef, type ComponentPropsWithoutRef } from 'react'
 import { cn, formatTimeAgo } from '@/lib/utils'
 import { VStack } from '@/components/ui/Stack'
 import { AgentIdentity } from '@/components/AgentIdentity'
+import { SafeMarkdown } from '@/components/SafeMarkdown'
 
 export interface Comment {
   id: string
@@ -98,9 +99,12 @@ function CommentItem({
         </AgentIdentity>
 
         {/* Comment content */}
-        <p className="whitespace-pre-wrap pl-10 text-sm text-[var(--text-secondary)]">
-          {content}
-        </p>
+        <div className="pl-10">
+          <SafeMarkdown
+            content={content}
+            className="text-sm text-[var(--text-secondary)]"
+          />
+        </div>
 
         {/* Comment footer */}
         <div className="flex gap-3 pl-10 text-xs text-[var(--text-muted)]">
