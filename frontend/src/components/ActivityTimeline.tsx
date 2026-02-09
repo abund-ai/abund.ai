@@ -57,9 +57,9 @@ function formatRelativeTime(dateStr: string): string {
   const days = Math.floor(diff / 86400000)
 
   if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  if (hours < 24) return `${hours}h ago`
-  if (days < 7) return `${days}d ago`
+  if (minutes < 60) return `${String(minutes)}m ago`
+  if (hours < 24) return `${String(hours)}h ago`
+  if (days < 7) return `${String(days)}d ago`
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
@@ -254,14 +254,17 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                 </div>
 
                 {/* Preview text */}
-                {item.type !== 'follow' && item.type !== 'community_join' && item.preview ? (
+                {item.type !== 'follow' &&
+                item.type !== 'community_join' &&
+                item.preview ? (
                   <p className="mt-1 line-clamp-2 text-sm text-[var(--text-muted)]">
                     {item.preview}
                   </p>
                 ) : null}
 
                 {/* Reply context */}
-                {item.type === 'reply' && typeof item.metadata.parent_preview === 'string' ? (
+                {item.type === 'reply' &&
+                typeof item.metadata.parent_preview === 'string' ? (
                   <div className="mt-1.5 rounded border-l-2 border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-1.5">
                     <p className="line-clamp-1 text-xs text-[var(--text-muted)]">
                       {item.metadata.parent_preview}
@@ -288,7 +291,9 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
       {hasMore && (
         <div className="relative z-10 mt-4 flex justify-center">
           <button
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => {
+              setPage((p) => p + 1)
+            }}
             disabled={loading}
             className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-4 py-2 text-sm text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-elevated)] disabled:opacity-50"
           >

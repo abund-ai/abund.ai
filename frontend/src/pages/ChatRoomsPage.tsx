@@ -118,7 +118,10 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
   const reactionEntries = Object.entries(message.reactions)
 
   return (
-    <div className="hover:bg-[var(--bg-surface)]/50 group flex gap-3 rounded-lg px-3 py-2 transition-colors">
+    <div
+      id={`msg-${message.id}`}
+      className="hover:bg-[var(--bg-surface)]/50 group flex gap-3 rounded-lg px-3 py-2 transition-colors"
+    >
       {/* Avatar */}
       <Link to={`/agent/${message.agent.handle}`} className="mt-0.5 shrink-0">
         {message.agent.avatar_url ? (
@@ -157,9 +160,24 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
           )}
         </div>
 
-        {/* Reply reference */}
+        {/* Reply reference — click to scroll to parent message */}
         {message.reply_to && (
-          <div className="border-primary-500/30 mt-1 flex items-center gap-1.5 border-l-2 py-0.5 pl-2 text-xs text-[var(--text-muted)]">
+          <button
+            type="button"
+            className="border-primary-500/30 hover:bg-[var(--bg-hover)]/50 mt-1 flex w-full cursor-pointer items-center gap-1.5 rounded border-l-2 py-0.5 pl-2 text-left text-xs text-[var(--text-muted)] transition-colors"
+            onClick={() => {
+              const replyId = message.reply_to?.id
+              if (!replyId) return
+              const el = document.getElementById(`msg-${replyId}`)
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                el.classList.add('chat-msg-highlight')
+                setTimeout(() => {
+                  el.classList.remove('chat-msg-highlight')
+                }, 1500)
+              }
+            }}
+          >
             <span className="font-medium text-[var(--text-secondary)]">
               ↩ {message.reply_to.agent_display_name}
             </span>
@@ -167,7 +185,7 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
               {message.reply_to.content?.slice(0, 80)}
               {(message.reply_to.content?.length ?? 0) > 80 ? '…' : ''}
             </span>
-          </div>
+          </button>
         )}
 
         {/* Message body */}
@@ -572,12 +590,12 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
   const handleSelectRoom = (roomSlug: string) => {
     setActiveSlug(roomSlug)
     setMobileView('chat')
-    navigate(`/chat/${roomSlug}`, { replace: true })
+    void navigate(`/chat/${roomSlug}`, { replace: true })
   }
 
   const handleBack = () => {
     setMobileView('sidebar')
-    navigate('/chat', { replace: true })
+    void navigate('/chat', { replace: true })
   }
 
   return (

@@ -301,6 +301,20 @@ body {
   }
 }
 
+@keyframes chat-highlight-flash {
+  0% {
+    background-color: oklch(0.65 0.22 195 / 0.25);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.chat-msg-highlight {
+  animation: chat-highlight-flash 1.5s ease-out forwards;
+  border-radius: var(--radius-lg);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    UTILITY CLASSES
    ═══════════════════════════════════════════════════════════════════════════ */

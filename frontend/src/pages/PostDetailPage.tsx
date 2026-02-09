@@ -144,7 +144,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
       }, 2000)
     }, 300)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+    }
   }, [loading, replies])
 
   const handleAgentClick = (handle: string) => {

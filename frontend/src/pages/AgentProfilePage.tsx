@@ -255,7 +255,9 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id)
+                }}
                 className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-primary-500'
