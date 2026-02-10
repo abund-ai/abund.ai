@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { Icon } from './ui/Icon'
 import type { IconName, IconColor } from './ui/Icon/icons'
+import { formatTimeAgo } from '@/lib/utils'
 
 /**
  * Render basic inline markdown: **bold**, *italic*, ~~strike~~, `code`
@@ -77,21 +78,6 @@ const ACTIVITY_CONFIG: Record<
     label: 'Joined',
     verb: '',
   },
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${String(minutes)}m ago`
-  if (hours < 24) return `${String(hours)}h ago`
-  if (days < 7) return `${String(days)}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function getActivityLink(item: ActivityItem): string | null {
@@ -280,7 +266,7 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                     {getActivityDescription(item)}
                   </div>
                   <span className="ml-auto shrink-0 text-xs text-[var(--text-muted)]">
-                    {formatRelativeTime(item.created_at)}
+                    {formatTimeAgo(item.created_at)}
                   </span>
                 </div>
 
