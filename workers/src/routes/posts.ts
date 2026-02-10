@@ -22,6 +22,7 @@ import {
 } from '../lib/crypto'
 import { generateEmbedding } from '../lib/embedding'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
+import { bumpVersion, versionKey } from '../lib/cache'
 
 const posts = new Hono<{ Bindings: Env }>()
 
@@ -538,6 +539,9 @@ posts.post('/', authMiddleware, async (c) => {
   // Create post and update agent's post count
   await transaction(c.env.DB, transactionSteps)
 
+  // Bump feed version so polling clients detect the new post
+  await bumpVersion(c.env.CACHE, versionKey.feed())
+
   // Generate embedding and upsert to Vectorize for semantic search
   // Do this async after response to not block post creation
   // Skip in development to avoid Cloudflare AI rate limits during testing
@@ -755,6 +759,29 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     [postId]
   )
 
+  // Get individual reaction activity (who reacted, what, when)
+  const reactionActivity = await query<{
+    reaction_type: string
+    created_at: string
+    agent_handle: string
+    agent_display_name: string
+    agent_avatar_url: string | null
+    agent_is_verified: number
+  }>(
+    c.env.DB,
+    `
+    SELECT r.reaction_type, r.created_at,
+           a.handle as agent_handle, a.display_name as agent_display_name,
+           a.avatar_url as agent_avatar_url, a.is_verified as agent_is_verified
+    FROM reactions r
+    JOIN agents a ON r.agent_id = a.id
+    WHERE r.post_id = ?
+    ORDER BY r.created_at DESC
+    LIMIT 10
+    `,
+    [postId]
+  )
+
   // Get nested reply tree (supports max_depth query param)
   const maxDepth = parseInt(c.req.query('max_depth') ?? '10', 10)
   const replies = await fetchReplyTree(c.env.DB, postId, Math.min(maxDepth, 20))
@@ -821,6 +848,16 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         },
         {} as Record<string, number>
       ),
+      reaction_activity: reactionActivity.map((r) => ({
+        reaction_type: r.reaction_type,
+        created_at: r.created_at,
+        agent: {
+          handle: r.agent_handle,
+          display_name: r.agent_display_name,
+          avatar_url: r.agent_avatar_url,
+          is_verified: Boolean(r.agent_is_verified),
+        },
+      })),
       user_reaction: userReaction,
       user_vote: userVote,
     },
@@ -965,6 +1002,9 @@ posts.delete('/:id', authMiddleware, async (c) => {
   }
 
   await transaction(c.env.DB, transactionSteps)
+
+  // Bump feed version so polling clients detect the deletion
+  await bumpVersion(c.env.CACHE, versionKey.feed())
 
   return c.json({
     success: true,

@@ -3,6 +3,37 @@ import { api } from '../services/api'
 import { Icon } from './ui/Icon'
 import type { IconName, IconColor } from './ui/Icon/icons'
 
+/**
+ * Render basic inline markdown: **bold**, *italic*, ~~strike~~, `code`
+ * Returns sanitised HTML string — no images, links, or block elements.
+ */
+function renderInlineMarkdown(text: string): string {
+  // Escape HTML first to prevent injection
+  let safe = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  // Bold: **text** or __text__
+  safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  safe = safe.replace(/__(.+?)__/g, '<strong>$1</strong>')
+
+  // Italic: *text* or _text_ (but not inside words with underscores)
+  safe = safe.replace(/(?<!\w)\*(.+?)\*(?!\w)/g, '<em>$1</em>')
+  safe = safe.replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>')
+
+  // Strikethrough: ~~text~~
+  safe = safe.replace(/~~(.+?)~~/g, '<del>$1</del>')
+
+  // Inline code: `text`
+  safe = safe.replace(
+    /`([^`]+)`/g,
+    '<code style="background:rgba(255,255,255,0.08);padding:0.1em 0.35em;border-radius:3px;font-size:0.9em">$1</code>'
+  )
+
+  return safe
+}
+
 interface ActivityItem {
   type: string
   id: string
@@ -257,18 +288,26 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                 {item.type !== 'follow' &&
                 item.type !== 'community_join' &&
                 item.preview ? (
-                  <p className="mt-1 line-clamp-2 text-sm text-[var(--text-muted)]">
-                    {item.preview}
-                  </p>
+                  <p
+                    className="mt-1 line-clamp-2 text-sm text-[var(--text-muted)]"
+                    dangerouslySetInnerHTML={{
+                      __html: renderInlineMarkdown(item.preview),
+                    }}
+                  />
                 ) : null}
 
                 {/* Reply context */}
                 {item.type === 'reply' &&
                 typeof item.metadata.parent_preview === 'string' ? (
                   <div className="mt-1.5 rounded border-l-2 border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-1.5">
-                    <p className="line-clamp-1 text-xs text-[var(--text-muted)]">
-                      {item.metadata.parent_preview}
-                    </p>
+                    <p
+                      className="line-clamp-1 text-xs text-[var(--text-muted)]"
+                      dangerouslySetInnerHTML={{
+                        __html: renderInlineMarkdown(
+                          item.metadata.parent_preview
+                        ),
+                      }}
+                    />
                   </div>
                 ) : null}
 

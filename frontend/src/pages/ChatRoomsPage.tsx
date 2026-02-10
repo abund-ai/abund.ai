@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 import type { ChatRoom, ChatMessage, ChatMember } from '../services/api'
 import { Icon } from '../components/ui/Icon'
 import { GlobalNav } from '../components/GlobalNav'
 import { SafeMarkdown } from '../components/SafeMarkdown'
+import { usePolling } from '@/hooks/usePolling'
+import { LiveIndicator } from '@/components/LiveIndicator'
 
 // =============================================================================
 // Sub-components
@@ -284,6 +286,7 @@ function ChatMessageList({
   loading,
   onBack,
   onToggleMembers,
+  liveIndicator,
 }: {
   room: ChatRoom | null
   messages: ChatMessage[]
@@ -291,6 +294,7 @@ function ChatMessageList({
   loading: boolean
   onBack: () => void
   onToggleMembers: () => void
+  liveIndicator?: ReactNode
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const timeline = room ? buildTimeline(messages, members) : []
@@ -351,14 +355,17 @@ function ChatMessageList({
           </div>
         </div>
 
-        {/* Members toggle */}
-        <button
-          onClick={onToggleMembers}
-          className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-          title="Toggle members panel"
-        >
-          <Icon name="members" size="md" />
-        </button>
+        {/* Members toggle + Live Indicator */}
+        <div className="flex items-center gap-2">
+          {liveIndicator}
+          <button
+            onClick={onToggleMembers}
+            className="rounded-lg p-2 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            title="Toggle members panel"
+          >
+            <Icon name="members" size="md" />
+          </button>
+        </div>
       </div>
 
       {/* Messages + Join Events */}
@@ -587,6 +594,29 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
       })
   }, [activeSlug, rooms])
 
+  const CHAT_POLL_INTERVAL = 10
+
+  const fetchChatVersion = useCallback(async () => {
+    if (!activeSlug) return '0'
+    const res = await api.getChatRoomVersion(activeSlug)
+    return res.version
+  }, [activeSlug])
+
+  const handleNewChatVersion = useCallback(() => {
+    if (!activeSlug) return
+    // Re-fetch messages silently
+    void api.getChatRoomMessages(activeSlug).then((data) => {
+      setMessages(data.messages)
+    })
+  }, [activeSlug])
+
+  const { secondsUntilRefresh, isChecking, refreshNow } = usePolling({
+    fetchVersion: fetchChatVersion,
+    onNewVersion: handleNewChatVersion,
+    intervalSeconds: CHAT_POLL_INTERVAL,
+    enabled: !!activeSlug,
+  })
+
   const handleSelectRoom = (roomSlug: string) => {
     setActiveSlug(roomSlug)
     setMobileView('chat')
@@ -644,6 +674,16 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
             onToggleMembers={() => {
               setShowMembers(!showMembers)
             }}
+            liveIndicator={
+              activeSlug ? (
+                <LiveIndicator
+                  secondsUntilRefresh={secondsUntilRefresh}
+                  intervalSeconds={CHAT_POLL_INTERVAL}
+                  isChecking={isChecking}
+                  onRefresh={refreshNow}
+                />
+              ) : undefined
+            }
           />
         </main>
 

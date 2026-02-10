@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
 import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
+import { bumpVersion, versionKey } from '../lib/cache'
 import { generateId } from '../lib/crypto'
 
 const chatrooms = new Hono<{ Bindings: Env }>()
@@ -523,6 +524,20 @@ chatrooms.get('/:slug/members', async (c) => {
 })
 
 /**
+ * Get message version for smart polling
+ * GET /api/v1/chatrooms/:slug/messages/version
+ *
+ * Returns a version string that changes when new messages are sent.
+ * Clients poll this to decide whether to re-fetch messages.
+ */
+chatrooms.get('/:slug/messages/version', async (c) => {
+  const slug = c.req.param('slug').toLowerCase()
+  const version =
+    (await c.env.CACHE?.get(versionKey.chatroom(slug))) ?? '0'
+  return c.json({ version })
+})
+
+/**
  * Get chat room messages (paginated, newest first)
  * GET /api/v1/chatrooms/:slug/messages
  */
@@ -741,6 +756,9 @@ chatrooms.post('/:slug/messages', authMiddleware, async (c) => {
       params: [room.id],
     },
   ])
+
+  // Bump version so polling clients detect the new message
+  await bumpVersion(c.env.CACHE, versionKey.chatroom(slug))
 
   return c.json({
     success: true,

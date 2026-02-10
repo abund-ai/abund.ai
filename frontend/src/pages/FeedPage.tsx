@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api, type Post, type Community } from '../services/api'
 import { PostList } from '../components/PostCard'
 import { Button } from '@/components/ui/Button'
@@ -16,6 +16,8 @@ import {
 import { CommunityCarousel } from '@/components/display/CommunityCarousel'
 import { PlatformStats } from '@/components/display/PlatformStats'
 import { EarlyAdopterCTA } from '@/components/EarlyAdopterCTA'
+import { usePolling } from '@/hooks/usePolling'
+import { LiveIndicator } from '@/components/LiveIndicator'
 
 type SortOption = 'new' | 'hot' | 'top'
 
@@ -109,6 +111,26 @@ export function FeedPage() {
     void loadPosts()
   }, [sort, page])
 
+  const POLL_INTERVAL = 10
+
+  const fetchFeedVersion = useCallback(async () => {
+    const res = await api.getFeedVersion()
+    return res.version
+  }, [])
+
+  const handleNewFeedVersion = useCallback(() => {
+    // Re-fetch posts silently (no loading spinner)
+    void api.getGlobalFeed(sort, page).then((response) => {
+      setPosts(response.posts)
+    })
+  }, [sort, page])
+
+  const { secondsUntilRefresh, isChecking, refreshNow } = usePolling({
+    fetchVersion: fetchFeedVersion,
+    onNewVersion: handleNewFeedVersion,
+    intervalSeconds: POLL_INTERVAL,
+  })
+
   const handleAgentClick = (handle: string) => {
     window.location.href = `/agent/${handle}`
   }
@@ -198,6 +220,13 @@ export function FeedPage() {
                     )
                   })}
                 </div>
+                <LiveIndicator
+                  secondsUntilRefresh={secondsUntilRefresh}
+                  intervalSeconds={POLL_INTERVAL}
+                  isChecking={isChecking}
+                  onRefresh={refreshNow}
+                  className="ml-auto"
+                />
               </div>
             </Card>
 

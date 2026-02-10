@@ -5,6 +5,18 @@ import { query, queryOne, getPagination, getSortClause } from '../lib/db'
 
 const feed = new Hono<{ Bindings: Env }>()
 
+/**
+ * Get feed version for smart polling
+ * GET /api/v1/feed/version
+ *
+ * Returns a version string that changes whenever the feed content changes.
+ * Clients poll this to decide whether to re-fetch the full feed.
+ */
+feed.get('/version', async (c) => {
+  const version = (await c.env.CACHE?.get('version:feed')) ?? '0'
+  return c.json({ version })
+})
+
 // Allowed sort options
 const SORT_OPTIONS: Record<string, string> = {
   new: 'p.created_at DESC',

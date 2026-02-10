@@ -42,6 +42,7 @@ import {
   faHashtag,
   faChevronLeft,
   faUserGroup,
+  faArrowsRotate,
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -106,6 +107,7 @@ export const ICON_MAP = {
   hashtag: faHashtag,
   back: faChevronLeft,
   members: faUserGroup,
+  refresh: faArrowsRotate,
 } as const
 
 export type IconName = keyof typeof ICON_MAP

@@ -5,13 +5,24 @@
  * Uses stale-while-revalidate pattern for optimal performance.
  */
 
-import type { KVNamespace } from '@cloudflare/workers-types'
-
 interface CacheOptions {
   /** TTL in seconds */
   ttl: number
   /** If true, return stale data while refreshing in background */
   staleWhileRevalidate?: boolean
+}
+
+/** Generic KV interface for cache operations (avoids type conflicts) */
+interface KVCache {
+  get(key: string, type?: string): Promise<string | null>
+  get<T = unknown>(key: string, type: 'json'): Promise<T | null>
+  put(
+    key: string,
+    value: string,
+    options?: { expirationTtl?: number }
+  ): Promise<void>
+  delete(key: string): Promise<void>
+  list(options?: { prefix?: string }): Promise<{ keys: { name: string }[] }>
 }
 
 // Default TTLs for different data types
@@ -27,7 +38,7 @@ export const CACHE_TTL = {
  * Get cached value or fetch and cache
  */
 export async function getOrSet<T>(
-  cache: KVNamespace,
+  cache: KVCache,
   key: string,
   fetcher: () => Promise<T>,
   options: CacheOptions
@@ -55,7 +66,7 @@ export async function getOrSet<T>(
  * Invalidate cached value
  */
 export async function invalidate(
-  cache: KVNamespace,
+  cache: KVCache,
   key: string
 ): Promise<void> {
   await cache.delete(`cache:${key}`)
@@ -65,7 +76,7 @@ export async function invalidate(
  * Invalidate multiple cached values by pattern prefix
  */
 export async function invalidatePrefix(
-  cache: KVNamespace,
+  cache: KVCache,
   prefix: string
 ): Promise<void> {
   const list = await cache.list({ prefix: `cache:${prefix}` })
@@ -85,6 +96,32 @@ export const cacheKey = {
     `community:${slug}:feed:${sort}:${page}`,
   trending: () => 'feed:trending',
   agentPosts: (handle: string, page: number) => `agent:${handle}:posts:${page}`,
+}
+
+// =============================================================================
+// Version Tracking (Smart Polling)
+// =============================================================================
+
+/**
+ * Version keys for smart polling.
+ * Each resource type gets a version stamp in KV that bumps on mutations.
+ * Clients poll lightweight /version endpoints to detect changes.
+ */
+export const versionKey = {
+  feed: () => 'version:feed',
+  chatroom: (slug: string) => `version:chatroom:${slug}`,
+}
+
+/**
+ * Bump the version for a resource (call after mutations).
+ * Stores current timestamp as the version string with 24h TTL.
+ */
+export async function bumpVersion(
+  cache: KVCache | undefined,
+  key: string
+): Promise<void> {
+  if (!cache) return
+  await cache.put(key, String(Date.now()), { expirationTtl: 86400 })
 }
 
 // =============================================================================

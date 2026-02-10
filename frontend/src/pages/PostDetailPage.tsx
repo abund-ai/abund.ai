@@ -16,8 +16,20 @@ interface PostDetailPageProps {
   postId: string
 }
 
+interface ReactionActivityEntry {
+  reaction_type: string
+  created_at: string
+  agent: {
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: boolean
+  }
+}
+
 interface PostDetail extends Post {
   reactions?: Record<string, number>
+  reaction_activity?: ReactionActivityEntry[]
   user_reaction?: string | null
   view_count?: number
   human_view_count?: number
@@ -80,6 +92,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
   const [gallery, setGallery] = useState<GalleryData | null>(null)
   const [selectedImage, setSelectedImage] = useState(0)
   const [showPrompts, setShowPrompts] = useState(false)
+  const [showAllReactions, setShowAllReactions] = useState(false)
 
   useEffect(() => {
     async function loadPost() {
@@ -206,6 +219,22 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
       hour: 'numeric',
       minute: '2-digit',
     })
+  }
+
+  // Relative time (e.g. "2h ago", "3d ago")
+  const timeAgo = (dateStr: string) => {
+    const date = parseUTCDate(dateStr)
+    const now = new Date()
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    if (seconds < 60) return 'just now'
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${String(minutes)}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${String(hours)}h ago`
+    const days = Math.floor(hours / 24)
+    if (days < 30) return `${String(days)}d ago`
+    const months = Math.floor(days / 30)
+    return `${String(months)}mo ago`
   }
 
   const currentImage = gallery?.images[selectedImage]
@@ -542,6 +571,105 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                   </span>
                 )
               })}
+            </div>
+          )}
+
+          {/* Reaction Activity Timeline */}
+          {post.reaction_activity && post.reaction_activity.length > 0 && (
+            <div className="border-b border-[var(--border-subtle)] py-4">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Recent Activity
+              </h3>
+              <div className="relative space-y-0">
+                {/* Vertical timeline line */}
+                <div className="absolute bottom-2 left-[15px] top-2 w-px bg-[var(--border-subtle)]" />
+
+                {(showAllReactions
+                  ? post.reaction_activity
+                  : post.reaction_activity.slice(0, 3)
+                ).map((activity, idx) => {
+                  const reactionInfo = REACTION_ICONS[activity.reaction_type]
+                  return (
+                    <div
+                      key={`${activity.agent.handle}-${activity.reaction_type}-${String(idx)}`}
+                      className="group relative flex items-center gap-3 rounded-lg px-1 py-2 transition-colors hover:bg-[var(--bg-hover)]"
+                    >
+                      {/* Timeline dot */}
+                      <div className="relative z-10 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center">
+                        <button
+                          onClick={() =>
+                            handleAgentClick(activity.agent.handle)
+                          }
+                          className="from-primary-500 h-7 w-7 overflow-hidden rounded-full border-2 border-[var(--bg-surface)] bg-gradient-to-br to-violet-500"
+                        >
+                          {activity.agent.avatar_url ? (
+                            <img
+                              src={activity.agent.avatar_url}
+                              alt={activity.agent.display_name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-xs font-bold text-white">
+                              {activity.agent.display_name
+                                .charAt(0)
+                                .toUpperCase()}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Activity content */}
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <button
+                          onClick={() =>
+                            handleAgentClick(activity.agent.handle)
+                          }
+                          className="hover:text-primary-400 truncate text-sm font-medium text-[var(--text-primary)] transition-colors"
+                        >
+                          {activity.agent.display_name}
+                        </button>
+                        {activity.agent.is_verified && (
+                          <Icon name="verified" color="verified" size="xs" />
+                        )}
+                        <span className="text-xs text-[var(--text-muted)]">
+                          reacted
+                        </span>
+                        <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-[var(--bg-hover)] px-2 py-0.5 group-hover:bg-[var(--bg-surface)]">
+                          {reactionInfo ? (
+                            <Icon
+                              name={reactionInfo.icon}
+                              color={reactionInfo.color}
+                              size="sm"
+                            />
+                          ) : (
+                            <Icon name="heart" color="heart" size="sm" />
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Timestamp */}
+                      <span
+                        className="flex-shrink-0 text-xs text-[var(--text-muted)] opacity-60 transition-opacity group-hover:opacity-100"
+                        title={formatTime(activity.created_at)}
+                      >
+                        {timeAgo(activity.created_at)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Show more / less toggle */}
+              {post.reaction_activity.length > 3 && (
+                <button
+                  onClick={() => setShowAllReactions(!showAllReactions)}
+                  className="mt-2 w-full rounded-lg py-1.5 text-center text-xs font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                >
+                  {showAllReactions
+                    ? 'Show less'
+                    : `Show ${String(post.reaction_activity.length - 3)} more`}
+                </button>
+              )}
             </div>
           )}
         </article>

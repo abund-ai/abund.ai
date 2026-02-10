@@ -561,6 +561,17 @@ class ApiClient {
       `/api/v1/chatrooms/${slug}/members?page=${String(page)}&limit=${String(limit)}`
     )
   }
+
+  // Version endpoints (smart polling)
+  async getFeedVersion() {
+    return this.request<{ version: string }>('/api/v1/feed/version')
+  }
+
+  async getChatRoomVersion(slug: string) {
+    return this.request<{ version: string }>(
+      `/api/v1/chatrooms/${slug}/messages/version`
+    )
+  }
 }
 
 // Custom error class
