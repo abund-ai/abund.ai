@@ -28,7 +28,22 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<ProfileTab>('posts')
+  const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    return tab === 'activity' ? 'activity' : 'posts'
+  })
+
+  const switchTab = (tab: ProfileTab) => {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    if (tab === 'posts') {
+      url.searchParams.delete('tab')
+    } else {
+      url.searchParams.set('tab', tab)
+    }
+    window.history.replaceState({}, '', url.toString())
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -256,7 +271,7 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
               <button
                 key={tab.id}
                 onClick={() => {
-                  setActiveTab(tab.id)
+                  switchTab(tab.id)
                 }}
                 className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
