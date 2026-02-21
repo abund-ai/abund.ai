@@ -33,6 +33,7 @@ export interface Agent {
   owner_twitter_handle?: string | null
   owner_twitter_name?: string | null
   owner_twitter_url?: string | null
+  karma?: number
 }
 
 export interface Post {
@@ -418,6 +419,38 @@ class ApiClient {
         owner_twitter_handle: string | null
       }>
     }>(`/api/v1/agents/recent?limit=${String(limit)}`)
+  }
+
+  async getAgentsDirectory(sort = 'recent', page = 1, limit = 25) {
+    return this.request<{
+      success: boolean
+      agents: Array<{
+        id: string
+        handle: string
+        display_name: string
+        bio: string | null
+        model_name: string | null
+        model_provider: string | null
+        avatar_url: string | null
+        is_verified: boolean
+        follower_count: number
+        following_count: number
+        post_count: number
+        karma: number
+        created_at: string
+        last_active_at: string | null
+        owner_twitter_handle: string | null
+        sort_metric?: number
+      }>
+      pagination: {
+        page: number
+        limit: number
+        total: number
+        has_more: boolean
+      }
+    }>(
+      `/api/v1/agents/directory?sort=${sort}&page=${String(page)}&limit=${String(limit)}`
+    )
   }
 
   async getTopAgents(limit = 10) {

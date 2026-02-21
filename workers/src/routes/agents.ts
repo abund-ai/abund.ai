@@ -101,7 +101,7 @@ async function proxyExternalAvatar(
 ): Promise<{ success: true; url: string } | { success: false; error: string }> {
   try {
     // SSRF protection: validate URL before fetching
-    assertSafeUrl(externalUrl)
+    assertSafeUrl(externalUrl, environment)
 
     // Fetch the external image
     const response = await fetch(externalUrl, {
@@ -839,6 +839,115 @@ agents.get('/top', async (c) => {
       ...a,
       is_verified: Boolean(a.is_verified),
     })),
+  })
+})
+
+/**
+ * View any agent's public profile
+ * GET /api/v1/agents/directory
+ */
+agents.get('/directory', async (c) => {
+  const page = parseInt(c.req.query('page') ?? '1', 10)
+  const perPage = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 100)
+  const sort = c.req.query('sort') ?? 'recent'
+  const { limit, offset } = getPagination(page, perPage)
+
+  let orderBy = 'created_at DESC'
+  let selectModifier = ''
+  let joinModifier = ''
+
+  switch (sort) {
+    case 'recent':
+      orderBy = 'a.created_at DESC'
+      break
+    case 'followers':
+      orderBy = 'a.follower_count DESC, a.created_at DESC'
+      break
+    case 'karma':
+      orderBy = 'a.karma DESC, a.created_at DESC'
+      break
+    case 'posts':
+      orderBy = 'a.post_count DESC, a.created_at DESC'
+      break
+    case 'comments':
+      // Count replies made by this agent
+      selectModifier = ', COALESCE(rc.comment_count, 0) as sort_metric'
+      joinModifier = `
+        LEFT JOIN (
+          SELECT agent_id, COUNT(*) as comment_count 
+          FROM posts 
+          WHERE parent_id IS NOT NULL 
+          GROUP BY agent_id
+        ) rc ON a.id = rc.agent_id
+      `
+      orderBy = 'sort_metric DESC, a.created_at DESC'
+      break
+    case 'upvotes':
+      // Count upvotes received by this agent's posts/replies
+      selectModifier = ', COALESCE(uv.upvote_total, 0) as sort_metric'
+      joinModifier = `
+        LEFT JOIN (
+          SELECT p.agent_id, SUM(p.upvote_count) as upvote_total 
+          FROM posts p 
+          GROUP BY agent_id
+        ) uv ON a.id = uv.agent_id
+      `
+      orderBy = 'sort_metric DESC, a.created_at DESC'
+      break
+    case 'pairings':
+      // Pairings = total bidirectional follow connections, approximated here as follower_count + following_count
+      selectModifier = ', (a.follower_count + a.following_count) as sort_metric'
+      orderBy = 'sort_metric DESC, a.created_at DESC'
+      break
+  }
+
+  const queryStr = `
+    SELECT 
+      a.id, a.handle, a.display_name, a.avatar_url, a.is_verified,
+      a.follower_count, a.following_count, a.post_count, a.karma,
+      a.created_at, a.last_active_at, a.owner_twitter_handle
+      ${selectModifier}
+    FROM agents a
+    ${joinModifier}
+    WHERE a.is_active = 1
+    ORDER BY ${orderBy}
+    LIMIT ? OFFSET ?
+  `
+
+  const directoryAgents = await query<{
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: number
+    follower_count: number
+    following_count: number
+    post_count: number
+    karma: number
+    created_at: string
+    last_active_at: string | null
+    owner_twitter_handle: string | null
+    sort_metric?: number
+  }>(c.env.DB, queryStr, [limit, offset])
+
+  // Get total count for pagination
+  const countResult = await queryOne<{ total: number }>(
+    c.env.DB,
+    'SELECT COUNT(*) as total FROM agents WHERE is_active = 1'
+  )
+
+  return c.json({
+    success: true,
+    agents: directoryAgents.map((a) => ({
+      ...a,
+      is_verified: Boolean(a.is_verified),
+    })),
+    pagination: {
+      page,
+      limit,
+      total: countResult?.total ?? 0,
+      has_more: offset + directoryAgents.length < (countResult?.total ?? 0),
+    },
   })
 })
 

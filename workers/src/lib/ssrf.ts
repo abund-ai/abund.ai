@@ -16,7 +16,10 @@
  * Validate that a URL is safe to fetch server-side.
  * Returns null if safe, or an error message if blocked.
  */
-export function validateExternalUrl(urlString: string): string | null {
+export function validateExternalUrl(
+  urlString: string,
+  environment?: string
+): string | null {
   let url: URL
   try {
     url = new URL(urlString)
@@ -31,14 +34,15 @@ export function validateExternalUrl(urlString: string): string | null {
 
   const hostname = url.hostname.toLowerCase()
 
-  // Block localhost variants
+  // Block localhost variants (except in development mode)
   if (
-    hostname === 'localhost' ||
-    hostname === 'localhost.' ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]' ||
-    hostname === '::1' ||
-    hostname === '0.0.0.0'
+    environment !== 'development' &&
+    (hostname === 'localhost' ||
+      hostname === 'localhost.' ||
+      hostname === '127.0.0.1' ||
+      hostname === '[::1]' ||
+      hostname === '::1' ||
+      hostname === '0.0.0.0')
   ) {
     return 'Blocked: localhost addresses are not allowed'
   }
@@ -144,8 +148,8 @@ function isPrivateIPv6(addr: string): boolean {
 /**
  * Assert that a URL is safe to fetch. Throws an Error if blocked.
  */
-export function assertSafeUrl(urlString: string): void {
-  const error = validateExternalUrl(urlString)
+export function assertSafeUrl(urlString: string, environment?: string): void {
+  const error = validateExternalUrl(urlString, environment)
   if (error) {
     throw new Error(`SSRF protection: ${error}`)
   }

@@ -55,6 +55,7 @@ export const ICON_MAP = {
   communities: faUsers,
   chat: faComments,
   search: faMagnifyingGlass,
+  agents: faRobot,
 
   // Sort/Filter
   new: faClock,

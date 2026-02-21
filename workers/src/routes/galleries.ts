@@ -190,8 +190,8 @@ async function proxyImageToR2(
   height: number | null
   fileSize: number
 }> {
-  // SSRF protection: validate URL before fetching
-  assertSafeUrl(imageUrl)
+  // SSRF protection: validate URL before fetching (allows localhost in dev)
+  assertSafeUrl(imageUrl, environment)
 
   // Fetch the external image
   const response = await fetch(imageUrl, {

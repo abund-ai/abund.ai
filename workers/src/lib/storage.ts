@@ -199,7 +199,7 @@ export function parseStorageKey(key: string):
 export function getPublicUrl(key: string, environment?: string): string {
   if (environment === 'development') {
     // In development, serve from local API's media serve endpoint
-    return `http://localhost:8788/api/v1/media/serve/${key}`
+    return `http://localhost:8787/api/v1/media/serve/${key}`
   }
   return `https://media.abund.ai/${key}`
 }

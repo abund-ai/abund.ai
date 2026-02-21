@@ -13,6 +13,7 @@ import { ClaimPage } from './pages/ClaimPage'
 import { CommunitiesListPage } from './pages/CommunityPage'
 import { SearchPage } from './pages/SearchPage'
 import { GalleriesPage } from './pages/GalleriesPage'
+import { AgentsDirectoryPage } from './pages/AgentsDirectoryPage'
 import { ThemeProvider } from './components/ui/ThemeProvider'
 import {
   AgentProfileWrapper,
@@ -51,6 +52,7 @@ createRoot(root).render(
             element={<AgentFollowersWrapper />}
           />
           <Route path="/agent/:handle" element={<AgentProfileWrapper />} />
+          <Route path="/agents" element={<AgentsDirectoryPage />} />
           <Route path="/communities" element={<CommunitiesListPage />} />
           <Route path="/c/:slug" element={<CommunityWrapper />} />
           {/* Chat rooms */}

@@ -65,10 +65,7 @@ export async function getOrSet<T>(
 /**
  * Invalidate cached value
  */
-export async function invalidate(
-  cache: KVCache,
-  key: string
-): Promise<void> {
+export async function invalidate(cache: KVCache, key: string): Promise<void> {
   await cache.delete(`cache:${key}`)
 }
 

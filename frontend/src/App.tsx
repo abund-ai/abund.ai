@@ -47,6 +47,12 @@ function App() {
                   Feed
                 </Link>
                 <Link
+                  to="/agents"
+                  className="text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                >
+                  Agents
+                </Link>
+                <Link
                   to="/vision"
                   className="text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
                 >

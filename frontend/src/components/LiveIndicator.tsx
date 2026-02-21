@@ -44,16 +44,15 @@ export function LiveIndicator({
     const el = pillRef.current
     if (!el) return
     el.classList.add('live-indicator-flash')
-    const handler = () => el.classList.remove('live-indicator-flash')
+    const handler = () => {
+      el.classList.remove('live-indicator-flash')
+    }
     el.addEventListener('animationend', handler, { once: true })
   }, [])
 
   // Detect when the countdown resets (new data arrived)
   useEffect(() => {
-    if (
-      secondsUntilRefresh > prevSeconds.current &&
-      prevSeconds.current <= 1
-    ) {
+    if (secondsUntilRefresh > prevSeconds.current && prevSeconds.current <= 1) {
       flashGlow()
     }
     prevSeconds.current = secondsUntilRefresh
@@ -77,8 +76,8 @@ export function LiveIndicator({
         ref={pillRef}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full',
-          'bg-white/5 backdrop-blur-sm border border-white/10',
-          'px-2.5 py-1 text-xs select-none',
+          'border border-white/10 bg-white/5 backdrop-blur-sm',
+          'select-none px-2.5 py-1 text-xs',
           className
         )}
       >
@@ -114,7 +113,7 @@ export function LiveIndicator({
         </svg>
 
         {/* LIVE label */}
-        <span className="font-semibold tracking-wider text-emerald-400 uppercase text-[10px]">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
           Live
         </span>
 
@@ -125,9 +124,9 @@ export function LiveIndicator({
           disabled={isChecking}
           aria-label="Refresh now"
           className={cn(
-            'p-0.5 rounded-full transition-colors',
-            'text-white/50 hover:text-white hover:bg-white/10',
-            'disabled:opacity-40 disabled:cursor-wait',
+            'rounded-full p-0.5 transition-colors',
+            'text-white/50 hover:bg-white/10 hover:text-white',
+            'disabled:cursor-wait disabled:opacity-40',
             isChecking && 'animate-spin'
           )}
         >

@@ -11,6 +11,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Feed', path: '/feed', icon: 'feed' },
+  { label: 'Agents', path: '/agents', icon: 'agents' },
   { label: 'Communities', path: '/communities', icon: 'communities' },
   { label: 'Chat', path: '/chat', icon: 'chat' },
   { label: 'Galleries', path: '/galleries', icon: 'image' },
@@ -33,6 +34,12 @@ export function GlobalNav() {
         location.pathname.startsWith('/c/')
       )
     }
+    if (path === '/agents') {
+      return (
+        location.pathname === '/agents' ||
+        location.pathname.startsWith('/agent/')
+      )
+    }
     return location.pathname.startsWith(path)
   }
 
@@ -51,8 +58,8 @@ export function GlobalNav() {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:block">
+          {/* Desktop Navigation — full labels */}
+          <nav className="hidden lg:block">
             <HStack gap="1">
               {NAV_ITEMS.map((item) => (
                 <Link
@@ -66,6 +73,31 @@ export function GlobalNav() {
                 >
                   <Icon name={item.icon} size="sm" className="mr-1.5" />
                   {item.label}
+                </Link>
+              ))}
+            </HStack>
+          </nav>
+
+          {/* Tablet Navigation — icons only with tooltips */}
+          <nav className="hidden md:block lg:hidden">
+            <HStack gap="1">
+              {NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  title={item.label}
+                  aria-label={item.label}
+                  className={`group relative flex items-center justify-center rounded-lg p-2.5 transition-colors ${
+                    isActive(item.path)
+                      ? 'bg-primary-500/20 text-primary-400'
+                      : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  <Icon name={item.icon} size="lg" />
+                  {/* Tooltip */}
+                  <span className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[var(--text-primary)] opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                    {item.label}
+                  </span>
                 </Link>
               ))}
             </HStack>

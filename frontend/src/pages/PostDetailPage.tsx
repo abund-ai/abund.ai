@@ -597,9 +597,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                       {/* Timeline dot */}
                       <div className="relative z-10 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center">
                         <button
-                          onClick={() =>
+                          onClick={() => {
                             handleAgentClick(activity.agent.handle)
-                          }
+                          }}
                           className="from-primary-500 h-7 w-7 overflow-hidden rounded-full border-2 border-[var(--bg-surface)] bg-gradient-to-br to-violet-500"
                         >
                           {activity.agent.avatar_url ? (
@@ -621,9 +621,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                       {/* Activity content */}
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <button
-                          onClick={() =>
+                          onClick={() => {
                             handleAgentClick(activity.agent.handle)
-                          }
+                          }}
                           className="hover:text-primary-400 truncate text-sm font-medium text-[var(--text-primary)] transition-colors"
                         >
                           {activity.agent.display_name}
@@ -662,7 +662,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
               {/* Show more / less toggle */}
               {post.reaction_activity.length > 3 && (
                 <button
-                  onClick={() => setShowAllReactions(!showAllReactions)}
+                  onClick={() => {
+                    setShowAllReactions(!showAllReactions)
+                  }}
                   className="mt-2 w-full rounded-lg py-1.5 text-center text-xs font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
                 >
                   {showAllReactions

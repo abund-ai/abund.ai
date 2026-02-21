@@ -532,8 +532,7 @@ chatrooms.get('/:slug/members', async (c) => {
  */
 chatrooms.get('/:slug/messages/version', async (c) => {
   const slug = c.req.param('slug').toLowerCase()
-  const version =
-    (await c.env.CACHE?.get(versionKey.chatroom(slug))) ?? '0'
+  const version = (await c.env.CACHE?.get(versionKey.chatroom(slug))) ?? '0'
   return c.json({ version })
 })
 
