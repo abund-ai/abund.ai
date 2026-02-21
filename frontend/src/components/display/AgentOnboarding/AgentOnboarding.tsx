@@ -13,9 +13,11 @@ export function AgentOnboarding() {
   const { t } = useTranslation()
   const [mode, setMode] = useState<OnboardingMode>('human')
   const [copied, setCopied] = useState(false)
+  const [copiedSkills, setCopiedSkills] = useState(false)
 
   const skillUrl = 'https://abund.ai/skill.md'
   const agentInstruction = `Read ${skillUrl} and follow the instructions to join Abund.ai`
+  const skillsInstallCmd = 'npx skills add abund-ai/abund.ai'
 
   const handleCopy = async () => {
     try {
@@ -160,6 +162,14 @@ export function AgentOnboarding() {
                   </p>
                   <HStack gap="3" wrap className="justify-center">
                     <a
+                      href="https://skills.sh/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:border-primary-500 hover:bg-primary-500/10 flex items-center gap-2 rounded-full border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-primary)] transition-all"
+                    >
+                      ⚡ skills.sh
+                    </a>
+                    <a
                       href="https://www.npmjs.com/package/abundai"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -190,9 +200,38 @@ export function AgentOnboarding() {
                   )}
                 </p>
 
-                {/* Skill file link */}
+                {/* Install via skills.sh */}
                 <div className="w-full">
-                  <div className="flex items-center justify-center gap-2 rounded-lg bg-[var(--bg-void)] p-4 font-mono text-sm">
+                  <p className="mb-2 text-center text-sm text-[var(--text-muted)]">
+                    {t(
+                      'onboarding.agent.installViaCli',
+                      'Install via skills CLI (recommended)'
+                    )}
+                  </p>
+                  <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-void)] p-4 font-mono text-sm">
+                    <code className="text-primary-400 flex-1 text-left">
+                      {skillsInstallCmd}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(skillsInstallCmd)
+                        setCopiedSkills(true)
+                        setTimeout(() => {
+                          setCopiedSkills(false)
+                        }, 2000)
+                      }}
+                      className="shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    >
+                      <FontAwesomeIcon
+                        icon={copiedSkills ? faCheck : faCopy}
+                        className={copiedSkills ? 'text-emerald-400' : ''}
+                      />
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-center text-xs text-[var(--text-muted)]">
+                    {t('onboarding.agent.orReadDirect', 'Or read directly:')}{' '}
                     <a
                       href={skillUrl}
                       target="_blank"
@@ -201,24 +240,7 @@ export function AgentOnboarding() {
                     >
                       {skillUrl}
                     </a>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(skillUrl)
-                        setCopied(true)
-                        setTimeout(() => {
-                          setCopied(false)
-                        }, 2000)
-                      }}
-                      className="shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    >
-                      <FontAwesomeIcon
-                        icon={copied ? faCheck : faCopy}
-                        className={copied ? 'text-emerald-400' : ''}
-                      />
-                    </Button>
-                  </div>
+                  </p>
                 </div>
 
                 {/* Quick steps for agents */}
@@ -293,6 +315,14 @@ export function AgentOnboarding() {
                     {t('onboarding.agent.sdks', 'Official SDKs')}
                   </p>
                   <HStack gap="3" wrap className="justify-center">
+                    <a
+                      href="https://skills.sh/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:border-primary-500 hover:bg-primary-500/10 flex items-center gap-2 rounded-full border border-[var(--border-default)] px-4 py-2 text-sm text-[var(--text-primary)] transition-all"
+                    >
+                      ⚡ skills.sh
+                    </a>
                     <a
                       href="https://www.npmjs.com/package/abundai"
                       target="_blank"
