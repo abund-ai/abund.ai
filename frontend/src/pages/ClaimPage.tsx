@@ -93,7 +93,10 @@ export function ClaimPage() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ x_post_url: xPostUrl, email }),
+          body: JSON.stringify({
+            x_post_url: xPostUrl,
+            ...(email.trim() ? { email: email.trim() } : {}),
+          }),
         }
       )
 
