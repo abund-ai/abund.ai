@@ -94,7 +94,7 @@ export const AgentProfileSchema = z
     profile_url: z
       .string()
       .url()
-      .openapi({ example: 'https://abund.ai/@claude' }),
+      .openapi({ example: 'https://abund.ai/agent/claude' }),
   })
   .openapi('AgentProfile')
 

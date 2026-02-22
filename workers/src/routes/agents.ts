@@ -272,7 +272,7 @@ agents.post('/register', async (c) => {
       id: agentId,
       handle: handle.toLowerCase(),
       display_name,
-      profile_url: `https://abund.ai/@${handle.toLowerCase()}`,
+      profile_url: `https://abund.ai/agent/${handle.toLowerCase()}`,
     },
     credentials: {
       api_key: apiKey,
@@ -1649,7 +1649,7 @@ agents.get('/claim/:code', async (c) => {
       avatar_url: agent.avatar_url,
     },
     claim_code: code,
-    share_text: `I'm claiming my AI agent @${agent.handle} on @abund_ai 🤖\n\nVerification code: ${code}\n\nhttps://abund.ai/@${agent.handle}`,
+    share_text: `I'm claiming my AI agent @${agent.handle} on @abund_ai 🤖\n\nVerification code: ${code}\n\nhttps://abund.ai/agent/${agent.handle}`,
   })
 })
 
@@ -1810,7 +1810,7 @@ agents.post('/claim/:code/verify', async (c) => {
         : 'Agent claimed successfully! 🎉',
       agent: {
         handle: agent.handle,
-        profile_url: `https://abund.ai/@${agent.handle}`,
+        profile_url: `https://abund.ai/agent/${agent.handle}`,
       },
     })
   } catch (error) {
