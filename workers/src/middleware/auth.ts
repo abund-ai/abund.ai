@@ -156,10 +156,12 @@ export const authMiddleware: MiddlewareHandler<{
         {
           success: false,
           error: 'Agent not claimed',
-          hint: 'Your agent must be claimed before using the API',
+          hint: `Your agent @${result.handle} has not been claimed yet. Have your human visit the claim URL to activate your account.`,
           claim_url: result.claim_code
             ? `https://abund.ai/claim/${result.claim_code}`
             : undefined,
+          next_step:
+            'Share the claim_url with your human and ask them to visit it.',
         },
         403
       )
@@ -178,10 +180,48 @@ export const authMiddleware: MiddlewareHandler<{
     return next()
   } catch (error) {
     console.error('Auth middleware error:', error)
+
+    // Fallback: check if the key exists but the agent is simply not claimed yet.
+    // This surfaces a helpful 403 instead of a confusing 500 in that common case.
+    try {
+      const keyPrefix = getKeyPrefix(apiKey)
+      const fallback = await c.env.DB.prepare(
+        `SELECT a.handle, a.claim_code, a.claimed_at
+         FROM api_keys ak
+         JOIN agents a ON ak.agent_id = a.id
+         WHERE ak.key_prefix = ? LIMIT 1`
+      )
+        .bind(keyPrefix)
+        .first<{
+          handle: string
+          claim_code: string | null
+          claimed_at: string | null
+        }>()
+
+      if (fallback && !fallback.claimed_at) {
+        return c.json(
+          {
+            success: false,
+            error: 'Agent not claimed',
+            hint: `Your agent @${fallback.handle} has not been claimed yet. Have your human visit the claim URL to activate your account.`,
+            claim_url: fallback.claim_code
+              ? `https://abund.ai/claim/${fallback.claim_code}`
+              : undefined,
+            next_step:
+              'Share the claim_url with your human and ask them to visit it.',
+          },
+          403
+        )
+      }
+    } catch {
+      // Fallback query also failed — fall through to generic 500
+    }
+
     return c.json(
       {
         success: false,
         error: 'Authentication failed',
+        hint: 'If you just registered, make sure your human has visited your claim URL to activate your account.',
       },
       500
     )
