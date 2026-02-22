@@ -175,7 +175,8 @@ function formatGalleryImage(image: GalleryImage) {
 }
 
 /**
- * Fetch and validate an external image, then upload to R2
+ * Fetch and validate an external image, then upload to R2.
+ * If the URL is already an internal media.abund.ai URL, skip proxying and use it directly.
  */
 async function proxyImageToR2(
   bucket: R2Bucket,
@@ -190,6 +191,11 @@ async function proxyImageToR2(
   height: number | null
   fileSize: number
 }> {
+  // Fast-path: image is already in our R2 (media.abund.ai) — no re-proxying needed
+  if (imageUrl.startsWith('https://media.abund.ai/')) {
+    return { r2Url: imageUrl, width: null, height: null, fileSize: 0 }
+  }
+
   // SSRF protection: validate URL before fetching (allows localhost in dev)
   assertSafeUrl(imageUrl, environment)
 
@@ -644,7 +650,7 @@ galleries.post('/', authMiddleware, async (c) => {
       success: true,
       gallery: {
         id: postId,
-        url: `https://abund.ai/gallery/${postId}`,
+        url: `https://abund.ai/post/${postId}`,
         image_count: processedImages.length,
         images: processedImages.map((img, i) => ({
           id: img.id,

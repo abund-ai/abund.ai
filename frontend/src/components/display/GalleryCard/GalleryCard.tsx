@@ -213,7 +213,15 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
               {community && (
                 <>
                   <span>•</span>
-                  <span className="text-primary-500">m/{community.slug}</span>
+                  <a
+                    href={`/c/${community.slug}`}
+                    className="text-primary-500 hover:underline"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                    }}
+                  >
+                    m/{community.slug}
+                  </a>
                 </>
               )}
             </HStack>

@@ -69,6 +69,18 @@ echo -e "${GREEN}✓ API deployed to https://api.abund.ai${NC}"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Step 3.5: Apply Database Migrations
+# ─────────────────────────────────────────────────────────────────────────────
+echo -e "${YELLOW}▶ Applying database migrations to production...${NC}"
+cd "$PROJECT_ROOT/workers"
+
+# Apply any pending migrations to the remote production DB
+npx wrangler d1 migrations apply abund-db --remote 2>&1 | grep -v "WARNING\|Please add\|not inherited\|env.production" || true
+
+echo -e "${GREEN}✓ Database migrations applied${NC}"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Step 4: Deploy Frontend to Pages
 # ─────────────────────────────────────────────────────────────────────────────
 echo -e "${YELLOW}▶ Deploying frontend to Cloudflare Pages...${NC}"

@@ -38,6 +38,7 @@ const updateProfileSchema = z.object({
   display_name: z.string().min(1).max(50).optional(),
   bio: z.string().max(500).optional(),
   avatar_url: z.string().url().optional(),
+  header_image_url: z.string().url().optional(),
   model_name: z.string().max(50).optional(),
   model_provider: z.string().max(50).optional(),
   relationship_status: z
@@ -297,6 +298,7 @@ agents.get('/me', authMiddleware, async (c) => {
     display_name: string
     bio: string | null
     avatar_url: string | null
+    header_image_url: string | null
     model_name: string | null
     model_provider: string | null
     follower_count: number
@@ -308,7 +310,7 @@ agents.get('/me', authMiddleware, async (c) => {
     c.env.DB,
     `
     SELECT 
-      id, handle, display_name, bio, avatar_url,
+      id, handle, display_name, bio, avatar_url, header_image_url,
       model_name, model_provider,
       follower_count, following_count, post_count,
       is_verified, created_at
@@ -392,6 +394,37 @@ agents.patch('/me', authMiddleware, async (c) => {
 
     updates.push('avatar_url = ?')
     params.push(avatarUrl)
+  }
+
+  // Handle header_image_url: proxy external URLs to R2 for security
+  if (result.data.header_image_url !== undefined) {
+    let headerImageUrl = result.data.header_image_url
+
+    // If it's an external URL, fetch and upload to R2
+    if (!isInternalMediaUrl(headerImageUrl)) {
+      const proxyResult = await proxyExternalAvatar(
+        headerImageUrl,
+        agentCtx.id,
+        c.env.MEDIA,
+        c.env.ENVIRONMENT
+      )
+
+      if (!proxyResult.success) {
+        return c.json(
+          {
+            success: false,
+            error: 'Failed to process header image URL',
+            hint: proxyResult.error,
+          },
+          400
+        )
+      }
+
+      headerImageUrl = proxyResult.url
+    }
+
+    updates.push('header_image_url = ?')
+    params.push(headerImageUrl)
   }
 
   if (result.data.model_name !== undefined) {
@@ -964,6 +997,7 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
     display_name: string
     bio: string | null
     avatar_url: string | null
+    header_image_url: string | null
     model_name: string | null
     model_provider: string | null
     follower_count: number
@@ -979,7 +1013,7 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
     c.env.DB,
     `
     SELECT 
-      id, handle, display_name, bio, avatar_url,
+      id, handle, display_name, bio, avatar_url, header_image_url,
       model_name, model_provider,
       follower_count, following_count, post_count,
       is_verified, created_at, last_active_at,
@@ -1146,39 +1180,56 @@ agents.get('/:handle/activity', async (c) => {
     return c.json({ success: false, error: 'Agent not found' }, 404)
   }
 
+  // Decode HTML entities from stored content for plain-text display in previews
+  function decodeHtmlEntities(str: string): string {
+    return str
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#x27;/g, "'")
+  }
+
   // Query all activity types in parallel
-  const [posts, replies, reactions, chatMessages, follows, communityJoins] =
-    await Promise.all([
-      // Posts (top-level only)
-      query<{
-        id: string
-        content: string
-        created_at: string
-        community_slug: string | null
-      }>(
-        c.env.DB,
-        `SELECT p.id, p.content, p.created_at, c.slug as community_slug
+  const [
+    posts,
+    replies,
+    reactions,
+    chatMessages,
+    follows,
+    communityJoins,
+    chatRoomsCreated,
+  ] = await Promise.all([
+    // Posts (top-level only)
+    query<{
+      id: string
+      content: string
+      created_at: string
+      community_slug: string | null
+    }>(
+      c.env.DB,
+      `SELECT p.id, p.content, p.created_at, c.slug as community_slug
          FROM posts p
          LEFT JOIN community_posts cp ON p.id = cp.post_id
          LEFT JOIN communities c ON cp.community_id = c.id
          WHERE p.agent_id = ? AND p.parent_id IS NULL
          ORDER BY p.created_at DESC
          LIMIT ?`,
-        [agent.id, limit]
-      ),
+      [agent.id, limit]
+    ),
 
-      // Replies (posts with parent_id) — uses recursive CTE to find root post
-      query<{
-        id: string
-        content: string
-        parent_id: string
-        root_post_id: string
-        parent_content: string | null
-        parent_agent_handle: string | null
-        created_at: string
-      }>(
-        c.env.DB,
-        `WITH RECURSIVE ancestors AS (
+    // Replies (posts with parent_id) — uses recursive CTE to find root post
+    query<{
+      id: string
+      content: string
+      parent_id: string
+      root_post_id: string
+      parent_content: string | null
+      parent_agent_handle: string | null
+      created_at: string
+    }>(
+      c.env.DB,
+      `WITH RECURSIVE ancestors AS (
            -- Base: start from the reply's immediate parent
            SELECT r.id as reply_id, r.parent_id as current_id, p.parent_id as next_parent
            FROM posts r
@@ -1209,20 +1260,20 @@ agents.get('/:handle/activity', async (c) => {
          WHERE r.agent_id = ? AND r.parent_id IS NOT NULL
          ORDER BY r.created_at DESC
          LIMIT ?`,
-        [agent.id, agent.id, limit]
-      ),
+      [agent.id, agent.id, limit]
+    ),
 
-      // Reactions
-      query<{
-        id: string
-        reaction_type: string
-        post_id: string
-        post_content: string | null
-        post_agent_handle: string | null
-        created_at: string
-      }>(
-        c.env.DB,
-        `SELECT r.id, r.reaction_type, r.post_id,
+    // Reactions
+    query<{
+      id: string
+      reaction_type: string
+      post_id: string
+      post_content: string | null
+      post_agent_handle: string | null
+      created_at: string
+    }>(
+      c.env.DB,
+      `SELECT r.id, r.reaction_type, r.post_id,
                 p.content as post_content,
                 a.handle as post_agent_handle,
                 r.created_at
@@ -1232,38 +1283,38 @@ agents.get('/:handle/activity', async (c) => {
          WHERE r.agent_id = ?
          ORDER BY r.created_at DESC
          LIMIT ?`,
-        [agent.id, limit]
-      ),
+      [agent.id, limit]
+    ),
 
-      // Chat messages
-      query<{
-        id: string
-        content: string
-        room_slug: string
-        room_name: string
-        created_at: string
-      }>(
-        c.env.DB,
-        `SELECT m.id, m.content, cr.slug as room_slug, cr.name as room_name,
+    // Chat messages
+    query<{
+      id: string
+      content: string
+      room_slug: string
+      room_name: string
+      created_at: string
+    }>(
+      c.env.DB,
+      `SELECT m.id, m.content, cr.slug as room_slug, cr.name as room_name,
                 m.created_at
          FROM chat_messages m
          JOIN chat_rooms cr ON m.room_id = cr.id
          WHERE m.agent_id = ?
          ORDER BY m.created_at DESC
          LIMIT ?`,
-        [agent.id, limit]
-      ),
+      [agent.id, limit]
+    ),
 
-      // Follows (who this agent followed)
-      query<{
-        id: string
-        created_at: string
-        target_handle: string
-        target_display_name: string
-        target_avatar_url: string | null
-      }>(
-        c.env.DB,
-        `SELECT f.id, f.created_at,
+    // Follows (who this agent followed)
+    query<{
+      id: string
+      created_at: string
+      target_handle: string
+      target_display_name: string
+      target_avatar_url: string | null
+    }>(
+      c.env.DB,
+      `SELECT f.id, f.created_at,
                 a.handle as target_handle,
                 a.display_name as target_display_name,
                 a.avatar_url as target_avatar_url
@@ -1272,26 +1323,42 @@ agents.get('/:handle/activity', async (c) => {
          WHERE f.follower_id = ?
          ORDER BY f.created_at DESC
          LIMIT ?`,
-        [agent.id, limit]
-      ),
+      [agent.id, limit]
+    ),
 
-      // Community joins
-      query<{
-        community_id: string
-        joined_at: string
-        community_slug: string
-        community_name: string
-      }>(
-        c.env.DB,
-        `SELECT cm.community_id, cm.joined_at, c.slug as community_slug, c.name as community_name
+    // Community joins
+    query<{
+      community_id: string
+      joined_at: string
+      community_slug: string
+      community_name: string
+    }>(
+      c.env.DB,
+      `SELECT cm.community_id, cm.joined_at, c.slug as community_slug, c.name as community_name
          FROM community_members cm
          JOIN communities c ON cm.community_id = c.id
          WHERE cm.agent_id = ?
          ORDER BY cm.joined_at DESC
          LIMIT ?`,
-        [agent.id, limit]
-      ),
-    ])
+      [agent.id, limit]
+    ),
+
+    // Chat rooms created by this agent
+    query<{
+      id: string
+      slug: string
+      name: string
+      created_at: string
+    }>(
+      c.env.DB,
+      `SELECT id, slug, name, created_at
+         FROM chat_rooms
+         WHERE created_by = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      [agent.id, limit]
+    ),
+  ])
 
   // Transform and merge all activity items
   type ActivityItem = {
@@ -1307,7 +1374,7 @@ agents.get('/:handle/activity', async (c) => {
       type: 'post' as const,
       id: p.id,
       created_at: p.created_at,
-      preview: p.content.substring(0, 120),
+      preview: decodeHtmlEntities(p.content.substring(0, 120)),
       metadata: {
         post_id: p.id,
         community_slug: p.community_slug,
@@ -1317,11 +1384,13 @@ agents.get('/:handle/activity', async (c) => {
       type: 'reply' as const,
       id: r.id,
       created_at: r.created_at,
-      preview: r.content.substring(0, 120),
+      preview: decodeHtmlEntities(r.content.substring(0, 120)),
       metadata: {
         post_id: r.id,
         parent_id: r.root_post_id,
-        parent_preview: r.parent_content?.substring(0, 80) ?? '',
+        parent_preview: decodeHtmlEntities(
+          r.parent_content?.substring(0, 80) ?? ''
+        ),
         parent_agent: r.parent_agent_handle,
       },
     })),
@@ -1333,7 +1402,9 @@ agents.get('/:handle/activity', async (c) => {
       metadata: {
         reaction_type: r.reaction_type,
         post_id: r.post_id,
-        post_preview: r.post_content?.substring(0, 80) ?? '',
+        post_preview: decodeHtmlEntities(
+          r.post_content?.substring(0, 80) ?? ''
+        ),
         post_agent: r.post_agent_handle,
       },
     })),
@@ -1341,7 +1412,7 @@ agents.get('/:handle/activity', async (c) => {
       type: 'chat_message' as const,
       id: m.id,
       created_at: m.created_at,
-      preview: m.content.substring(0, 120),
+      preview: decodeHtmlEntities(m.content.substring(0, 120)),
       metadata: {
         room_slug: m.room_slug,
         room_name: m.room_name,
@@ -1366,6 +1437,16 @@ agents.get('/:handle/activity', async (c) => {
       metadata: {
         community_slug: cj.community_slug,
         community_name: cj.community_name,
+      },
+    })),
+    ...chatRoomsCreated.map((r) => ({
+      type: 'chat_room_created' as const,
+      id: r.id,
+      created_at: r.created_at,
+      preview: `Created #${r.name}`,
+      metadata: {
+        room_slug: r.slug,
+        room_name: r.name,
       },
     })),
   ]

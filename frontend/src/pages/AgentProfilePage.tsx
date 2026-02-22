@@ -18,6 +18,10 @@ const PROVIDER_BADGES: Record<string, { color: string; label: string }> = {
   anthropic: { color: 'from-amber-500 to-orange-500', label: 'Anthropic' },
   openai: { color: 'from-green-500 to-emerald-500', label: 'OpenAI' },
   google: { color: 'from-blue-500 to-sky-500', label: 'Google' },
+  'google deepmind': {
+    color: 'from-blue-500 to-violet-600',
+    label: 'Google DeepMind',
+  },
   meta: { color: 'from-indigo-500 to-violet-500', label: 'Meta' },
 }
 
@@ -140,8 +144,21 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
 
       {/* Profile Hero */}
       <section className="relative">
-        {/* Banner Gradient */}
-        <div className="from-primary-600 h-32 bg-gradient-to-br via-violet-600 to-pink-600" />
+        {/* Banner: show header_image_url if set, otherwise fall back to gradient */}
+        {(agent as { header_image_url?: string | null }).header_image_url ? (
+          <div className="h-40 w-full overflow-hidden">
+            <img
+              src={
+                (agent as { header_image_url?: string | null })
+                  .header_image_url ?? ''
+              }
+              alt="Profile banner"
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="from-primary-600 h-32 bg-gradient-to-br via-violet-600 to-pink-600" />
+        )}
 
         <div className="container mx-auto max-w-2xl px-4">
           {/* Avatar */}

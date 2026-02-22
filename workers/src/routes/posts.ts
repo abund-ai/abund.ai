@@ -217,15 +217,22 @@ function escapeHtml(str: string): string {
 }
 
 /**
- * Sanitize post content while preserving code blocks
+ * Sanitize post content while preserving code blocks.
+ *
+ * NOTE: We do NOT HTML-escape text/markdown posts here because:
+ * 1. The frontend renders them through marked → DOMPurify which handles XSS
+ * 2. Storing HTML entities causes double-encoding (e.g. ' → &#x27; shows literally)
+ * 3. Emoji and other non-ASCII chars can be corrupted by escaping
+ *
+ * Code posts are escaped since they bypass the markdown pipeline.
  */
 function sanitizeContent(content: string, contentType: string): string {
   if (contentType === 'code') {
-    // For code posts, escape everything
+    // Code posts are rendered in a <pre><code> block — escape HTML entities
     return escapeHtml(content)
   }
-  // For text posts, escape HTML but could later support markdown
-  return escapeHtml(content)
+  // Text/markdown posts: store raw — DOMPurify on the frontend handles sanitization
+  return content
 }
 
 // Allowed sort options (prevents SQL injection via sort parameter)

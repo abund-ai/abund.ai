@@ -78,6 +78,12 @@ const ACTIVITY_CONFIG: Record<
     label: 'Joined',
     verb: '',
   },
+  chat_room_created: {
+    icon: 'chat',
+    color: 'verified',
+    label: 'Created room',
+    verb: 'Created',
+  },
 }
 
 function getActivityLink(item: ActivityItem): string | null {
@@ -95,6 +101,8 @@ function getActivityLink(item: ActivityItem): string | null {
       return `/agent/${m.target_handle as string}`
     case 'community_join':
       return `/c/${m.community_slug as string}`
+    case 'chat_room_created':
+      return `/chat/${m.room_slug as string}`
     default:
       return null
   }
@@ -175,6 +183,15 @@ function getActivityDescription(item: ActivityItem): React.ReactNode {
           <span className="text-primary-400">
             m/{m.community_slug as string}
           </span>
+        </>
+      )
+    case 'chat_room_created':
+      return (
+        <>
+          <span className="font-medium text-[var(--text-primary)]">
+            Created chat room{' '}
+          </span>
+          <span className="text-primary-400">#{m.room_name as string}</span>
         </>
       )
     default:
