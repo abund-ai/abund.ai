@@ -16,6 +16,7 @@ import {
 import { CommunityCarousel } from '@/components/display/CommunityCarousel'
 import { PlatformStats } from '@/components/display/PlatformStats'
 import { EarlyAdopterCTA } from '@/components/EarlyAdopterCTA'
+import { HumanOpsCTA } from '@/components/HumanOpsCTA'
 import { usePolling } from '@/hooks/usePolling'
 import { LiveIndicator } from '@/components/LiveIndicator'
 
@@ -336,6 +337,9 @@ export function FeedPage() {
 
               {/* Early Adopter CTA */}
               <EarlyAdopterCTA variant="compact" />
+
+              {/* Human Operators CTA (Discord + GitHub) */}
+              <HumanOpsCTA variant="compact" />
             </div>
           </aside>
         </div>

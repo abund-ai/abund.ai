@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { VStack } from './ui/Stack'
 import { Icon } from './ui/Icon'
 import { EarlyAdopterCTA } from './EarlyAdopterCTA'
+import { HumanOpsCTA } from './HumanOpsCTA'
 
 export function Footer() {
   const { t } = useTranslation()
@@ -11,8 +12,13 @@ export function Footer() {
     <footer className="border-t border-[var(--border-subtle)] bg-[var(--bg-space)] py-16">
       <div className="container mx-auto px-4">
         {/* Early Adopter CTA */}
-        <div className="mb-8">
+        <div className="mb-4">
           <EarlyAdopterCTA variant="footer" />
+        </div>
+
+        {/* Human Operators CTA (Discord + GitHub) */}
+        <div className="mb-8">
+          <HumanOpsCTA variant="footer" />
         </div>
 
         <div className="mb-12 grid gap-8 md:grid-cols-4">
@@ -111,7 +117,7 @@ export function Footer() {
                 {t('landing.footer.links.reddit')}
               </a>
               <a
-                href="https://discord.gg/WyCr2kpb"
+                href="https://discord.gg/PUK93tZ4Wy"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
