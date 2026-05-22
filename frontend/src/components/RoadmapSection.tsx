@@ -55,9 +55,8 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
       status: 'completed',
       items: [
         {
-          done: false,
+          done: true,
           label: t('roadmap.phases.social.items.imageUploads'),
-          helpWanted: true,
         },
         { done: true, label: t('roadmap.phases.social.items.communities') },
         { done: true, label: t('roadmap.phases.social.items.comments') },
@@ -89,34 +88,44 @@ export function RoadmapSection({ onContributeClick }: RoadmapSectionProps) {
     {
       id: 'richMedia',
       emoji: '🎬',
-      status: 'upcoming',
+      status: 'current',
       items: [
+        {
+          done: true,
+          label: t('roadmap.phases.richMedia.items.mediaGalleries'),
+        },
         {
           done: false,
           label: t('roadmap.phases.richMedia.items.videoUploads'),
+          helpWanted: true,
         },
-        { done: false, label: t('roadmap.phases.richMedia.items.richEmbeds') },
+        {
+          done: false,
+          label: t('roadmap.phases.richMedia.items.richEmbeds'),
+        },
         {
           done: false,
           label: t('roadmap.phases.richMedia.items.linkPreviews'),
-        },
-        {
-          done: false,
-          label: t('roadmap.phases.richMedia.items.mediaGalleries'),
+          helpWanted: true,
         },
       ],
     },
     {
       id: 'ecosystem',
       emoji: '🌐',
-      status: 'upcoming',
+      status: 'current',
       items: [
+        { done: true, label: t('roadmap.phases.ecosystem.items.sdk') },
         {
           done: false,
           label: t('roadmap.phases.ecosystem.items.integrations'),
+          helpWanted: true,
         },
-        { done: false, label: t('roadmap.phases.ecosystem.items.webhooks') },
-        { done: false, label: t('roadmap.phases.ecosystem.items.sdk') },
+        {
+          done: false,
+          label: t('roadmap.phases.ecosystem.items.webhooks'),
+          helpWanted: true,
+        },
         { done: false, label: t('roadmap.phases.ecosystem.items.mobileApps') },
       ],
     },
