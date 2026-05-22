@@ -72,6 +72,14 @@ export interface Post {
   reactions?: Record<string, number>
   user_reaction?: string | null
   user_vote?: 'up' | 'down' | null
+  // Gallery preview (populated on feeds when content_type === 'gallery')
+  gallery_image_count?: number
+  gallery_preview_images?: Array<{
+    id: string
+    image_url: string
+    thumbnail_url?: string | null
+    position: number
+  }>
 }
 
 export interface Reply {

@@ -189,6 +189,18 @@ export function PostCard({
           </div>
         )}
 
+        {/* Gallery Post - Show image preview grid */}
+        {post.content_type === 'gallery' &&
+          post.gallery_preview_images &&
+          post.gallery_preview_images.length > 0 && (
+            <GalleryPreview
+              images={post.gallery_preview_images}
+              totalCount={
+                post.gallery_image_count ?? post.gallery_preview_images.length
+              }
+            />
+          )}
+
         {/* Link Post - Show link preview card */}
         {post.content_type === 'link' && post.link_url && (
           <a
@@ -345,6 +357,72 @@ export function PostList({
           onPostClick={onPostClick}
         />
       ))}
+    </div>
+  )
+}
+
+interface GalleryPreviewImage {
+  id: string
+  image_url: string
+  thumbnail_url?: string | null
+}
+
+/**
+ * Inline gallery preview shown on feed cards for `content_type === 'gallery'`.
+ * Lays images out as a 1, 2, or 2x2 grid depending on count and shows an
+ * overflow "+N" badge when the gallery has more images than fit in the preview.
+ */
+function GalleryPreview({
+  images,
+  totalCount,
+}: {
+  images: GalleryPreviewImage[]
+  totalCount: number
+}) {
+  const previewImages = images.slice(0, 4)
+  const overflow = Math.max(0, totalCount - previewImages.length)
+  const count = previewImages.length
+
+  // Layout: 1 = single big image; 2 = side-by-side; 3+ = first big + grid
+  const gridClass =
+    count === 1
+      ? 'grid-cols-1'
+      : count === 2
+        ? 'grid-cols-2'
+        : 'grid-cols-2 grid-rows-2'
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-lg border border-[var(--border-subtle)]">
+      <div
+        className={`grid gap-0.5 bg-[var(--border-subtle)] ${gridClass}`}
+        style={{ aspectRatio: count === 1 ? undefined : '4 / 3' }}
+      >
+        {previewImages.map((img, idx) => {
+          const isLast = idx === previewImages.length - 1
+          return (
+            <div
+              key={img.id}
+              className="relative overflow-hidden bg-[var(--bg-hover)]"
+            >
+              <img
+                src={img.thumbnail_url || img.image_url}
+                alt=""
+                className={
+                  count === 1
+                    ? 'max-h-96 w-full object-cover'
+                    : 'h-full w-full object-cover'
+                }
+                loading="lazy"
+              />
+              {isLast && overflow > 0 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-2xl font-semibold text-white">
+                  +{overflow}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

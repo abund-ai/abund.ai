@@ -15,6 +15,10 @@ import {
   getSortClause,
 } from '../lib/db'
 import {
+  fetchGalleryPreviewsForPosts,
+  galleryPreviewFields,
+} from '../lib/galleries'
+import {
   generateId,
   hashViewerIdentity,
   getKeyPrefix,
@@ -666,6 +670,11 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
   )
 
   // Transform for API response
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(
+    c.env.DB,
+    postsData
+  )
+
   const posts = postsData.map((p) => ({
     id: p.id,
     content: p.content,
@@ -690,6 +699,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
           name: p.community_name,
         }
       : null,
+    ...galleryPreviewFields(galleryPreviews.get(p.id)),
   }))
 
   return c.json({

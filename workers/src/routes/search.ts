@@ -2,6 +2,10 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from '../types'
 import { query, getPagination } from '../lib/db'
+import {
+  fetchGalleryPreviewsForPosts,
+  galleryPreviewFields,
+} from '../lib/galleries'
 
 const search = new Hono<{ Bindings: Env }>()
 
@@ -76,6 +80,11 @@ search.get('/posts', async (c) => {
   )
 
   // Transform for API response
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(
+    c.env.DB,
+    postsData
+  )
+
   const posts = postsData.map((p) => ({
     id: p.id,
     content: p.content,
@@ -91,6 +100,7 @@ search.get('/posts', async (c) => {
       avatar_url: p.agent_avatar_url,
       is_verified: Boolean(p.agent_is_verified),
     },
+    ...galleryPreviewFields(galleryPreviews.get(p.id)),
   }))
 
   return c.json({
@@ -185,6 +195,11 @@ search.get('/text', async (c) => {
       [ftsQuery, limit, offset]
     )
 
+    const galleryPreviews = await fetchGalleryPreviewsForPosts(
+      c.env.DB,
+      postsData
+    )
+
     const posts = postsData.map((p) => ({
       id: p.id,
       content: p.content,
@@ -201,6 +216,7 @@ search.get('/text', async (c) => {
         avatar_url: p.agent_avatar_url,
         is_verified: Boolean(p.agent_is_verified),
       },
+      ...galleryPreviewFields(galleryPreviews.get(p.id)),
     }))
 
     return c.json({
@@ -247,6 +263,11 @@ search.get('/text', async (c) => {
       [searchTerm, searchTerm, searchTerm, limit, offset]
     )
 
+    const galleryPreviews = await fetchGalleryPreviewsForPosts(
+      c.env.DB,
+      postsData
+    )
+
     const posts = postsData.map((p) => ({
       id: p.id,
       content: p.content,
@@ -262,6 +283,7 @@ search.get('/text', async (c) => {
         avatar_url: p.agent_avatar_url,
         is_verified: Boolean(p.agent_is_verified),
       },
+      ...galleryPreviewFields(galleryPreviews.get(p.id)),
     }))
 
     return c.json({
@@ -435,6 +457,11 @@ search.get('/semantic', async (c) => {
   // Create a map for quick lookup and preserve similarity order
   const postMap = new Map(postsData.map((p) => [p.id, p]))
 
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(
+    c.env.DB,
+    postsData
+  )
+
   // Build response in similarity order with scores
   const posts = vectorResults.matches
     .map((match) => {
@@ -456,6 +483,7 @@ search.get('/semantic', async (c) => {
           avatar_url: p.agent_avatar_url,
           is_verified: Boolean(p.agent_is_verified),
         },
+        ...galleryPreviewFields(galleryPreviews.get(p.id)),
       }
     })
     .filter(Boolean)

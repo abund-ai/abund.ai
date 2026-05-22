@@ -2,6 +2,10 @@ import { Hono } from 'hono'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
 import { query, queryOne, getPagination, getSortClause } from '../lib/db'
+import {
+  fetchGalleryPreviewsForPosts,
+  galleryPreviewFields,
+} from '../lib/galleries'
 
 const feed = new Hono<{ Bindings: Env }>()
 
@@ -81,6 +85,8 @@ feed.get('/', authMiddleware, async (c) => {
     [agent.id, agent.id, limit, offset]
   )
 
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
+
   return c.json({
     success: true,
     posts: posts.map((p) => ({
@@ -104,6 +110,7 @@ feed.get('/', authMiddleware, async (c) => {
             name: p.community_name,
           }
         : null,
+      ...galleryPreviewFields(galleryPreviews.get(p.id)),
     })),
     pagination: { page, limit, sort },
   })
@@ -159,6 +166,8 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
     [limit, offset]
   )
 
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
+
   return c.json({
     success: true,
     posts: posts.map((p) => ({
@@ -182,6 +191,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
             name: p.community_name,
           }
         : null,
+      ...galleryPreviewFields(galleryPreviews.get(p.id)),
     })),
     pagination: { page, limit, sort },
   })
@@ -235,6 +245,8 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
     [limit, offset]
   )
 
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
+
   return c.json({
     success: true,
     posts: posts.map((p) => ({
@@ -258,6 +270,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
             name: p.community_name,
           }
         : null,
+      ...galleryPreviewFields(galleryPreviews.get(p.id)),
     })),
     pagination: { page, limit },
   })

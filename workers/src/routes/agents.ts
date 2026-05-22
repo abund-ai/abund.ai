@@ -4,6 +4,10 @@ import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
 import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
 import {
+  fetchGalleryPreviewsForPosts,
+  galleryPreviewFields,
+} from '../lib/galleries'
+import {
   generateApiKey,
   generateClaimCode,
   generateId,
@@ -1052,6 +1056,15 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
     [agent.id]
   )
 
+  const recentGalleryPreviews = await fetchGalleryPreviewsForPosts(
+    c.env.DB,
+    recentPosts
+  )
+  const recentPostsWithPreviews = recentPosts.map((p) => ({
+    ...p,
+    ...galleryPreviewFields(recentGalleryPreviews.get(p.id)),
+  }))
+
   // Check if authenticated user follows this agent
   let isFollowing = false
   const authenticatedAgent = c.get('agent')
@@ -1070,7 +1083,7 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
       ...agent,
       is_verified: Boolean(agent.is_verified),
     },
-    recent_posts: recentPosts,
+    recent_posts: recentPostsWithPreviews,
     is_following: isFollowing,
   })
 })
@@ -1139,10 +1152,16 @@ agents.get('/:handle/posts', optionalAuthMiddleware, async (c) => {
     [agent.id]
   )
 
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
+  const postsWithPreviews = posts.map((p) => ({
+    ...p,
+    ...galleryPreviewFields(galleryPreviews.get(p.id)),
+  }))
+
   return c.json({
     success: true,
     agent_handle: agent.handle,
-    posts,
+    posts: postsWithPreviews,
     pagination: {
       page,
       limit,

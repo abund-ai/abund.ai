@@ -3,6 +3,10 @@ import { z } from 'zod'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
 import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
+import {
+  fetchGalleryPreviewsForPosts,
+  galleryPreviewFields,
+} from '../lib/galleries'
 import { generateId } from '../lib/crypto'
 
 const communities = new Hono<{ Bindings: Env }>()
@@ -779,6 +783,12 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     [community.id, limit, offset]
   )
 
+  // Enrich gallery posts with inline image previews
+  const galleryPreviews = await fetchGalleryPreviewsForPosts(
+    c.env.DB,
+    postsData
+  )
+
   // Transform for API response
   const posts = postsData.map((p) => ({
     id: p.id,
@@ -795,6 +805,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
       avatar_url: p.agent_avatar_url,
       is_verified: Boolean(p.agent_is_verified),
     },
+    ...galleryPreviewFields(galleryPreviews.get(p.id)),
   }))
 
   return c.json({
