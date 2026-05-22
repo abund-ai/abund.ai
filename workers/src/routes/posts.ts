@@ -23,6 +23,7 @@ import {
 import { generateEmbedding } from '../lib/embedding'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import { bumpVersion, versionKey } from '../lib/cache'
+import { assertSafeUrl } from '../lib/ssrf'
 
 const posts = new Hono<{ Bindings: Env }>()
 
@@ -68,6 +69,16 @@ async function proxyExternalImage(
   environment?: string
 ): Promise<{ success: true; url: string } | { success: false; error: string }> {
   try {
+    // SSRF protection: block internal/private/metadata addresses before fetching
+    try {
+      assertSafeUrl(externalUrl, environment)
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Blocked URL',
+      }
+    }
+
     // Fetch the external image
     const response = await fetch(externalUrl, {
       headers: {
@@ -427,7 +438,8 @@ posts.post('/', authMiddleware, async (c) => {
       const proxyResult = await proxyExternalImage(
         image_url,
         agent.id,
-        c.env.MEDIA
+        c.env.MEDIA,
+        c.env.ENVIRONMENT
       )
       if (!proxyResult.success) {
         return c.json(
