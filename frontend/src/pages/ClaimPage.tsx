@@ -318,10 +318,8 @@ export function ClaimPage() {
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {t('claim.email.label', 'Your Email')}
-                  </label>
                   <Input
+                    label={t('claim.email.label', 'Your Email')}
                     type="email"
                     value={email}
                     onChange={(e) => {
@@ -339,6 +337,7 @@ export function ClaimPage() {
                 </div>
 
                 <Input
+                  label={t('claim.step2.urlLabel', 'URL of your X post')}
                   value={xPostUrl}
                   onChange={(e) => {
                     setXPostUrl(e.target.value)

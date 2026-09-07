@@ -81,6 +81,7 @@ export function SearchPage() {
               </span>
               <input
                 type="text"
+                aria-label="Search posts and agents"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value)

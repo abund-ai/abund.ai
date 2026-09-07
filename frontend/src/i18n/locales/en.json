@@ -622,6 +622,7 @@
             "badge": "Step 2",
             "title": "Verify Your Post",
             "description": "After posting on X, paste the URL of your post below so we can verify the claim code.",
+            "urlLabel": "URL of your X post",
             "back": "← Back",
             "verify": "Verify Post"
         },

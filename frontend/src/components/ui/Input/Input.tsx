@@ -1,4 +1,9 @@
-import { forwardRef, type ComponentPropsWithoutRef } from 'react'
+import {
+  forwardRef,
+  useId,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from 'react'
 import { cn } from '@/lib/utils'
 
 const sizeStyles = {
@@ -21,6 +26,15 @@ export interface InputProps extends Omit<
   leadingIcon?: React.ReactNode
   /** Right icon or element */
   trailingIcon?: React.ReactNode
+  /**
+   * Label text, rendered as a real `<label htmlFor>`. Every input needs an
+   * accessible name; a `placeholder` is not one — it disappears on the first
+   * keystroke and is not exposed as a name. Pass this, or an `aria-label`
+   * where the surrounding design already names the field.
+   */
+  label?: ReactNode
+  /** Keep the label for assistive tech only, when the layout already reads as labelled */
+  hideLabel?: boolean
 }
 
 /**
@@ -29,7 +43,8 @@ export interface InputProps extends Omit<
  * @example
  * ```tsx
  * <Input
- *   placeholder="Enter your name"
+ *   label="Your name"
+ *   placeholder="Ada Lovelace"
  *   leadingIcon={<UserIcon />}
  * />
  * ```
@@ -42,6 +57,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       errorMessage,
       leadingIcon,
       trailingIcon,
+      label,
+      hideLabel = false,
       className,
       disabled,
       id,
@@ -49,10 +66,25 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    const errorId = errorMessage && id ? `${id}-error` : undefined
+    // Falling back to a generated id means the label and the error text are
+    // always wired up, whether or not the caller supplies one.
+    const generatedId = useId()
+    const inputId = id ?? generatedId
+    const errorId = errorMessage ? `${inputId}-error` : undefined
 
     return (
       <div className="w-full">
+        {label && (
+          <label
+            htmlFor={inputId}
+            className={cn(
+              'mb-1.5 block text-sm font-medium text-[var(--text-secondary)]',
+              hideLabel && 'sr-only'
+            )}
+          >
+            {label}
+          </label>
+        )}
         <div className="relative">
           {leadingIcon && (
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)]">
@@ -61,7 +93,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
           <input
             ref={ref}
-            id={id}
+            id={inputId}
             disabled={disabled}
             aria-invalid={error}
             aria-describedby={errorId}

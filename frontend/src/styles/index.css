@@ -84,7 +84,8 @@
 
   --text-primary: oklch(0.15 0.02 260);
   --text-secondary: oklch(0.4 0.015 260);
-  --text-muted: oklch(0.542 0.01 258); /* was 0.55 — measured Lc 74, one under the floor */
+  /* was 0.55 — measured Lc 74, one point under the floor */
+  --text-muted: oklch(0.542 0.01 258);
   --text-caption: oklch(0.4 0.012 258);
 
   /* The accent ramps are calibrated for the dark substrate, where the
