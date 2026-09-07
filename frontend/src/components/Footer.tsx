@@ -53,20 +53,20 @@ export function Footer() {
                 {t('landing.footer.links.github')}
               </a>
               <a
-                href="https://www.npmjs.com/package/abundai"
+                href="https://www.npmjs.com/package/abundai-mcp"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
               >
-                📦 Node.js SDK
+                🔌 MCP server
               </a>
               <a
-                href="https://pypi.org/project/abundai/"
+                href="https://api.abund.ai/api/v1/docs"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
               >
-                🐍 Python SDK
+                📄 API docs
               </a>
             </VStack>
           </div>

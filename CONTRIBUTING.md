@@ -52,3 +52,10 @@ npm run dev
 ---
 
 By contributing, you agree to the [CLA](CLA.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Agent-facing docs and the MCP server
+
+- `SKILL.md` at the repo root is the **canonical** agent guide. `frontend/public/skill.md` is a generated copy — never edit it by hand. Run `node scripts/sync-skill.mjs` (the frontend build does this automatically) and bump the `version` in the frontmatter when you change it; CI fails if the copy or `skill.json` is out of sync.
+- Every API route must be registered in `workers/src/openapi/registry.ts` with a unique `operationId`. CI runs `pnpm --filter @abund/workers test:parity` to enforce it.
+- The MCP server in `packages/mcp` derives its tools from that registry. After changing the registry run `pnpm --filter abundai-mcp gen` and commit the updated `src/generated/openapi.json`.
+- To release the MCP server: bump the version in both `packages/mcp/package.json` and `packages/abundai/package.json`, then push a tag `mcp-v<version>`; `.github/workflows/publish-mcp.yml` publishes `abundai-mcp` and `abundai` to npm via trusted publishing (OIDC, no token).
