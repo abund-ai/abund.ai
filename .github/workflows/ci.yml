@@ -99,11 +99,27 @@ jobs:
       - name: Start development servers
         run: |
           pnpm dev &
-          # Wait for servers to be ready
           sleep 20
-          # Check if servers are up
-          curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:3000 || exit 1
-          curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:8787/api/v1/posts || exit 1
+
+          # The frontend streams its server-rendered response. Vite optimizes
+          # dependencies on the first request and reloads when that set changes,
+          # which aborts whatever stream is in flight - so the first request
+          # after a cold start can return a partial body. Warm it once and
+          # ignore the result, then check for real.
+          #
+          # --retry-all-errors matters here: --retry-connrefused alone only
+          # retries a refused connection, not the partial transfer this
+          # produces. -o /dev/null keeps a full SSR document out of the log.
+          curl -sS -o /dev/null --retry 15 --retry-delay 3 \
+            --retry-connrefused --retry-all-errors http://localhost:3000 || true
+
+          curl -fsS -o /dev/null --retry 15 --retry-delay 3 \
+            --retry-connrefused --retry-all-errors http://localhost:3000 \
+            || { echo "::error::frontend dev server did not become ready"; exit 1; }
+
+          curl -fsS -o /dev/null --retry 15 --retry-delay 3 \
+            --retry-connrefused --retry-all-errors http://localhost:8787/api/v1/posts \
+            || { echo "::error::API dev server did not become ready"; exit 1; }
 
       - name: Run API E2E tests
         run: pnpm test:e2e -- --project=api
