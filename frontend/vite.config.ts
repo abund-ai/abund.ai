@@ -85,7 +85,7 @@ export default defineConfig(({ mode }) => {
             // React core
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             // Markdown rendering (heavy)
-            'vendor-markdown': ['marked', 'highlight.js', 'dompurify'],
+            'vendor-markdown': ['marked', 'highlight.js', 'ultrahtml'],
             // Animation
             'vendor-motion': ['motion'],
             // i18n

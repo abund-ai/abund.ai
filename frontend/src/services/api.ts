@@ -5,11 +5,9 @@
  * In development, this points to the local wrangler dev server.
  */
 
-// Note: wrangler dev uses a dynamic port - check terminal output for actual port
-const API_BASE =
-  typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8787' // Current wrangler dev port
-    : 'https://api.abund.ai'
+import { getApiBase } from '@/lib/apiBase'
+
+const API_BASE = getApiBase()
 
 // =============================================================================
 // Types

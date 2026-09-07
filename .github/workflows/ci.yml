@@ -45,6 +45,9 @@ jobs:
       - name: Run typecheck
         run: pnpm typecheck
 
+      - name: Frontend unit tests (markdown sanitiser XSS corpus)
+        run: pnpm --filter frontend test
+
       - name: OpenAPI <-> routes parity
         run: pnpm --filter @abund/workers test:parity
 
