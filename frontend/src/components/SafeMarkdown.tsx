@@ -107,10 +107,14 @@ function createSecureRenderer(): Renderer {
   // Override code block rendering with syntax highlighting
   renderer.code = ({ text, lang }) => {
     const highlighted = highlightCode(text, lang)
+    // Carried on the <pre> so labelCodeBlock can name the region after
+    // sanitising; narrowed to class-safe characters.
+    const langSlug = lang ? lang.toLowerCase().replace(/[^\w-]/g, '') : ''
+    const langClass = langSlug ? ` language-${langSlug}` : ''
     const langLabel = lang
-      ? `<div class="absolute top-2 right-2 text-xs text-[var(--text-muted)] font-mono opacity-60">${escapeHtml(lang)}</div>`
+      ? `<div class="absolute top-2 right-2 text-xs text-[var(--text-caption)] font-mono opacity-60">${escapeHtml(lang)}</div>`
       : ''
-    return `<div class="relative"><pre class="bg-[var(--bg-void)] rounded-lg p-4 overflow-x-auto text-sm font-mono"><code class="hljs">${highlighted}</code></pre>${langLabel}</div>`
+    return `<div class="relative"><pre class="bg-[var(--bg-void)] rounded-lg p-4 overflow-x-auto text-sm font-mono${langClass}"><code class="hljs">${highlighted}</code></pre>${langLabel}</div>`
   }
 
   // Override inline code
@@ -134,64 +138,87 @@ function escapeHtml(str: string): string {
 }
 
 /**
+ * Every code block scrolls sideways, and a scrollable region with no
+ * focusable children cannot be reached or scrolled by keyboard (WCAG 2.1
+ * SC 2.1.1). `group` rather than `region` keeps a post full of snippets from
+ * flooding the landmark list.
+ */
+function labelCodeBlock(node: Element): void {
+  if (node.nodeName !== 'PRE') return
+  node.setAttribute('tabindex', '0')
+  node.setAttribute('role', 'group')
+  const lang = /(?:^|\s)language-([\w-]+)/.exec(
+    node.getAttribute('class') ?? ''
+  )?.[1]
+  node.setAttribute('aria-label', lang ? `${lang} code block` : 'Code block')
+}
+
+/**
  * Configure DOMPurify with strict settings
  */
 function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    // Allowed tags (no scripts, iframes, objects, etc.)
-    ALLOWED_TAGS: [
-      'p',
-      'br',
-      'strong',
-      'b',
-      'em',
-      'i',
-      'u',
-      's',
-      'strike',
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'h5',
-      'h6',
-      'ul',
-      'ol',
-      'li',
-      'blockquote',
-      'pre',
-      'code',
-      'a',
-      'img',
-      'table',
-      'thead',
-      'tbody',
-      'tr',
-      'th',
-      'td',
-      'hr',
-      'span',
-      'div',
-    ],
-    // Allowed attributes
-    ALLOWED_ATTR: [
-      'href',
-      'src',
-      'alt',
-      'title',
-      'class',
-      'target',
-      'rel',
-      'loading',
-    ],
-    // Force links to have security attributes
-    ADD_ATTR: ['target', 'rel'],
-    // Don't allow data: URLs for images (could contain XSS)
-    ALLOW_DATA_ATTR: false,
-    // Force all URLs to be safe
-    ALLOWED_URI_REGEXP:
-      /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
-  })
+  // Applied after sanitising rather than by widening ALLOWED_ATTR, so
+  // authored markdown still cannot set tabindex, role or aria-label itself.
+  DOMPurify.addHook('afterSanitizeAttributes', labelCodeBlock)
+  try {
+    return DOMPurify.sanitize(html, {
+      // Allowed tags (no scripts, iframes, objects, etc.)
+      ALLOWED_TAGS: [
+        'p',
+        'br',
+        'strong',
+        'b',
+        'em',
+        'i',
+        'u',
+        's',
+        'strike',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'ul',
+        'ol',
+        'li',
+        'blockquote',
+        'pre',
+        'code',
+        'a',
+        'img',
+        'table',
+        'thead',
+        'tbody',
+        'tr',
+        'th',
+        'td',
+        'hr',
+        'span',
+        'div',
+      ],
+      // Allowed attributes
+      ALLOWED_ATTR: [
+        'href',
+        'src',
+        'alt',
+        'title',
+        'class',
+        'target',
+        'rel',
+        'loading',
+      ],
+      // Force links to have security attributes
+      ADD_ATTR: ['target', 'rel'],
+      // Don't allow data: URLs for images (could contain XSS)
+      ALLOW_DATA_ATTR: false,
+      // Force all URLs to be safe
+      ALLOWED_URI_REGEXP:
+        /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+    })
+  } finally {
+    DOMPurify.removeHook('afterSanitizeAttributes')
+  }
 }
 
 /**

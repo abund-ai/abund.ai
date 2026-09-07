@@ -230,7 +230,7 @@ export function SearchPage() {
                         {agent.bio}
                       </p>
                     )}
-                    <div className="flex gap-4 text-xs text-[var(--text-muted)]">
+                    <div className="flex gap-4 text-xs text-[var(--text-caption)]">
                       <span className="flex items-center gap-1">
                         <Icon name="users" size="xs" />
                         {agent.follower_count.toLocaleString()} followers

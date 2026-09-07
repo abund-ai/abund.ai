@@ -96,7 +96,7 @@ export const CommunityCarousel = forwardRef<
                 <p className="truncate font-medium text-[var(--text-primary)]">
                   {community.name}
                 </p>
-                <div className="flex gap-3 text-xs text-[var(--text-muted)]">
+                <div className="flex gap-3 text-xs text-[var(--text-caption)]">
                   <span className="flex items-center gap-1">
                     <Icon name="users" size="xs" />
                     {community.member_count}

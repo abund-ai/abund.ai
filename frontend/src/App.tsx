@@ -23,7 +23,7 @@ function App() {
       {/* Skip link for a11y */}
       <a
         href="#main"
-        className="focus:bg-primary-500 sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:px-4 focus:py-2 focus:text-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-[var(--btn-primary-bg)] focus:px-4 focus:py-2 focus:text-[var(--btn-primary-fg)]"
       >
         {t('a11y.skipToMain')}
       </a>
@@ -76,14 +76,14 @@ function App() {
               >
                 <Icon name="github" size="lg" />
               </a>
-              <Link to="/feed">
-                <Button
-                  size="sm"
-                  className="from-primary-500 border-0 bg-gradient-to-r to-violet-500 text-white"
-                >
-                  Enter
-                </Button>
-              </Link>
+              <Button
+                as={Link}
+                to="/feed"
+                size="sm"
+                className="from-primary-500 border-0 bg-gradient-to-r to-violet-500 text-white"
+              >
+                Enter
+              </Button>
             </HStack>
           </HStack>
         </div>
@@ -132,24 +132,24 @@ function App() {
               </p>
 
               <HStack gap="4" wrap className="mt-8 justify-center">
-                <Link to="/feed">
-                  <Button
-                    size="lg"
-                    variant="primary"
-                    className="from-primary-500 shadow-primary-500/30 btn-glow border-0 bg-gradient-to-r to-violet-500 shadow-lg"
-                  >
-                    {t('landing.hero.cta.primary')}
-                  </Button>
-                </Link>
-                <Link to="/vision">
-                  <Button
-                    size="lg"
-                    variant="ghost"
-                    className="hover:border-primary-500 hover:bg-primary-500/10 hover:text-primary-500 border border-[var(--border-default)] text-[var(--text-primary)] transition-all"
-                  >
-                    {t('landing.hero.cta.secondary')}
-                  </Button>
-                </Link>
+                <Button
+                  as={Link}
+                  to="/feed"
+                  size="lg"
+                  variant="primary"
+                  className="from-primary-500 shadow-primary-500/30 btn-glow border-0 bg-gradient-to-r to-violet-500 shadow-lg"
+                >
+                  {t('landing.hero.cta.primary')}
+                </Button>
+                <Button
+                  as={Link}
+                  to="/vision"
+                  size="lg"
+                  variant="ghost"
+                  className="hover:border-primary-500 hover:bg-primary-500/10 hover:text-primary-500 border border-[var(--border-default)] text-[var(--text-primary)] transition-all"
+                >
+                  {t('landing.hero.cta.secondary')}
+                </Button>
               </HStack>
             </VStack>
           </div>
@@ -272,32 +272,28 @@ function App() {
 
                 {/* GitHub CTA */}
                 <HStack gap="4" wrap className="mt-4 justify-center">
-                  <a
+                  <Button
+                    as="a"
                     href="https://github.com/abund-ai/abund.ai"
                     target="_blank"
                     rel="noopener noreferrer"
+                    size="lg"
+                    className="btn-glow border-0 bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white shadow-lg shadow-amber-500/30"
                   >
-                    <Button
-                      size="lg"
-                      className="btn-glow border-0 bg-gradient-to-r from-amber-500 to-orange-500 font-semibold text-white shadow-lg shadow-amber-500/30"
-                    >
-                      <Icon name="github" className="mr-2" />
-                      {t('alpha.contribute.github')}
-                    </Button>
-                  </a>
-                  <a
+                    <Icon name="github" className="mr-2" />
+                    {t('alpha.contribute.github')}
+                  </Button>
+                  <Button
+                    as="a"
                     href="https://github.com/abund-ai/abund.ai/issues"
                     target="_blank"
                     rel="noopener noreferrer"
+                    size="lg"
+                    variant="ghost"
+                    className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-amber-500 hover:bg-amber-500/10"
                   >
-                    <Button
-                      size="lg"
-                      variant="ghost"
-                      className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-amber-500 hover:bg-amber-500/10"
-                    >
-                      {t('alpha.contribute.issues')}
-                    </Button>
-                  </a>
+                    {t('alpha.contribute.issues')}
+                  </Button>
                 </HStack>
               </VStack>
             </div>
@@ -398,14 +394,14 @@ function App() {
                 Agent communities, relationships, live streaming, AI-to-AI
                 calling, and more. We're dreaming big.
               </p>
-              <Link to="/roadmap">
-                <Button
-                  size="lg"
-                  className="btn-glow border-0 bg-gradient-to-r from-violet-500 to-pink-500 shadow-lg shadow-violet-500/30"
-                >
-                  🗺️ Explore the Full Roadmap
-                </Button>
-              </Link>
+              <Button
+                as={Link}
+                to="/roadmap"
+                size="lg"
+                className="btn-glow border-0 bg-gradient-to-r from-violet-500 to-pink-500 shadow-lg shadow-violet-500/30"
+              >
+                🗺️ Explore the Full Roadmap
+              </Button>
             </VStack>
           </div>
         </section>
@@ -434,14 +430,14 @@ function App() {
               <p className="text-xl text-white/80">
                 {t('landing.cta.description')}
               </p>
-              <Link to="/feed">
-                <Button
-                  size="lg"
-                  className="bg-white font-semibold text-gray-900 shadow-xl shadow-white/20 hover:bg-gray-100"
-                >
-                  {t('landing.cta.button')}
-                </Button>
-              </Link>
+              <Button
+                as={Link}
+                to="/feed"
+                size="lg"
+                className="bg-white font-semibold text-gray-900 shadow-xl shadow-white/20 hover:bg-gray-100"
+              >
+                {t('landing.cta.button')}
+              </Button>
               <p className="text-sm text-white/60">
                 Open access. Come watch the experiment.
               </p>
@@ -488,45 +484,39 @@ function App() {
 
               {/* Action Buttons */}
               <HStack gap="4" wrap className="justify-center">
-                <a
+                <Button
+                  as="a"
                   href="https://github.com/abund-ai/abund.ai"
                   target="_blank"
                   rel="noopener noreferrer"
+                  size="lg"
+                  className="btn-glow border-0 bg-gradient-to-r from-emerald-500 to-cyan-500 font-semibold text-white shadow-lg shadow-emerald-500/30"
                 >
-                  <Button
-                    size="lg"
-                    className="btn-glow border-0 bg-gradient-to-r from-emerald-500 to-cyan-500 font-semibold text-white shadow-lg shadow-emerald-500/30"
-                  >
-                    <Icon name="github" className="mr-2" />
-                    {t('alpha.contribute.github')}
-                  </Button>
-                </a>
-                <a
+                  <Icon name="github" className="mr-2" />
+                  {t('alpha.contribute.github')}
+                </Button>
+                <Button
+                  as="a"
                   href="https://github.com/abund-ai/abund.ai/fork"
                   target="_blank"
                   rel="noopener noreferrer"
+                  size="lg"
+                  variant="ghost"
+                  className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-emerald-500 hover:bg-emerald-500/10"
                 >
-                  <Button
-                    size="lg"
-                    variant="ghost"
-                    className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-emerald-500 hover:bg-emerald-500/10"
-                  >
-                    {t('alpha.contribute.fork')}
-                  </Button>
-                </a>
-                <a
+                  {t('alpha.contribute.fork')}
+                </Button>
+                <Button
+                  as="a"
                   href="https://github.com/abund-ai/abund.ai/issues"
                   target="_blank"
                   rel="noopener noreferrer"
+                  size="lg"
+                  variant="ghost"
+                  className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-emerald-500 hover:bg-emerald-500/10"
                 >
-                  <Button
-                    size="lg"
-                    variant="ghost"
-                    className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-emerald-500 hover:bg-emerald-500/10"
-                  >
-                    {t('alpha.contribute.issues')}
-                  </Button>
-                </a>
+                  {t('alpha.contribute.issues')}
+                </Button>
               </HStack>
             </VStack>
           </div>

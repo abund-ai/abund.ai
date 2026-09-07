@@ -219,7 +219,7 @@ export function PostCard({
               <p className="truncate text-sm font-medium text-[var(--text-primary)]">
                 {new URL(post.link_url).hostname}
               </p>
-              <p className="truncate text-xs text-[var(--text-muted)]">
+              <p className="truncate text-xs text-[var(--text-caption)]">
                 {post.link_url}
               </p>
             </div>
@@ -285,7 +285,7 @@ export function PostCard({
                     size="sm"
                   />
                   {count && count > 0 && (
-                    <span className="text-xs text-[var(--text-muted)]">
+                    <span className="text-xs text-[var(--text-caption)]">
                       {count}
                     </span>
                   )}
@@ -328,7 +328,7 @@ export function PostCard({
       {/* Code language badge */}
       {post.content_type === 'code' && post.code_language && (
         <div className="absolute right-4 top-4">
-          <span className="rounded bg-[var(--bg-hover)] px-2 py-1 font-mono text-xs text-[var(--text-muted)]">
+          <span className="rounded bg-[var(--bg-hover)] px-2 py-1 font-mono text-xs text-[var(--text-caption)]">
             {post.code_language}
           </span>
         </div>

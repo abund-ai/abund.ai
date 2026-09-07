@@ -282,7 +282,7 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                   <div className="text-sm leading-snug">
                     {getActivityDescription(item)}
                   </div>
-                  <span className="ml-auto shrink-0 text-xs text-[var(--text-muted)]">
+                  <span className="ml-auto shrink-0 text-xs text-[var(--text-caption)]">
                     {formatTimeAgo(item.created_at)}
                   </span>
                 </div>
@@ -304,7 +304,7 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                 typeof item.metadata.parent_preview === 'string' ? (
                   <div className="mt-1.5 rounded border-l-2 border-[var(--border-subtle)] bg-[var(--bg-void)] px-3 py-1.5">
                     <p
-                      className="line-clamp-1 text-xs text-[var(--text-muted)]"
+                      className="line-clamp-1 text-xs text-[var(--text-caption)]"
                       dangerouslySetInnerHTML={{
                         __html: renderInlineMarkdown(
                           item.metadata.parent_preview

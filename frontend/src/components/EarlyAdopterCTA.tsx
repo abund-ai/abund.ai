@@ -33,15 +33,17 @@ export function EarlyAdopterCTA({ variant = 'banner' }: EarlyAdopterCTAProps) {
               {t('earlyAdopter.footer.description')}
             </p>
           </div>
-          <a href={twitterShareUrl} target="_blank" rel="noopener noreferrer">
-            <Button
-              size="sm"
-              className="from-primary-500 border-0 bg-gradient-to-r to-pink-500 text-white"
-            >
-              <Icon name="x" size="sm" className="mr-1.5" />
-              {t('earlyAdopter.footer.cta')}
-            </Button>
-          </a>
+          <Button
+            as="a"
+            href={twitterShareUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            size="sm"
+            className="from-primary-500 border-0 bg-gradient-to-r to-pink-500 text-white"
+          >
+            <Icon name="x" size="sm" className="mr-1.5" />
+            {t('earlyAdopter.footer.cta')}
+          </Button>
         </HStack>
       </div>
     )
@@ -61,29 +63,26 @@ export function EarlyAdopterCTA({ variant = 'banner' }: EarlyAdopterCTAProps) {
             {t('earlyAdopter.sidebar.description')}
           </CardDescription>
           <VStack gap="2" className="mt-3">
-            <Link to="/#main" className="w-full">
-              <Button
-                size="sm"
-                className="from-primary-500 w-full border-0 bg-gradient-to-r to-violet-500 text-white"
-              >
-                {t('earlyAdopter.sidebar.cta')}
-              </Button>
-            </Link>
-            <a
+            <Button
+              as={Link}
+              to="/#main"
+              size="sm"
+              className="from-primary-500 w-full border-0 bg-gradient-to-r to-violet-500 text-white"
+            >
+              {t('earlyAdopter.sidebar.cta')}
+            </Button>
+            <Button
+              as="a"
               href={twitterShareUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full"
+              size="sm"
+              variant="ghost"
+              className="w-full border border-[var(--border-subtle)] hover:border-pink-500 hover:bg-pink-500/10"
             >
-              <Button
-                size="sm"
-                variant="ghost"
-                className="w-full border border-[var(--border-subtle)] hover:border-pink-500 hover:bg-pink-500/10"
-              >
-                <Icon name="x" size="sm" className="mr-1.5" />
-                {t('earlyAdopter.cta.shareOnX')}
-              </Button>
-            </a>
+              <Icon name="x" size="sm" className="mr-1.5" />
+              {t('earlyAdopter.cta.shareOnX')}
+            </Button>
           </VStack>
         </CardHeader>
       </Card>
@@ -120,29 +119,27 @@ export function EarlyAdopterCTA({ variant = 'banner' }: EarlyAdopterCTAProps) {
             </div>
 
             <HStack gap="4" wrap className="mt-4 justify-center">
-              <Link to="/#main">
-                <Button
-                  size="lg"
-                  className="btn-glow border-0 bg-gradient-to-r from-violet-500 to-pink-500 font-semibold text-white shadow-lg shadow-violet-500/30"
-                >
-                  <Icon name="robot" size="sm" className="mr-2" />
-                  {t('earlyAdopter.cta.register')}
-                </Button>
-              </Link>
-              <a
+              <Button
+                as={Link}
+                to="/#main"
+                size="lg"
+                className="btn-glow border-0 bg-gradient-to-r from-violet-500 to-pink-500 font-semibold text-white shadow-lg shadow-violet-500/30"
+              >
+                <Icon name="robot" size="sm" className="mr-2" />
+                {t('earlyAdopter.cta.register')}
+              </Button>
+              <Button
+                as="a"
                 href={twitterShareUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                size="lg"
+                variant="ghost"
+                className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-pink-500 hover:bg-pink-500/10"
               >
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-pink-500 hover:bg-pink-500/10"
-                >
-                  <Icon name="x" size="sm" className="mr-2" />
-                  {t('earlyAdopter.cta.shareOnX')}
-                </Button>
-              </a>
+                <Icon name="x" size="sm" className="mr-2" />
+                {t('earlyAdopter.cta.shareOnX')}
+              </Button>
             </HStack>
           </VStack>
         </div>

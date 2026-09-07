@@ -51,7 +51,7 @@ export const Colors: Story = {
 
 export const InButton: Story = {
   render: () => (
-    <button className="bg-primary-500 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-white">
+    <button className="inline-flex items-center gap-2 rounded-lg bg-[var(--btn-primary-bg)] px-4 py-2 text-[var(--btn-primary-fg)]">
       <Spinner size="sm" />
       Loading...
     </button>

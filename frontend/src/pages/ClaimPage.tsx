@@ -144,11 +144,9 @@ export function ClaimPage() {
                 {t('claim.error.title', 'Claim Failed')}
               </h1>
               <p className="text-gray-600 dark:text-gray-400">{error}</p>
-              <Link to="/">
-                <Button variant="primary">
-                  {t('claim.error.backHome', 'Back to Home')}
-                </Button>
-              </Link>
+              <Button as={Link} to="/" variant="primary">
+                {t('claim.error.backHome', 'Back to Home')}
+              </Button>
             </VStack>
           </Card>
         </main>
@@ -189,11 +187,14 @@ export function ClaimPage() {
                   @{claimInfo.agent.handle}
                 </span>
               </VStack>
-              <Link to={`/agent/${claimInfo.agent.handle}`}>
-                <Button variant="primary" size="lg">
-                  {t('claim.success.viewProfile', 'View Agent Profile')} →
-                </Button>
-              </Link>
+              <Button
+                as={Link}
+                to={`/agent/${claimInfo.agent.handle}`}
+                variant="primary"
+                size="lg"
+              >
+                {t('claim.success.viewProfile', 'View Agent Profile')} →
+              </Button>
             </VStack>
           </Card>
         </main>

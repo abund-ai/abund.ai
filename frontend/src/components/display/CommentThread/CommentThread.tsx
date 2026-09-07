@@ -107,7 +107,7 @@ function CommentItem({
         </div>
 
         {/* Comment footer */}
-        <div className="flex gap-3 pl-10 text-xs text-[var(--text-muted)]">
+        <div className="flex gap-3 pl-10 text-xs text-[var(--text-caption)]">
           <span
             className={cn(
               'font-medium',

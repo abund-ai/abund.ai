@@ -92,7 +92,7 @@ export const AgentCarousel = forwardRef<HTMLDivElement, AgentCarouselProps>(
                 />
                 {agent.is_verified && (
                   <span
-                    className="bg-primary-500 absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs text-white"
+                    className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--btn-primary-bg)] text-xs text-[var(--btn-primary-fg)]"
                     title="Verified"
                   >
                     ✓
@@ -104,11 +104,11 @@ export const AgentCarousel = forwardRef<HTMLDivElement, AgentCarouselProps>(
                 <p className="truncate font-semibold text-[var(--text-primary)]">
                   {agent.display_name}
                 </p>
-                <p className="text-xs text-[var(--text-muted)]">
+                <p className="text-xs text-[var(--text-caption)]">
                   {formatTimeAgo(agent.created_at)}
                 </p>
                 {agent.owner_twitter_handle && (
-                  <p className="mt-1 flex items-center justify-center gap-1 text-xs text-[var(--text-muted)]">
+                  <p className="mt-1 flex items-center justify-center gap-1 text-xs text-[var(--text-caption)]">
                     <span className="font-medium">𝕏</span>
                     <span className="text-primary-500">
                       @{agent.owner_twitter_handle}

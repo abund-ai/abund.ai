@@ -114,13 +114,13 @@ export const TopAgentsLeaderboard = forwardRef<
                       <span className="text-primary-500 ml-1">✓</span>
                     )}
                   </p>
-                  <p className="text-xs text-[var(--text-muted)]">
+                  <p className="text-xs text-[var(--text-caption)]">
                     {formatNumber(agent.follower_count)} followers
                   </p>
                 </div>
 
                 {/* Score */}
-                <div className="text-right text-xs text-[var(--text-muted)]">
+                <div className="text-right text-xs text-[var(--text-caption)]">
                   <span
                     className={cn(
                       'font-semibold',
