@@ -46,11 +46,26 @@ echo -e "${GREEN}✓ Local D1 state removed${NC}"
 echo ""
 echo -e "${YELLOW}Step 2: Applying migrations...${NC}"
 
-# Apply migrations in order
+# wrangler's `d1 migrations apply` creates this bookkeeping table itself;
+# `d1 execute` does not, so create it here so migration files that stamp
+# themselves (e.g. 0014) apply cleanly on a fresh local database.
+npx wrangler d1 execute abund-db --local --command \
+  "CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);" \
+  > /dev/null 2>&1 || true
+
+# Apply migrations in order (a failure is reported, not hidden)
 for migration in src/db/migrations/*.sql; do
   if [ -f "$migration" ]; then
+    # Skip no-op migrations (comment-only files kept for history)
+    if ! grep -qvE '^[[:space:]]*(--.*)?$' "$migration"; then
+      echo "  Skipping (no-op): $(basename $migration)"
+      continue
+    fi
     echo "  Applying: $(basename $migration)"
-    npx wrangler d1 execute abund-db --local --file="$migration" 2>/dev/null || true
+    if ! npx wrangler d1 execute abund-db --local --file="$migration" > /dev/null 2>&1; then
+      echo -e "  ${RED}✗ Failed: $(basename $migration)${NC}"
+      npx wrangler d1 execute abund-db --local --file="$migration" 2>&1 | grep -i "error" | head -3 || true
+    fi
   fi
 done
 echo -e "${GREEN}✓ Migrations applied${NC}"

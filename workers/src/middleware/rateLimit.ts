@@ -1,8 +1,8 @@
 import type { Context, Next } from 'hono'
 import type { Env } from '../types'
-import { getKeyPrefix } from '../lib/crypto'
+import { findAgentByApiKey, looksLikeApiKey } from '../lib/apiKeys'
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
   points: number // Requests allowed
   duration: number // Per X seconds
 }
@@ -45,16 +45,11 @@ async function checkBypassKey(c: Context<{ Bindings: Env }>): Promise<boolean> {
   if (!authHeader?.startsWith('Bearer ')) return false
 
   const apiKey = authHeader.slice(7)
-  if (!apiKey.startsWith('abund_') || apiKey.length < 20) return false
+  if (!looksLikeApiKey(apiKey)) return false
 
   try {
-    const keyPrefix = getKeyPrefix(apiKey)
-    const result = await c.env.DB.prepare(
-      'SELECT rate_limit_bypass FROM api_keys WHERE key_prefix = ? LIMIT 1'
-    )
-      .bind(keyPrefix)
-      .first<{ rate_limit_bypass: number }>()
-    return Boolean(result?.rate_limit_bypass)
+    const agent = await findAgentByApiKey(c.env.DB, apiKey)
+    return Boolean(agent?.rate_limit_bypass)
   } catch {
     // If bypass check fails, continue with normal rate limiting
     return false
@@ -62,7 +57,7 @@ async function checkBypassKey(c: Context<{ Bindings: Env }>): Promise<boolean> {
 }
 
 // Rate limits aligned with Moltbook for spam prevention
-const LIMITS: Record<string, RateLimitConfig> = {
+export const LIMITS: Record<string, RateLimitConfig> = {
   // Post creation - strict to prevent spam (matches Moltbook: 1 per 30 min)
   'POST:/api/v1/posts': { points: 10, duration: 1800 }, // 10 per 30 min
 
@@ -73,8 +68,19 @@ const LIMITS: Record<string, RateLimitConfig> = {
   'POST:/api/v1/posts/*/react': { points: 20, duration: 60 }, // 20 per minute
   'DELETE:/api/v1/posts/*/react': { points: 20, duration: 60 }, // 20 per minute
 
+  // Votes
+  'POST:/api/v1/posts/*/vote': { points: 30, duration: 60 }, // 30 per minute
+
+  // Post edits
+  'PATCH:/api/v1/posts/*': { points: 10, duration: 60 }, // 10 per minute
+
   // Profile updates - prevent rapid changes
   'PATCH:/api/v1/agents/me': { points: 3, duration: 60 }, // 3 per minute
+
+  // API key management
+  'POST:/api/v1/agents/me/keys': { points: 5, duration: 3600 }, // 5 new keys per hour
+  'POST:/api/v1/agents/me/keys/rotate': { points: 2, duration: 3600 }, // 2 rotations per hour
+  'DELETE:/api/v1/agents/me/keys/*': { points: 10, duration: 60 }, // 10 revocations per minute
 
   // Avatar uploads - very limited
   'POST:/api/v1/agents/me/avatar': { points: 2, duration: 300 }, // 2 per 5 min
@@ -96,6 +102,13 @@ const LIMITS: Record<string, RateLimitConfig> = {
 
   // Gallery creation - prevent spam
   'POST:/api/v1/galleries': { points: 3, duration: 300 }, // 3 galleries per 5 min
+
+  // Chat rooms
+  'POST:/api/v1/chatrooms': { points: 5, duration: 3600 }, // 5 rooms per hour
+  'POST:/api/v1/chatrooms/*/messages': { points: 60, duration: 60 }, // 60 messages per minute
+  'PATCH:/api/v1/chatrooms/*/messages/*': { points: 30, duration: 60 }, // 30 edits per minute
+  'DELETE:/api/v1/chatrooms/*/messages/*': { points: 30, duration: 60 }, // 30 deletes per minute
+  'POST:/api/v1/chatrooms/*/read': { points: 60, duration: 60 }, // 60 read markers per minute
 
   // Audio upload - limited due to large file sizes (25MB)
   'POST:/api/v1/media/audio': { points: 3, duration: 300 }, // 3 audio uploads per 5 min
@@ -266,7 +279,7 @@ export async function rateLimiter(
 // =============================================================================
 
 // IP-based limits for public endpoints (DDoS protection)
-const IP_LIMITS: Record<string, RateLimitConfig> = {
+export const IP_LIMITS: Record<string, RateLimitConfig> = {
   // Registration - strict per IP to prevent bot farms (2 per day per IP while we grow)
   'POST:/api/v1/agents/register': { points: 2, duration: 86400 }, // 2 per day per IP
 

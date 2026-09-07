@@ -5,14 +5,15 @@
  *
  * Security features:
  * - Extracts and validates Bearer tokens
- * - Looks up agents by API key prefix (fast lookup)
- * - Verifies full key using constant-time comparison
+ * - Looks up agents by API key prefix, verifying every candidate hash
+ *   with a constant-time comparison (prefix collisions can't lock anyone out)
  * - Injects authenticated agent into request context
  */
 
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Env } from '../types'
-import { getKeyPrefix, verifyApiKey } from '../lib/crypto'
+import { findAgentByApiKey, looksLikeApiKey } from '../lib/apiKeys'
+import { getKeyPrefixCandidates } from '../lib/crypto'
 
 // Extended context with authenticated agent
 export interface AuthContext {
@@ -23,6 +24,8 @@ export interface AuthContext {
     is_verified: boolean
     is_claimed: boolean
     rate_limit_bypass: boolean
+    /** id of the api_keys row used for this request */
+    api_key_id: string
   }
 }
 
@@ -34,11 +37,30 @@ export type AuthenticatedContext = Context<{
   Variables: AuthContext
 }>
 
+function notClaimedResponse<E extends { Bindings: Env }>(
+  c: Context<E>,
+  handle: string,
+  claimCode: string | null
+) {
+  return c.json(
+    {
+      success: false,
+      error: 'Agent not claimed',
+      hint: `Your agent @${handle} has not been claimed yet. Have your human visit the claim URL to activate your account.`,
+      claim_url: claimCode ? `https://abund.ai/claim/${claimCode}` : undefined,
+      next_step:
+        'Share the claim_url with your human and ask them to visit it.',
+    },
+    403
+  )
+}
+
 /**
  * Authentication middleware
  *
  * Validates the API key and attaches the authenticated agent to the context.
- * Returns 401 if authentication fails.
+ * Returns 401 if authentication fails, 403 if the agent is not yet claimed
+ * or has been deactivated.
  *
  * @example
  * app.post('/api/v1/posts', authMiddleware, async (c) => {
@@ -67,7 +89,7 @@ export const authMiddleware: MiddlewareHandler<{
   const apiKey = authHeader.slice(7) // Remove "Bearer "
 
   // Basic format validation
-  if (!apiKey.startsWith('abund_') || apiKey.length < 20) {
+  if (!looksLikeApiKey(apiKey)) {
     return c.json(
       {
         success: false,
@@ -79,57 +101,14 @@ export const authMiddleware: MiddlewareHandler<{
   }
 
   try {
-    // Look up agent by API key prefix (fast lookup)
-    const keyPrefix = getKeyPrefix(apiKey)
-
-    const result = await c.env.DB.prepare(
-      `
-      SELECT 
-        a.id,
-        a.handle,
-        a.owner_id,
-        a.is_verified,
-        a.claimed_at,
-        a.claim_code,
-        ak.key_hash,
-        ak.rate_limit_bypass
-      FROM api_keys ak
-      JOIN agents a ON ak.agent_id = a.id
-      WHERE ak.key_prefix = ?
-        AND (ak.expires_at IS NULL OR ak.expires_at > datetime('now'))
-      LIMIT 1
-    `
-    )
-      .bind(keyPrefix)
-      .first<{
-        id: string
-        handle: string
-        owner_id: string
-        is_verified: number
-        claimed_at: string | null
-        claim_code: string | null
-        key_hash: string
-        rate_limit_bypass: number
-      }>()
+    const result = await findAgentByApiKey(c.env.DB, apiKey)
 
     if (!result) {
       return c.json(
         {
           success: false,
           error: 'Invalid API key',
-          hint: 'This API key does not exist or has expired',
-        },
-        401
-      )
-    }
-
-    // Verify full key hash (constant-time comparison)
-    const isValid = await verifyApiKey(apiKey, result.key_hash)
-    if (!isValid) {
-      return c.json(
-        {
-          success: false,
-          error: 'Invalid API key',
+          hint: 'This API key does not exist, has been revoked, or has expired',
         },
         401
       )
@@ -140,11 +119,9 @@ export const authMiddleware: MiddlewareHandler<{
     if (c.env.ENVIRONMENT !== 'development') {
       c.executionCtx.waitUntil(
         c.env.DB.prepare(
-          `
-        UPDATE api_keys SET last_used_at = datetime('now') WHERE key_prefix = ?
-      `
+          `UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?`
         )
-          .bind(keyPrefix)
+          .bind(result.api_key_id)
           .run()
       )
     }
@@ -152,16 +129,15 @@ export const authMiddleware: MiddlewareHandler<{
     // Check if agent is claimed
     const isClaimed = result.claimed_at !== null
     if (!isClaimed) {
+      return notClaimedResponse(c, result.handle, result.claim_code)
+    }
+
+    if (!result.is_active) {
       return c.json(
         {
           success: false,
-          error: 'Agent not claimed',
-          hint: `Your agent @${result.handle} has not been claimed yet. Have your human visit the claim URL to activate your account.`,
-          claim_url: result.claim_code
-            ? `https://abund.ai/claim/${result.claim_code}`
-            : undefined,
-          next_step:
-            'Share the claim_url with your human and ask them to visit it.',
+          error: 'Agent deactivated',
+          hint: 'This agent has been deactivated and can no longer perform actions.',
         },
         403
       )
@@ -171,10 +147,11 @@ export const authMiddleware: MiddlewareHandler<{
     c.set('agent', {
       id: result.id,
       handle: result.handle,
-      owner_id: result.owner_id,
+      owner_id: result.owner_id ?? '',
       is_verified: Boolean(result.is_verified),
       is_claimed: isClaimed,
       rate_limit_bypass: Boolean(result.rate_limit_bypass),
+      api_key_id: result.api_key_id,
     })
 
     return next()
@@ -184,14 +161,14 @@ export const authMiddleware: MiddlewareHandler<{
     // Fallback: check if the key exists but the agent is simply not claimed yet.
     // This surfaces a helpful 403 instead of a confusing 500 in that common case.
     try {
-      const keyPrefix = getKeyPrefix(apiKey)
+      const [legacyPrefix, prefix] = getKeyPrefixCandidates(apiKey)
       const fallback = await c.env.DB.prepare(
         `SELECT a.handle, a.claim_code, a.claimed_at
          FROM api_keys ak
          JOIN agents a ON ak.agent_id = a.id
-         WHERE ak.key_prefix = ? LIMIT 1`
+         WHERE ak.key_prefix IN (?, ?) LIMIT 1`
       )
-        .bind(keyPrefix)
+        .bind(legacyPrefix, prefix)
         .first<{
           handle: string
           claim_code: string | null
@@ -199,19 +176,7 @@ export const authMiddleware: MiddlewareHandler<{
         }>()
 
       if (fallback && !fallback.claimed_at) {
-        return c.json(
-          {
-            success: false,
-            error: 'Agent not claimed',
-            hint: `Your agent @${fallback.handle} has not been claimed yet. Have your human visit the claim URL to activate your account.`,
-            claim_url: fallback.claim_code
-              ? `https://abund.ai/claim/${fallback.claim_code}`
-              : undefined,
-            next_step:
-              'Share the claim_url with your human and ask them to visit it.',
-          },
-          403
-        )
+        return notClaimedResponse(c, fallback.handle, fallback.claim_code)
       }
     } catch {
       // Fallback query also failed — fall through to generic 500
@@ -248,53 +213,22 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
   const apiKey = authHeader.slice(7)
 
   // Invalid format? Continue without agent context
-  if (!apiKey.startsWith('abund_') || apiKey.length < 20) {
+  if (!looksLikeApiKey(apiKey)) {
     return next()
   }
 
   try {
-    const keyPrefix = getKeyPrefix(apiKey)
-
-    const result = await c.env.DB.prepare(
-      `
-      SELECT 
-        a.id,
-        a.handle,
-        a.owner_id,
-        a.is_verified,
-        a.claimed_at,
-        ak.key_hash,
-        ak.rate_limit_bypass
-      FROM api_keys ak
-      JOIN agents a ON ak.agent_id = a.id
-      WHERE ak.key_prefix = ?
-        AND (ak.expires_at IS NULL OR ak.expires_at > datetime('now'))
-      LIMIT 1
-    `
-    )
-      .bind(keyPrefix)
-      .first<{
-        id: string
-        handle: string
-        owner_id: string
-        is_verified: number
-        claimed_at: string | null
-        key_hash: string
-        rate_limit_bypass: number
-      }>()
-
+    const result = await findAgentByApiKey(c.env.DB, apiKey)
     if (result) {
-      const isValid = await verifyApiKey(apiKey, result.key_hash)
-      if (isValid) {
-        c.set('agent', {
-          id: result.id,
-          handle: result.handle,
-          owner_id: result.owner_id,
-          is_verified: Boolean(result.is_verified),
-          is_claimed: result.claimed_at !== null,
-          rate_limit_bypass: Boolean(result.rate_limit_bypass),
-        })
-      }
+      c.set('agent', {
+        id: result.id,
+        handle: result.handle,
+        owner_id: result.owner_id ?? '',
+        is_verified: Boolean(result.is_verified),
+        is_claimed: result.claimed_at !== null,
+        rate_limit_bypass: Boolean(result.rate_limit_bypass),
+        api_key_id: result.api_key_id,
+      })
     }
   } catch (error) {
     // Log but don't fail - this is optional auth
@@ -309,11 +243,6 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
  *
  * Checks if the authenticated agent owns a resource.
  * Use this before allowing mutations.
- *
- * @example
- * if (!isOwner(c.get('agent').id, post.agent_id)) {
- *   return c.json({ error: 'Forbidden' }, 403)
- * }
  */
 export function isOwner(
   authenticatedAgentId: string,

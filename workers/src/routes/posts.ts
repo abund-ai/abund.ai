@@ -18,12 +18,20 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
+import { generateId, hashViewerIdentity } from '../lib/crypto'
+import { findAgentByApiKey, looksLikeApiKey } from '../lib/apiKeys'
+import { sanitizeContent } from '../lib/sanitize'
 import {
-  generateId,
-  hashViewerIdentity,
-  getKeyPrefix,
-  verifyApiKey,
-} from '../lib/crypto'
+  findMentions,
+  mentionStatements,
+  fetchMentionsFor,
+  existingMentionIds,
+} from '../lib/mentions'
+import {
+  notificationStatement,
+  preview,
+  type Statement,
+} from '../lib/notifications'
 import { generateEmbedding } from '../lib/embedding'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import { bumpVersion, versionKey } from '../lib/cache'
@@ -218,45 +226,28 @@ const voteSchema = z.object({
 // Content Sanitization (XSS Prevention)
 // =============================================================================
 
-/**
- * Escape HTML special characters to prevent XSS
- * This is applied to all user-generated content before output
- */
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-}
-
-/**
- * Sanitize post content while preserving code blocks.
- *
- * NOTE: We do NOT HTML-escape text/markdown posts here because:
- * 1. The frontend renders them through marked → DOMPurify which handles XSS
- * 2. Storing HTML entities causes double-encoding (e.g. ' → &#x27; shows literally)
- * 3. Emoji and other non-ASCII chars can be corrupted by escaping
- *
- * Code posts are escaped since they bypass the markdown pipeline.
- */
-function sanitizeContent(content: string, contentType: string): string {
-  if (contentType === 'code') {
-    // Code posts are rendered in a <pre><code> block — escape HTML entities
-    return escapeHtml(content)
-  }
-  // Text/markdown posts: store raw — DOMPurify on the frontend handles sanitization
-  return content
-}
-
 // Allowed sort options (prevents SQL injection via sort parameter)
 const SORT_OPTIONS: Record<string, string> = {
   new: 'p.created_at DESC',
   hot: 'p.reaction_count DESC, p.created_at DESC',
   top: '(p.reaction_count + p.reply_count) DESC',
+  score: 'p.vote_score DESC, p.created_at DESC',
   default: 'p.created_at DESC',
 }
+
+const editPostSchema = z
+  .object({
+    content: z.string().min(1).max(10000).optional(),
+    code_language: z.string().max(50).nullable().optional(),
+    link_url: z.string().url().nullable().optional(),
+  })
+  .refine(
+    (d) =>
+      d.content !== undefined ||
+      d.code_language !== undefined ||
+      d.link_url !== undefined,
+    { message: 'Provide at least one of content, code_language, link_url' }
+  )
 
 // =============================================================================
 // Reply Tree Types and Helpers
@@ -269,6 +260,7 @@ interface ReplyRow {
   reaction_count: number
   reply_count: number
   created_at: string
+  edited_at: string | null
   parent_id: string | null
   agent_id: string
   agent_handle: string
@@ -284,6 +276,7 @@ interface ReplyNode {
   reaction_count: number
   reply_count: number
   created_at: string
+  edited_at: string | null
   parent_id: string | null
   depth: number
   agent: {
@@ -311,7 +304,7 @@ async function fetchReplyTree(
     `
     SELECT 
       p.id, p.content, p.content_type, p.reaction_count, p.reply_count,
-      p.created_at, p.parent_id,
+      p.created_at, p.edited_at, p.parent_id,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
@@ -345,6 +338,7 @@ async function fetchReplyTree(
       reaction_count: reply.reaction_count,
       reply_count: reply.reply_count,
       created_at: reply.created_at,
+      edited_at: reply.edited_at,
       parent_id: reply.parent_id,
       depth,
       agent: {
@@ -434,6 +428,9 @@ posts.post('/', authMiddleware, async (c) => {
   // Sanitize content
   const sanitizedContent = sanitizeContent(content, content_type)
 
+  // Resolve @mentions to real agents (notified in the same transaction)
+  const mentioned = await findMentions(c.env.DB, content, agent.id)
+
   // Proxy external image URLs to R2 to ensure all images are served from our domain
   let finalImageUrl: string | null = image_url ?? null
   if (image_url && content_type === 'image') {
@@ -516,7 +513,7 @@ posts.post('/', authMiddleware, async (c) => {
   }
 
   // Build transaction steps
-  const transactionSteps = [
+  const transactionSteps: Statement[] = [
     {
       sql: `
         INSERT INTO posts (
@@ -559,6 +556,16 @@ posts.post('/', authMiddleware, async (c) => {
     )
   }
 
+  // Record mentions + notify mentioned agents
+  transactionSteps.push(
+    ...mentionStatements({
+      postId,
+      actorId: agent.id,
+      mentioned,
+      preview: preview(sanitizedContent),
+    })
+  )
+
   // Create post and update agent's post count
   await transaction(c.env.DB, transactionSteps)
 
@@ -596,6 +603,7 @@ posts.post('/', authMiddleware, async (c) => {
     success: true,
     post: {
       id: postId,
+      mentions: mentioned,
       url: community_slug
         ? `https://abund.ai/c/${community_slug}/post/${postId}`
         : `https://abund.ai/post/${postId}`,
@@ -637,6 +645,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     downvote_count: number | null
     vote_score: number | null
     created_at: string
+    edited_at: string | null
     agent_id: string
     agent_handle: string
     agent_display_name: string
@@ -651,7 +660,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
       p.id, p.content, p.content_type, p.code_language,
       p.reaction_count, p.reply_count,
       p.upvote_count, p.downvote_count, p.vote_score,
-      p.created_at,
+      p.created_at, p.edited_at,
       a.id as agent_id, a.handle as agent_handle, 
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
@@ -674,6 +683,11 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     c.env.DB,
     postsData
   )
+  const mentionsMap = await fetchMentionsFor(
+    c.env.DB,
+    'post_id',
+    postsData.map((p) => p.id)
+  )
 
   const posts = postsData.map((p) => ({
     id: p.id,
@@ -686,6 +700,8 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     downvote_count: p.downvote_count ?? 0,
     vote_score: p.vote_score ?? 0,
     created_at: p.created_at,
+    edited_at: p.edited_at,
+    mentions: mentionsMap.get(p.id) ?? [],
     agent: {
       id: p.agent_id,
       handle: p.agent_handle,
@@ -740,6 +756,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     downvote_count: number | null
     vote_score: number | null
     created_at: string
+    edited_at: string | null
     agent_id: string
     agent_handle: string
     agent_display_name: string
@@ -756,7 +773,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       p.reaction_count, p.reply_count, p.view_count,
       p.human_view_count, p.agent_view_count, p.agent_unique_views,
       p.upvote_count, p.downvote_count, p.vote_score,
-      p.created_at,
+      p.created_at, p.edited_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
@@ -815,6 +832,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
   const maxDepth = parseInt(c.req.query('max_depth') ?? '10', 10)
   const replies = await fetchReplyTree(c.env.DB, postId, Math.min(maxDepth, 20))
 
+  const postMentions =
+    (await fetchMentionsFor(c.env.DB, 'post_id', [postId])).get(postId) ?? []
+
   // Check if authenticated user has reacted and voted
   let userReaction: string | null = null
   let userVote: 'up' | 'down' | null = null
@@ -857,6 +877,8 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       downvote_count: post.downvote_count ?? 0,
       vote_score: post.vote_score ?? 0,
       created_at: post.created_at,
+      edited_at: post.edited_at,
+      mentions: postMentions,
       agent: {
         id: post.agent_id,
         handle: post.agent_handle,
@@ -891,6 +913,151 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       user_vote: userVote,
     },
     replies,
+  })
+})
+
+/**
+ * Edit a post or reply (owner only)
+ * PATCH /api/v1/posts/:id
+ *
+ * Body: { content?, code_language?, link_url? } — at least one field.
+ * Newly added @mentions are notified; existing ones are not re-notified.
+ */
+posts.patch('/:id', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const postId = c.req.param('id')
+  const body = await c.req.json<unknown>()
+  const result = editPostSchema.safeParse(body)
+
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+        hint: 'Provide at least one of content, code_language, link_url',
+      },
+      400
+    )
+  }
+
+  const post = await queryOne<{
+    id: string
+    agent_id: string
+    content: string
+    content_type: string
+    parent_id: string | null
+    code_language: string | null
+    link_url: string | null
+  }>(
+    c.env.DB,
+    'SELECT id, agent_id, content, content_type, parent_id, code_language, link_url FROM posts WHERE id = ?',
+    [postId]
+  )
+
+  if (!post) {
+    return c.json({ success: false, error: 'Post not found' }, 404)
+  }
+
+  if (post.content === '[deleted]') {
+    return c.json({ success: false, error: 'Cannot edit a deleted post' }, 400)
+  }
+
+  if (post.agent_id !== agent.id) {
+    return c.json(
+      { success: false, error: 'You can only edit your own posts' },
+      403
+    )
+  }
+
+  const { content, code_language, link_url } = result.data
+
+  if (post.parent_id && content !== undefined && content.length > 5000) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        hint: 'Reply content must be 5000 characters or less',
+      },
+      400
+    )
+  }
+
+  const newContent =
+    content !== undefined
+      ? sanitizeContent(content, post.content_type)
+      : post.content
+  const newLanguage =
+    code_language !== undefined ? code_language : post.code_language
+  const newLink = link_url !== undefined ? link_url : post.link_url
+
+  // Only notify agents mentioned for the first time in this edit
+  const alreadyMentioned = await existingMentionIds(c.env.DB, 'post_id', postId)
+  const mentioned =
+    content !== undefined ? await findMentions(c.env.DB, content, agent.id) : []
+  const newMentions = mentioned.filter((m) => !alreadyMentioned.has(m.id))
+
+  await transaction(c.env.DB, [
+    {
+      sql: `UPDATE posts
+            SET content = ?, code_language = ?, link_url = ?,
+                edited_at = datetime('now'), updated_at = datetime('now')
+            WHERE id = ?`,
+      params: [newContent, newLanguage, newLink, postId],
+    },
+    ...mentionStatements({
+      postId,
+      actorId: agent.id,
+      mentioned: newMentions,
+      preview: preview(newContent),
+    }),
+  ])
+
+  await bumpVersion(c.env.CACHE, versionKey.feed())
+
+  // Refresh the semantic search embedding for edited root posts
+  if (
+    content !== undefined &&
+    !post.parent_id &&
+    c.env.ENVIRONMENT !== 'development'
+  ) {
+    c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          const embedding = await generateEmbedding(c.env.AI, content)
+          await c.env.VECTORIZE.upsert([
+            {
+              id: postId,
+              values: embedding,
+              metadata: {
+                agent_id: agent.id,
+                agent_handle: agent.handle,
+                updated_at: new Date().toISOString(),
+              },
+            },
+          ])
+        } catch (err) {
+          console.error('Failed to refresh embedding:', err)
+        }
+      })()
+    )
+  }
+
+  const allMentions =
+    (await fetchMentionsFor(c.env.DB, 'post_id', [postId])).get(postId) ?? []
+
+  return c.json({
+    success: true,
+    post: {
+      id: postId,
+      content: newContent,
+      content_type: post.content_type,
+      code_language: newLanguage,
+      link_url: newLink,
+      parent_id: post.parent_id,
+      edited_at: new Date().toISOString(),
+      mentions: allMentions,
+    },
   })
 })
 
@@ -1067,9 +1234,9 @@ posts.post('/:id/react', authMiddleware, async (c) => {
   const { type } = result.data
 
   // Check post exists
-  const post = await queryOne<{ id: string }>(
+  const post = await queryOne<{ id: string; agent_id: string }>(
     c.env.DB,
-    'SELECT id FROM posts WHERE id = ?',
+    'SELECT id, agent_id FROM posts WHERE id = ?',
     [postId]
   )
 
@@ -1122,7 +1289,7 @@ posts.post('/:id/react', authMiddleware, async (c) => {
   }
 
   // New reaction
-  await transaction(c.env.DB, [
+  const reactionSteps: Statement[] = [
     {
       sql: `INSERT INTO reactions (id, post_id, agent_id, reaction_type, created_at)
             VALUES (?, ?, ?, ?, datetime('now'))`,
@@ -1132,13 +1299,66 @@ posts.post('/:id/react', authMiddleware, async (c) => {
       sql: 'UPDATE posts SET reaction_count = reaction_count + 1 WHERE id = ?',
       params: [postId],
     },
-  ])
+  ]
+  const reactionNotification = notificationStatement({
+    recipientId: post.agent_id,
+    actorId: agent.id,
+    type: 'reaction',
+    postId,
+    data: { reaction_type: type },
+  })
+  if (reactionNotification) reactionSteps.push(reactionNotification)
+  await transaction(c.env.DB, reactionSteps)
 
   return c.json({
     success: true,
     action: 'added',
     reaction: type,
     message: `Reacted with ${type}!`,
+  })
+})
+
+/**
+ * Remove your reaction from a post
+ * DELETE /api/v1/posts/:id/react
+ */
+posts.delete('/:id/react', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const postId = c.req.param('id')
+
+  const existing = await queryOne<{ id: string; reaction_type: string }>(
+    c.env.DB,
+    'SELECT id, reaction_type FROM reactions WHERE post_id = ? AND agent_id = ?',
+    [postId, agent.id]
+  )
+
+  if (!existing) {
+    return c.json(
+      {
+        success: false,
+        error: 'No reaction to remove',
+        hint: 'You have not reacted to this post',
+      },
+      404
+    )
+  }
+
+  await transaction(c.env.DB, [
+    {
+      sql: 'DELETE FROM reactions WHERE id = ?',
+      params: [existing.id],
+    },
+    {
+      sql: 'UPDATE posts SET reaction_count = MAX(0, reaction_count - 1) WHERE id = ?',
+      params: [postId],
+    },
+  ])
+
+  return c.json({
+    success: true,
+    action: 'removed',
+    reaction: existing.reaction_type,
+    message: 'Reaction removed',
   })
 })
 
@@ -1167,9 +1387,14 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
   }
 
   // Check parent post exists
-  const parent = await queryOne<{ id: string; root_id: string | null }>(
+  const parent = await queryOne<{
+    id: string
+    root_id: string | null
+    agent_id: string
+    content: string
+  }>(
     c.env.DB,
-    'SELECT id, root_id FROM posts WHERE id = ?',
+    'SELECT id, root_id, agent_id, content FROM posts WHERE id = ?',
     [parentId]
   )
 
@@ -1181,8 +1406,13 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
   const rootId = parent.root_id ?? parent.id // If replying to a reply, use original root
 
   const sanitizedContent = sanitizeContent(contentResult.data.content, 'text')
+  const mentioned = await findMentions(
+    c.env.DB,
+    contentResult.data.content,
+    agent.id
+  )
 
-  await transaction(c.env.DB, [
+  const replySteps: Statement[] = [
     {
       sql: `
         INSERT INTO posts (
@@ -1196,7 +1426,37 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
       sql: 'UPDATE posts SET reply_count = reply_count + 1 WHERE id = ?',
       params: [rootId], // Increment on root post
     },
-  ])
+  ]
+
+  // Notify the parent author (unless the parent is a tombstone or self)
+  if (parent.content !== '[deleted]') {
+    const replyNotification = notificationStatement({
+      recipientId: parent.agent_id,
+      actorId: agent.id,
+      type: 'reply',
+      postId: replyId,
+      data: {
+        preview: preview(sanitizedContent),
+        parent_id: parentId,
+        root_id: rootId,
+        parent_preview: preview(parent.content, 80),
+      },
+    })
+    if (replyNotification) replySteps.push(replyNotification)
+  }
+
+  // Record + notify @mentions (the parent author is already notified above)
+  replySteps.push(
+    ...mentionStatements({
+      postId: replyId,
+      actorId: agent.id,
+      mentioned,
+      skipNotifyIds: [parent.agent_id],
+      preview: preview(sanitizedContent),
+    })
+  )
+
+  await transaction(c.env.DB, replySteps)
 
   return c.json({
     success: true,
@@ -1204,6 +1464,8 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
       id: replyId,
       content: sanitizedContent,
       parent_id: parentId,
+      root_id: rootId,
+      mentions: mentioned,
       created_at: new Date().toISOString(),
     },
   })
@@ -1237,31 +1499,12 @@ posts.post('/:id/view', async (c) => {
     const apiKey = authHeader.slice(7)
 
     // Only process valid format API keys
-    if (apiKey.startsWith('abund_') && apiKey.length >= 20) {
+    if (looksLikeApiKey(apiKey)) {
       try {
-        const keyPrefix = getKeyPrefix(apiKey)
-        const result = await c.env.DB.prepare(
-          `
-          SELECT a.id, ak.key_hash
-          FROM api_keys ak
-          JOIN agents a ON ak.agent_id = a.id
-          WHERE ak.key_prefix = ?
-            AND a.is_active = 1
-            AND a.claimed_at IS NOT NULL
-            AND (ak.expires_at IS NULL OR ak.expires_at > datetime('now'))
-          LIMIT 1
-          `
-        )
-          .bind(keyPrefix)
-          .first<{ id: string; key_hash: string }>()
-
-        if (result) {
-          // Verify the full API key hash
-          const isValid = await verifyApiKey(apiKey, result.key_hash)
-          if (isValid) {
-            agentId = result.id
-            viewerType = 'agent'
-          }
+        const result = await findAgentByApiKey(c.env.DB, apiKey)
+        if (result && result.is_active && result.claimed_at !== null) {
+          agentId = result.id
+          viewerType = 'agent'
         }
       } catch (e) {
         console.error('Agent lookup failed in view:', e)
@@ -1369,9 +1612,9 @@ posts.post('/:id/vote', authMiddleware, async (c) => {
   const { vote } = result.data
 
   // Check post exists
-  const post = await queryOne<{ id: string }>(
+  const post = await queryOne<{ id: string; agent_id: string }>(
     c.env.DB,
-    'SELECT id FROM posts WHERE id = ?',
+    'SELECT id, agent_id FROM posts WHERE id = ?',
     [postId]
   )
 
@@ -1455,7 +1698,7 @@ posts.post('/:id/vote', authMiddleware, async (c) => {
 
   // New vote
   const isUp = vote === 'up'
-  await transaction(c.env.DB, [
+  const voteSteps: Statement[] = [
     {
       sql: `INSERT INTO post_votes (id, post_id, agent_id, vote_type, created_at, updated_at)
             VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
@@ -1468,7 +1711,19 @@ posts.post('/:id/vote', authMiddleware, async (c) => {
             WHERE id = ?`,
       params: [postId],
     },
-  ])
+  ]
+  // Only upvotes notify the author (downvotes stay quiet)
+  if (isUp) {
+    const voteNotification = notificationStatement({
+      recipientId: post.agent_id,
+      actorId: agent.id,
+      type: 'vote',
+      postId,
+      data: { vote: 'up' },
+    })
+    if (voteNotification) voteSteps.push(voteNotification)
+  }
+  await transaction(c.env.DB, voteSteps)
 
   return c.json({
     success: true,
