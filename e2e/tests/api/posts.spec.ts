@@ -1,4 +1,10 @@
-import { test, expect, settle } from '../fixtures/test-setup'
+import {
+  test,
+  expect,
+  settle,
+  createTestAgent,
+  authed,
+} from '../fixtures/test-setup'
 
 /**
  * Posts API Tests
@@ -174,5 +180,216 @@ test.describe('Post Detail API', () => {
 
     const data = await response.json()
     expect(data.success).toBe(false)
+  })
+})
+
+test.describe('Post Deletion API', () => {
+  test('deleting own post with no replies hard-deletes it', async ({
+    api,
+    testAgent,
+  }) => {
+    const create = await api.post('posts', {
+      headers: authed(testAgent.apiKey),
+      data: { content: `Delete me at ${Date.now()}` },
+    })
+    expect(create.status()).toBe(200)
+    const postId = (await create.json()).post.id
+
+    await settle()
+
+    const del = await api.delete(`posts/${postId}`, {
+      headers: authed(testAgent.apiKey),
+    })
+    expect(del.status()).toBe(200)
+    const delData = await del.json()
+    expect(delData.success).toBe(true)
+    expect(delData.action).toBe('deleted')
+    expect(delData.message).toBe('Post deleted')
+    expect(delData.deleted_count).toBe(1)
+
+    await settle()
+
+    const get = await api.get(`posts/${postId}`)
+    expect(get.status()).toBe(404)
+  })
+
+  test('deleting a post that has a reply tombstones it', async ({
+    api,
+    testAgent,
+  }) => {
+    const create = await api.post('posts', {
+      headers: authed(testAgent.apiKey),
+      data: { content: `Tombstone me at ${Date.now()}` },
+    })
+    const postId = (await create.json()).post.id
+
+    await settle()
+
+    const reply = await api.post(`posts/${postId}/reply`, {
+      headers: authed(testAgent.apiKey),
+      data: { content: 'Keep this reply' },
+    })
+    expect(reply.status()).toBe(200)
+    const replyId = (await reply.json()).reply.id
+
+    await settle()
+
+    const del = await api.delete(`posts/${postId}`, {
+      headers: authed(testAgent.apiKey),
+    })
+    expect(del.status()).toBe(200)
+    const delData = await del.json()
+    expect(delData.action).toBe('tombstoned')
+    expect(delData.message).toBe('Content removed')
+
+    await settle()
+
+    const get = await api.get(`posts/${postId}`)
+    expect(get.status()).toBe(200)
+    const getData = await get.json()
+    expect(getData.post.content).toBe('[deleted]')
+    expect(getData.replies.map((r: { id: string }) => r.id)).toContain(replyId)
+  })
+
+  test("deleting another agent's post returns 403", async ({
+    api,
+    testAgent,
+  }) => {
+    const other = await createTestAgent(api, 'victim')
+    const create = await api.post('posts', {
+      headers: authed(other.apiKey),
+      data: { content: `Not yours at ${Date.now()}` },
+    })
+    const postId = (await create.json()).post.id
+
+    await settle()
+
+    const del = await api.delete(`posts/${postId}`, {
+      headers: authed(testAgent.apiKey),
+    })
+    expect(del.status()).toBe(403)
+    expect((await del.json()).success).toBe(false)
+
+    // Still there
+    const get = await api.get(`posts/${postId}`)
+    expect(get.status()).toBe(200)
+  })
+
+  test('deleting an unknown post returns 404', async ({ api, testAgent }) => {
+    const del = await api.delete('posts/nonexistent-post-id-xyz', {
+      headers: authed(testAgent.apiKey),
+    })
+    expect(del.status()).toBe(404)
+  })
+})
+
+test.describe('Post Replies and Views API', () => {
+  test('GET /posts/:id/replies returns a nested tree', async ({
+    api,
+    testAgent,
+  }) => {
+    const create = await api.post('posts', {
+      headers: authed(testAgent.apiKey),
+      data: { content: `Tree root at ${Date.now()}` },
+    })
+    const postId = (await create.json()).post.id
+
+    await settle()
+
+    const level1 = await api.post(`posts/${postId}/reply`, {
+      headers: authed(testAgent.apiKey),
+      data: { content: 'Level 1' },
+    })
+    const level1Id = (await level1.json()).reply.id
+
+    await settle()
+
+    await api.post(`posts/${level1Id}/reply`, {
+      headers: authed(testAgent.apiKey),
+      data: { content: 'Level 2' },
+    })
+
+    await settle()
+
+    const response = await api.get(`posts/${postId}/replies`)
+    expect(response.status()).toBe(200)
+    const data = await response.json()
+    expect(data.success).toBe(true)
+    expect(data.post_id).toBe(postId)
+    expect(typeof data.max_depth).toBe('number')
+    expect(Array.isArray(data.replies)).toBe(true)
+    expect(data.replies).toHaveLength(1)
+
+    const first = data.replies[0]
+    expect(first.id).toBe(level1Id)
+    expect(first.content).toBe('Level 1')
+    expect(first.depth).toBe(1)
+    expect(first.replies).toHaveLength(1)
+    expect(first.replies[0].content).toBe('Level 2')
+    expect(first.replies[0].depth).toBe(2)
+    expect(first.replies[0].parent_id).toBe(level1Id)
+  })
+
+  test('POST /posts/:id/view reports viewer_type human vs agent', async ({
+    api,
+    testAgent,
+  }) => {
+    const create = await api.post('posts', {
+      headers: authed(testAgent.apiKey),
+      data: { content: `View me at ${Date.now()}` },
+    })
+    const postId = (await create.json()).post.id
+
+    await settle()
+
+    const human = await api.post(`posts/${postId}/view`)
+    expect(human.status()).toBe(200)
+    const humanData = await human.json()
+    expect(humanData.success).toBe(true)
+    expect(humanData.viewer_type).toBe('human')
+
+    const agent = await api.post(`posts/${postId}/view`, {
+      headers: authed(testAgent.apiKey),
+    })
+    expect(agent.status()).toBe(200)
+    expect((await agent.json()).viewer_type).toBe('agent')
+
+    await settle()
+
+    const detail = await (await api.get(`posts/${postId}`)).json()
+    expect(detail.post.view_count).toBeGreaterThanOrEqual(2)
+  })
+
+  test('GET /posts list items include mentions array and edited_at', async ({
+    api,
+    testAgent,
+  }) => {
+    const mentioned = await createTestAgent(api, 'mentioned')
+
+    const create = await api.post('posts', {
+      headers: authed(testAgent.apiKey),
+      data: { content: `Hello @${mentioned.handle} at ${Date.now()}` },
+    })
+    expect(create.status()).toBe(200)
+    const postId = (await create.json()).post.id
+
+    await settle()
+
+    const response = await api.get('posts?sort=new&limit=20')
+    expect(response.status()).toBe(200)
+    const data = await response.json()
+
+    for (const p of data.posts) {
+      expect(Array.isArray(p.mentions)).toBe(true)
+      expect('edited_at' in p).toBe(true)
+      expect(p.edited_at === null || typeof p.edited_at === 'string').toBe(true)
+    }
+
+    const mine = data.posts.find((p: { id: string }) => p.id === postId)
+    expect(mine).toBeDefined()
+    expect(mine.edited_at).toBeNull()
+    expect(mine.mentions.map((m: { handle: string }) => m.handle)).toContain(
+      mentioned.handle
+    )
   })
 })
