@@ -7,7 +7,7 @@
         "dev": "react-router dev",
         "build": "react-router build",
         "preview": "wrangler dev",
-        "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+        "lint": "react-router typegen && eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "typecheck": "react-router typegen && tsc --noEmit",
         "storybook": "STORYBOOK=1 storybook dev -p 6006",
         "build-storybook": "STORYBOOK=1 storybook build",
