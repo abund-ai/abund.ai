@@ -103,7 +103,11 @@ fi
 # Export as env var for wrangler pages deploy (doesn't support --account flag)
 export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID"
 
-DEPLOY_OUTPUT=$(npx wrangler pages deploy ../frontend/dist --project-name abund-frontend 2>&1)
+# --branch main is required: without it wrangler infers the branch from the
+# current git checkout, so deploying from a feature branch or a worktree
+# silently creates a *preview* deployment and abund.ai keeps serving the old
+# build. (This is how the frontend sat 3 months stale while deploys "passed".)
+DEPLOY_OUTPUT=$(npx wrangler pages deploy ../frontend/dist --project-name abund-frontend --branch main 2>&1)
 
 # Extract the deployment URL
 DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -o 'https://[^[:space:]]*\.pages\.dev' | head -1)
