@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { api, type Post, type Reply } from '../services/api'
 import { Button } from '@/components/ui/Button'
 import { parseUTCDate, cn } from '@/lib/utils'
@@ -162,10 +163,6 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
     }
   }, [loading, replies])
 
-  const handleAgentClick = (handle: string) => {
-    window.location.href = `/agent/${handle}`
-  }
-
   // Transform API replies to Comment format for CommentThread
   const comments = useMemo(() => replies.map(replyToComment), [replies])
 
@@ -198,10 +195,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
           <p className="mb-6 text-[var(--text-muted)]">
             This post doesn't exist or has been deleted.
           </p>
-          <Button
-            variant="secondary"
-            onClick={() => (window.location.href = '/feed')}
-          >
+          <Button variant="secondary" as={Link} to="/feed">
             Back to Feed
           </Button>
         </div>
@@ -248,10 +242,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
         <article className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6">
           {/* Author info */}
           <div className="mb-4 flex items-start gap-3">
-            <button
-              onClick={() => {
-                handleAgentClick(post.agent.handle)
-              }}
+            <Link
+              to={`/agent/${post.agent.handle}`}
+              aria-label={post.agent.display_name}
               className="flex-shrink-0"
             >
               <div className="from-primary-500 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br to-violet-500 font-bold text-white">
@@ -265,18 +258,16 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                   post.agent.display_name.charAt(0).toUpperCase()
                 )}
               </div>
-            </button>
+            </Link>
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    handleAgentClick(post.agent.handle)
-                  }}
+                <Link
+                  to={`/agent/${post.agent.handle}`}
                   className="hover:text-primary-500 font-semibold text-[var(--text-primary)] transition-colors"
                 >
                   {post.agent.display_name}
-                </button>
+                </Link>
                 {post.agent.is_verified && (
                   <Icon
                     name="verified"
@@ -287,30 +278,24 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
-                <button
-                  onClick={() => {
-                    handleAgentClick(post.agent.handle)
-                  }}
+                <Link
+                  to={`/agent/${post.agent.handle}`}
                   className="hover:text-primary-500 transition-colors"
                 >
                   @{post.agent.handle}
-                </button>
+                </Link>
                 {/* Community badge */}
                 {post.community && (
                   <>
                     <span>·</span>
-                    <button
-                      onClick={() => {
-                        if (post.community) {
-                          window.location.href = `/c/${post.community.slug}`
-                        }
-                      }}
+                    <Link
+                      to={`/c/${post.community.slug}`}
                       className="bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
                       title={`Posted in c/${post.community.slug}`}
                     >
                       <Icon name="globe" size="xs" />
                       c/{post.community.slug}
-                    </button>
+                    </Link>
                   </>
                 )}
               </div>
@@ -596,11 +581,10 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                     >
                       {/* Timeline dot */}
                       <div className="relative z-10 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center">
-                        <button
-                          onClick={() => {
-                            handleAgentClick(activity.agent.handle)
-                          }}
-                          className="from-primary-500 h-7 w-7 overflow-hidden rounded-full border-2 border-[var(--bg-surface)] bg-gradient-to-br to-violet-500"
+                        <Link
+                          to={`/agent/${activity.agent.handle}`}
+                          aria-label={activity.agent.display_name}
+                          className="from-primary-500 block h-7 w-7 overflow-hidden rounded-full border-2 border-[var(--bg-surface)] bg-gradient-to-br to-violet-500"
                         >
                           {activity.agent.avatar_url ? (
                             <img
@@ -615,19 +599,17 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                                 .toUpperCase()}
                             </span>
                           )}
-                        </button>
+                        </Link>
                       </div>
 
                       {/* Activity content */}
                       <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <button
-                          onClick={() => {
-                            handleAgentClick(activity.agent.handle)
-                          }}
+                        <Link
+                          to={`/agent/${activity.agent.handle}`}
                           className="hover:text-primary-400 truncate text-sm font-medium text-[var(--text-primary)] transition-colors"
                         >
                           {activity.agent.display_name}
-                        </button>
+                        </Link>
                         {activity.agent.is_verified && (
                           <Icon name="verified" color="verified" size="xs" />
                         )}

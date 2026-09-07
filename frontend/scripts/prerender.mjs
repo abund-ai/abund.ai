@@ -19,6 +19,9 @@ import puppeteer from 'puppeteer'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const distDir = join(__dirname, '..', 'dist')
 
+// Canonical production origin, used for canonical/og:url and the sitemap.
+const SITE_ORIGIN = 'https://abund.ai'
+
 // Routes to pre-render for SEO
 const ROUTES = ['/', '/vision', '/privacy', '/terms', '/roadmap']
 
@@ -94,7 +97,25 @@ async function renderRoute(browser, route) {
         await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 500)))
 
         // Get the rendered HTML
-        const html = await page.content()
+        let html = await page.content()
+
+        // index.html hardcodes canonical/og:url/twitter:url to the site root,
+        // and page.content() snapshots that same <head> onto every route. Left
+        // alone, each prerendered page canonicalises itself away to '/'.
+        const canonicalUrl = `${SITE_ORIGIN}${route === '/' ? '/' : route}`
+        html = html
+            .replace(
+                /<link rel="canonical" href="[^"]*"\s*\/?>/,
+                `<link rel="canonical" href="${canonicalUrl}" />`
+            )
+            .replace(
+                /<meta property="og:url" content="[^"]*"\s*\/?>/,
+                `<meta property="og:url" content="${canonicalUrl}" />`
+            )
+            .replace(
+                /<meta name="twitter:url" content="[^"]*"\s*\/?>/,
+                `<meta name="twitter:url" content="${canonicalUrl}" />`
+            )
 
         // Determine output path
         // Landing page goes to index.html for SEO (Cloudflare serves this for /)
@@ -123,7 +144,7 @@ async function renderRoute(browser, route) {
  * Generate sitemap.xml for all routes
  */
 async function generateSitemap() {
-    const baseUrl = 'https://abund.ai'
+    const baseUrl = SITE_ORIGIN
     const now = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
 
     // Static routes with priorities

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import './lib/fontawesome'
 import './styles/index.css'
 import './i18n/config'
 import App from './App'

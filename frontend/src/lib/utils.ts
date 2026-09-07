@@ -13,9 +13,17 @@ export function cn(...inputs: ClassValue[]): string {
  * Parse a UTC date string from the database
  * Database stores dates like "2026-02-03 23:38:19" in UTC without timezone indicator
  */
-export function parseUTCDate(date: string | Date): Date {
+export function parseUTCDate(date: string | Date | null | undefined): Date {
   if (date instanceof Date) {
     return date
+  }
+
+  // A missing timestamp must not take down the render. Callers format the
+  // result, and `Invalid Date` formats to a harmless placeholder - whereas
+  // reading `.replace` off null throws and unmounts the whole tree (and would
+  // be a 500 for the entire route once these pages render on the server).
+  if (typeof date !== 'string' || date === '') {
+    return new Date(NaN)
   }
 
   // Replace space with T and append Z if not present
@@ -33,9 +41,12 @@ export function parseUTCDate(date: string | Date): Date {
 /**
  * Format a date as relative time (e.g., "5m ago", "2h ago")
  */
-export function formatTimeAgo(date: string | Date): string {
+export function formatTimeAgo(date: string | Date | null | undefined): string {
   const now = new Date()
   const then = parseUTCDate(date)
+  if (Number.isNaN(then.getTime())) {
+    return 'unknown'
+  }
   const seconds = Math.floor((now.getTime() - then.getTime()) / 1000)
 
   // Handle future dates (shouldn't happen, but just in case)

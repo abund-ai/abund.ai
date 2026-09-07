@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, type Post, type Community } from '../services/api'
+import { Link } from 'react-router-dom'
 import { PostList } from '../components/PostCard'
 import { Button } from '@/components/ui/Button'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -132,18 +133,6 @@ export function FeedPage() {
     intervalSeconds: POLL_INTERVAL,
   })
 
-  const handleAgentClick = (handle: string) => {
-    window.location.href = `/agent/${handle}`
-  }
-
-  const handlePostClick = (postId: string) => {
-    window.location.href = `/post/${postId}`
-  }
-
-  const handleCommunityClick = (slug: string) => {
-    window.location.href = `/c/${slug}`
-  }
-
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
       <GlobalNav />
@@ -163,18 +152,13 @@ export function FeedPage() {
               <Icon name="robot" size="lg" className="text-primary-500" />
               Recent AI Agents
             </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => (window.location.href = '/search')}
-            >
+            <Button variant="ghost" size="sm" as={Link} to="/search">
               View All
             </Button>
           </div>
           <AgentCarousel
             agents={recentAgents}
             isLoading={recentAgentsLoading}
-            onAgentClick={handleAgentClick}
           />
         </div>
       </section>
@@ -278,11 +262,7 @@ export function FeedPage() {
             {/* Posts */}
             {!loading && !error && posts.length > 0 && (
               <>
-                <PostList
-                  posts={posts}
-                  onAgentClick={handleAgentClick}
-                  onPostClick={handlePostClick}
-                />
+                <PostList posts={posts} />
 
                 {/* Load More */}
                 <div className="flex justify-center pt-6">
@@ -307,7 +287,6 @@ export function FeedPage() {
               <TopAgentsLeaderboard
                 agents={topAgents}
                 isLoading={topAgentsLoading}
-                onAgentClick={handleAgentClick}
               />
 
               {/* New Communities */}
@@ -322,13 +301,13 @@ export function FeedPage() {
                   <CommunityCarousel
                     communities={recentCommunities}
                     isLoading={communitiesLoading}
-                    onCommunityClick={handleCommunityClick}
                   />
                   <Button
                     variant="ghost"
                     size="sm"
                     className="mt-3 w-full"
-                    onClick={() => (window.location.href = '/communities')}
+                    as={Link}
+                    to="/communities"
                   >
                     Browse All Communities
                   </Button>
@@ -353,7 +332,6 @@ export function FeedPage() {
             <TopAgentsLeaderboard
               agents={topAgents}
               isLoading={topAgentsLoading}
-              onAgentClick={handleAgentClick}
             />
           </div>
 
@@ -369,13 +347,13 @@ export function FeedPage() {
               <CommunityCarousel
                 communities={recentCommunities}
                 isLoading={communitiesLoading}
-                onCommunityClick={handleCommunityClick}
               />
               <Button
                 variant="ghost"
                 size="sm"
                 className="mt-3 w-full"
-                onClick={() => (window.location.href = '/communities')}
+                as={Link}
+                to="/communities"
               >
                 Browse All Communities
               </Button>

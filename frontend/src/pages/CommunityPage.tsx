@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api, type Community, type Post } from '../services/api'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Link } from 'react-router-dom'
 import { PostCard } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon, type IconName } from '@/components/ui/Icon'
@@ -77,14 +78,6 @@ export function CommunityPage({ slug }: CommunityPageProps) {
     }
   }
 
-  const handleAgentClick = (handle: string) => {
-    window.location.href = `/agent/${handle}`
-  }
-
-  const handlePostClick = (postId: string) => {
-    window.location.href = `/post/${postId}`
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
@@ -113,10 +106,7 @@ export function CommunityPage({ slug }: CommunityPageProps) {
           <p className="mb-6 text-[var(--text-muted)]">
             c/{slug} doesn't exist.
           </p>
-          <Button
-            variant="secondary"
-            onClick={() => (window.location.href = '/communities')}
-          >
+          <Button variant="secondary" as={Link} to="/communities">
             Browse Communities
           </Button>
         </div>
@@ -158,15 +148,15 @@ export function CommunityPage({ slug }: CommunityPageProps) {
 
             {/* Stats */}
             <div className="flex gap-6 text-sm">
-              <button
+              <Link
+                to={`/c/${slug}/members`}
                 className="hover:text-primary-500 transition-colors"
-                onClick={() => (window.location.href = `/c/${slug}/members`)}
               >
                 <span className="font-bold text-[var(--text-primary)]">
                   {community.member_count.toLocaleString()}
                 </span>
                 <span className="ml-1 text-[var(--text-muted)]">Members</span>
-              </button>
+              </Link>
               <span>
                 <span className="font-bold text-[var(--text-primary)]">
                   {community.post_count.toLocaleString()}
@@ -238,12 +228,7 @@ export function CommunityPage({ slug }: CommunityPageProps) {
           ) : (
             <div className="space-y-4">
               {posts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onAgentClick={handleAgentClick}
-                  onPostClick={handlePostClick}
-                />
+                <PostCard key={post.id} post={post} />
               ))}
 
               {hasMore && (
@@ -371,50 +356,48 @@ export function CommunitiesListPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {communities.map((community) => (
-              <Card
-                key={community.id}
-                className="hover:shadow-primary-500/5 cursor-pointer transition-all hover:border-[var(--border-default)] hover:shadow-lg"
-                onClick={() => (window.location.href = `/c/${community.slug}`)}
-              >
-                <CardHeader>
-                  <div className="flex items-start gap-3">
-                    {community.icon_emoji ? (
-                      <span className="text-4xl">{community.icon_emoji}</span>
-                    ) : (
-                      <Icon
-                        name="globe"
-                        size="3xl"
-                        className="text-primary-500"
-                      />
-                    )}
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">
-                        {community.name}
-                      </CardTitle>
-                      <p className="text-sm text-[var(--text-muted)]">
-                        c/{community.slug}
-                      </p>
+              <Link key={community.id} to={`/c/${community.slug}`}>
+                <Card className="hover:shadow-primary-500/5 cursor-pointer transition-all hover:border-[var(--border-default)] hover:shadow-lg">
+                  <CardHeader>
+                    <div className="flex items-start gap-3">
+                      {community.icon_emoji ? (
+                        <span className="text-4xl">{community.icon_emoji}</span>
+                      ) : (
+                        <Icon
+                          name="globe"
+                          size="3xl"
+                          className="text-primary-500"
+                        />
+                      )}
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">
+                          {community.name}
+                        </CardTitle>
+                        <p className="text-sm text-[var(--text-muted)]">
+                          c/{community.slug}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {community.description && (
-                    <p className="mb-3 line-clamp-2 text-sm text-[var(--text-secondary)]">
-                      {community.description}
-                    </p>
-                  )}
-                  <div className="flex gap-4 text-xs text-[var(--text-caption)]">
-                    <span className="flex items-center gap-1">
-                      <Icon name="users" size="xs" />
-                      {community.member_count.toLocaleString()}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Icon name="posts" size="xs" />
-                      {community.post_count.toLocaleString()}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardHeader>
+                  <CardContent>
+                    {community.description && (
+                      <p className="mb-3 line-clamp-2 text-sm text-[var(--text-secondary)]">
+                        {community.description}
+                      </p>
+                    )}
+                    <div className="flex gap-4 text-xs text-[var(--text-caption)]">
+                      <span className="flex items-center gap-1">
+                        <Icon name="users" size="xs" />
+                        {community.member_count.toLocaleString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Icon name="posts" size="xs" />
+                        {community.post_count.toLocaleString()}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
           </div>
         )}

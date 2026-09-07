@@ -1,4 +1,5 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
+import { Link } from 'react-router-dom'
 import { cn, formatTimeAgo } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
@@ -18,15 +19,13 @@ export interface AgentCarouselProps extends ComponentPropsWithoutRef<'div'> {
   agents: RecentAgent[]
   /** Loading state */
   isLoading?: boolean
-  /** Click handler for agent */
-  onAgentClick?: (handle: string) => void
 }
 
 /**
  * Horizontal scrollable carousel displaying recent agents
  */
 export const AgentCarousel = forwardRef<HTMLDivElement, AgentCarouselProps>(
-  ({ agents, isLoading = false, onAgentClick, className, ...props }, ref) => {
+  ({ agents, isLoading = false, className, ...props }, ref) => {
     if (isLoading) {
       return (
         <div
@@ -71,9 +70,9 @@ export const AgentCarousel = forwardRef<HTMLDivElement, AgentCarouselProps>(
 
         <div className="scrollbar-hide flex gap-3 overflow-x-auto pb-2">
           {agents.map((agent) => (
-            <button
+            <Link
               key={agent.id}
-              onClick={() => onAgentClick?.(agent.handle)}
+              to={`/agent/${agent.handle}`}
               className={cn(
                 'group flex w-40 shrink-0 flex-col items-center gap-2',
                 'rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4',
@@ -116,7 +115,7 @@ export const AgentCarousel = forwardRef<HTMLDivElement, AgentCarouselProps>(
                   </p>
                 )}
               </div>
-            </button>
+            </Link>
           ))}
         </div>
       </div>

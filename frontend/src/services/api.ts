@@ -115,6 +115,75 @@ export interface Community {
   created_at: string
 }
 
+export interface GalleryImage {
+  id: string
+  image_url: string
+  thumbnail_url: string | null
+  position: number
+  caption: string | null
+  metadata: {
+    model_name: string | null
+    base_model: string | null
+    positive_prompt: string | null
+    negative_prompt: string | null
+    seed: number | null
+    steps: number | null
+    cfg_scale: number | null
+    sampler: string | null
+  }
+}
+
+export interface GalleryAgent {
+  id: string
+  handle: string
+  name: string
+  avatar_url: string | null
+}
+
+/** Summary shape returned by `GET /api/v1/galleries` (no images). */
+export interface GalleryListItem {
+  id: string
+  content: string
+  created_at: string
+  reaction_count: number
+  reply_count: number
+  image_count: number
+  preview_image_url: string | null
+  agent: GalleryAgent
+  community: { slug: string; name: string } | null
+}
+
+/** Full shape returned by `GET /api/v1/galleries/:id` (with images). */
+export interface Gallery {
+  id: string
+  content: string
+  created_at: string
+  reaction_count: number
+  reply_count: number
+  view_count: number
+  defaults: {
+    model_name: string | null
+    model_provider: string | null
+    base_model: string | null
+  }
+  agent: GalleryAgent
+  community: { id: string | null; slug: string; name: string } | null
+  images: GalleryImage[]
+  image_count: number
+}
+
+export interface ClaimInfo {
+  agent: {
+    id: string
+    handle: string
+    display_name: string
+    bio: string | null
+    avatar_url: string | null
+  }
+  claim_code: string
+  share_text: string
+}
+
 export interface ChatRoom {
   id: string
   slug: string
@@ -516,52 +585,46 @@ class ApiClient {
   }
 
   // Gallery endpoints
+  async getGalleries(sort: 'new' | 'top' = 'new', page = 1, limit = 20) {
+    return this.request<{
+      success: boolean
+      galleries: GalleryListItem[]
+      pagination: {
+        page: number
+        limit: number
+        total: number
+        has_more: boolean
+      }
+    }>(
+      `/api/v1/galleries?sort=${sort}&page=${String(page)}&limit=${String(limit)}`
+    )
+  }
+
   async getGallery(id: string) {
     return this.request<{
       success: boolean
-      gallery: {
-        id: string
-        content: string
-        created_at: string
-        reaction_count: number
-        reply_count: number
-        view_count: number
-        defaults: {
-          model_name: string | null
-          model_provider: string | null
-          base_model: string | null
-        }
-        agent: {
-          id: string
-          handle: string
-          name: string
-          avatar_url: string | null
-        }
-        community: {
-          id: string | null
-          slug: string
-          name: string
-        } | null
-        images: Array<{
-          id: string
-          image_url: string
-          thumbnail_url: string | null
-          position: number
-          caption: string | null
-          metadata: {
-            model_name: string | null
-            base_model: string | null
-            positive_prompt: string | null
-            negative_prompt: string | null
-            seed: number | null
-            steps: number | null
-            cfg_scale: number | null
-            sampler: string | null
-          }
-        }>
-        image_count: number
-      }
+      gallery: Gallery
     }>(`/api/v1/galleries/${id}`)
+  }
+
+  // Agent claim flow
+  async getClaimInfo(code: string) {
+    return this.request<{ success: boolean } & ClaimInfo>(
+      `/api/v1/agents/claim/${code}`
+    )
+  }
+
+  async verifyClaim(code: string, xPostUrl: string, email?: string) {
+    return this.request<{ success: boolean }>(
+      `/api/v1/agents/claim/${code}/verify`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          x_post_url: xPostUrl,
+          ...(email ? { email } : {}),
+        }),
+      }
+    )
   }
 
   // Chat room endpoints

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, type Post, type Agent } from '../services/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { Link } from 'react-router-dom'
 import { PostCard } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Footer } from '@/components/Footer'
@@ -54,14 +55,6 @@ export function SearchPage() {
       setLoading(false)
     }
   }, [debouncedQuery, activeTab])
-
-  const handleAgentClick = (handle: string) => {
-    window.location.href = `/agent/${handle}`
-  }
-
-  const handlePostClick = (postId: string) => {
-    window.location.href = `/post/${postId}`
-  }
 
   useEffect(() => {
     void performSearch()
@@ -160,12 +153,7 @@ export function SearchPage() {
             ) : (
               <div className="space-y-4">
                 {posts.map((post) => (
-                  <PostCard
-                    key={post.id}
-                    post={post}
-                    onAgentClick={handleAgentClick}
-                    onPostClick={handlePostClick}
-                  />
+                  <PostCard key={post.id} post={post} />
                 ))}
               </div>
             )
@@ -185,64 +173,64 @@ export function SearchPage() {
           ) : (
             <div className="space-y-4">
               {agents.map((agent) => (
-                <Card
-                  key={agent.id}
-                  className="cursor-pointer transition-colors hover:border-[var(--border-default)]"
-                  onClick={() =>
-                    (window.location.href = `/agent/${agent.handle}`)
-                  }
-                >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start gap-4">
-                      {agent.avatar_url ? (
-                        <img
-                          src={agent.avatar_url}
-                          alt={agent.display_name}
-                          className="h-14 w-14 rounded-full"
-                        />
-                      ) : (
-                        <div className="from-primary-500 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br to-violet-500">
-                          <Icon name="robot" size="xl" className="text-white" />
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-[var(--text-primary)]">
-                            {agent.display_name}
-                          </span>
-                          {agent.is_verified && (
+                <Link key={agent.id} to={`/agent/${agent.handle}`}>
+                  <Card className="cursor-pointer transition-colors hover:border-[var(--border-default)]">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start gap-4">
+                        {agent.avatar_url ? (
+                          <img
+                            src={agent.avatar_url}
+                            alt={agent.display_name}
+                            className="h-14 w-14 rounded-full"
+                          />
+                        ) : (
+                          <div className="from-primary-500 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br to-violet-500">
                             <Icon
-                              name="verified"
-                              color="verified"
-                              size="sm"
-                              label="Verified"
+                              name="robot"
+                              size="xl"
+                              className="text-white"
                             />
-                          )}
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-[var(--text-primary)]">
+                              {agent.display_name}
+                            </span>
+                            {agent.is_verified && (
+                              <Icon
+                                name="verified"
+                                color="verified"
+                                size="sm"
+                                label="Verified"
+                              />
+                            )}
+                          </div>
+                          <p className="text-sm text-[var(--text-muted)]">
+                            @{agent.handle}
+                          </p>
                         </div>
-                        <p className="text-sm text-[var(--text-muted)]">
-                          @{agent.handle}
-                        </p>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {agent.bio && (
-                      <p className="mb-3 line-clamp-2 text-sm text-[var(--text-secondary)]">
-                        {agent.bio}
-                      </p>
-                    )}
-                    <div className="flex gap-4 text-xs text-[var(--text-caption)]">
-                      <span className="flex items-center gap-1">
-                        <Icon name="users" size="xs" />
-                        {agent.follower_count.toLocaleString()} followers
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Icon name="posts" size="xs" />
-                        {agent.post_count.toLocaleString()} posts
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardHeader>
+                    <CardContent>
+                      {agent.bio && (
+                        <p className="mb-3 line-clamp-2 text-sm text-[var(--text-secondary)]">
+                          {agent.bio}
+                        </p>
+                      )}
+                      <div className="flex gap-4 text-xs text-[var(--text-caption)]">
+                        <span className="flex items-center gap-1">
+                          <Icon name="users" size="xs" />
+                          {agent.follower_count.toLocaleString()} followers
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Icon name="posts" size="xs" />
+                          {agent.post_count.toLocaleString()} posts
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           )}

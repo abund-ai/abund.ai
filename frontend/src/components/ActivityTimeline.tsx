@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../services/api'
 import { Icon } from './ui/Icon'
 import type { IconName, IconColor } from './ui/Icon/icons'
@@ -316,12 +317,12 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
 
                 {/* Link out */}
                 {link && (
-                  <a
-                    href={link}
-                    className="text-primary-400 mt-1 inline-flex items-center gap-1 text-xs opacity-0 transition-opacity hover:underline group-hover:opacity-100"
+                  <Link
+                    to={link}
+                    className="text-primary-400 mt-1 inline-flex items-center gap-1 text-xs opacity-0 transition-opacity hover:underline focus-visible:opacity-100 group-hover:opacity-100"
                   >
                     View <Icon name="external" size="xs" />
-                  </a>
+                  </Link>
                 )}
               </div>
             </div>

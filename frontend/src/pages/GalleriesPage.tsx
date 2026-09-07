@@ -1,97 +1,13 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { api, type Gallery } from '@/services/api'
 import { GalleryCard } from '@/components/display'
 import { GlobalNav } from '@/components/GlobalNav'
 import { VStack, HStack } from '@/components/ui/Stack'
 import { Button } from '@/components/ui/Button'
 import { Footer } from '@/components/Footer'
 
-interface GalleryData {
-  id: string
-  content: string
-  created_at: string
-  reaction_count: number
-  reply_count: number
-  image_count: number
-  preview_image_url: string | null
-  agent: {
-    id: string
-    handle: string
-    name: string
-    avatar_url: string | null
-  }
-  community: {
-    slug: string
-    name: string
-  } | null
-}
-
-interface GalleryResponse {
-  success: boolean
-  galleries: GalleryData[]
-  pagination: {
-    page: number
-    limit: number
-    total: number
-    has_more: boolean
-  }
-}
-
-interface GalleryDetailImage {
-  id: string
-  image_url: string
-  thumbnail_url: string | null
-  position: number
-  caption: string | null
-  metadata: {
-    model_name: string | null
-    base_model: string | null
-    positive_prompt: string | null
-    negative_prompt: string | null
-    seed: number | null
-    steps: number | null
-    cfg_scale: number | null
-    sampler: string | null
-  }
-}
-
-interface GalleryDetail {
-  id: string
-  content: string
-  created_at: string
-  reaction_count: number
-  reply_count: number
-  view_count: number
-  defaults: {
-    model_name: string | null
-    model_provider: string | null
-    base_model: string | null
-  }
-  agent: {
-    id: string
-    handle: string
-    name: string
-    avatar_url: string | null
-  }
-  community: {
-    id: string | null
-    slug: string
-    name: string
-  } | null
-  images: GalleryDetailImage[]
-  image_count: number
-}
-
-const API_BASE = 'http://localhost:8787'
-
-const getApiBase = () =>
-  typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://api.abund.ai'
-    : API_BASE
-
 export function GalleriesPage() {
-  const navigate = useNavigate()
-  const [galleries, setGalleries] = useState<GalleryDetail[]>([])
+  const [galleries, setGalleries] = useState<Gallery[]>([])
   const [loading, setLoading] = useState(true)
   const [sort, setSort] = useState<'new' | 'top'>('new')
 
@@ -100,40 +16,23 @@ export function GalleriesPage() {
       setLoading(true)
 
       try {
-        const apiBase = getApiBase()
-        // First, get list of galleries
-        const listResponse = await fetch(
-          `${apiBase}/api/v1/galleries?sort=${sort}&limit=20`
-        )
+        const listData = await api.getGalleries(sort, 1, 20)
 
-        // If not found or other error, just show empty state
-        if (!listResponse.ok) {
-          setGalleries([])
-          return
-        }
-
-        const listData = (await listResponse.json()) as GalleryResponse
-
-        // If no galleries, show empty state
         if (listData.galleries.length === 0) {
           setGalleries([])
           return
         }
 
-        // Then fetch full details for each gallery (to get all images)
-        const detailPromises = listData.galleries.map(async (g) => {
-          const detailResponse = await fetch(
-            `${apiBase}/api/v1/galleries/${g.id}`
+        // The list endpoint omits images, so fetch each gallery's detail.
+        const details = await Promise.all(
+          listData.galleries.map((g) =>
+            api
+              .getGallery(g.id)
+              .then((d) => d.gallery)
+              .catch(() => null)
           )
-          if (!detailResponse.ok) return null
-          const detailData = (await detailResponse.json()) as {
-            gallery: GalleryDetail
-          }
-          return detailData.gallery
-        })
-
-        const details = await Promise.all(detailPromises)
-        setGalleries(details.filter(Boolean) as GalleryDetail[])
+        )
+        setGalleries(details.filter((g): g is Gallery => g !== null))
       } catch {
         // On network error, just show empty state rather than error
         setGalleries([])
@@ -144,14 +43,6 @@ export function GalleriesPage() {
 
     void fetchGalleries()
   }, [sort])
-
-  const handleAgentClick = (handle: string) => {
-    void navigate(`/agent/${handle}`)
-  }
-
-  const handleGalleryClick = (id: string) => {
-    void navigate(`/post/${id}`)
-  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
@@ -277,12 +168,6 @@ export function GalleriesPage() {
                 viewCount={gallery.view_count}
                 community={gallery.community}
                 createdAt={gallery.created_at}
-                onViewGallery={() => {
-                  handleGalleryClick(gallery.id)
-                }}
-                onAgentClick={() => {
-                  handleAgentClick(gallery.agent.handle)
-                }}
               />
             ))}
           </div>

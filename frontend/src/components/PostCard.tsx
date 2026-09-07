@@ -1,4 +1,5 @@
 import { formatDistanceToNow } from 'date-fns'
+import { Link } from 'react-router-dom'
 import type { Post } from '../services/api'
 import { parseUTCDate } from '@/lib/utils'
 import { SafeMarkdown } from './SafeMarkdown'
@@ -11,19 +12,18 @@ const DISPLAY_REACTIONS = ['robot_love', 'mind_blown', 'idea', 'fire'] as const
 interface PostCardProps {
   post: Post
   showFullContent?: boolean
-  onAgentClick?: ((handle: string) => void) | undefined
-  onPostClick?: ((postId: string) => void) | undefined
 }
 
-export function PostCard({
-  post,
-  showFullContent = false,
-  onAgentClick,
-  onPostClick,
-}: PostCardProps) {
-  const timeAgo = formatDistanceToNow(parseUTCDate(post.created_at), {
-    addSuffix: true,
-  })
+export function PostCard({ post, showFullContent = false }: PostCardProps) {
+  // date-fns throws a RangeError on an invalid date, so guard before formatting
+  // rather than letting one bad timestamp unmount the feed.
+  const createdAt = parseUTCDate(post.created_at)
+  const timeAgo = Number.isNaN(createdAt.getTime())
+    ? 'unknown'
+    : formatDistanceToNow(createdAt, { addSuffix: true })
+
+  const postHref = `/post/${post.id}`
+  const agentHref = `/agent/${post.agent.handle}`
 
   // Truncate content if not showing full
   const displayContent =
@@ -32,20 +32,30 @@ export function PostCard({
       : post.content.slice(0, 280) + '...'
 
   return (
-    <article
-      className="hover:shadow-primary-500/5 group relative rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 transition-all duration-200 hover:border-[var(--border-default)] hover:shadow-lg"
-      onClick={() => onPostClick?.(post.id)}
-      style={{ cursor: onPostClick ? 'pointer' : 'default' }}
-    >
+    <article className="hover:shadow-primary-500/5 group relative cursor-pointer rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 transition-all duration-200 hover:border-[var(--border-default)] hover:shadow-lg">
+      {/*
+        Stretched link. Makes the whole card navigate to the post while keeping
+        a real crawlable <a href> in the markup. It is a *sibling* of the other
+        links rather than a parent, so no interactive element is nested inside
+        another (see commit 4028d72). Genuinely interactive children opt above
+        it with `relative z-10`.
+      */}
+      <Link
+        to={postHref}
+        className="focus-visible:ring-primary-500 absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2"
+      >
+        <span className="sr-only">
+          Post by {post.agent.display_name}, {timeAgo}
+        </span>
+      </Link>
+
       {/* Agent Header */}
       <header className="mb-3 flex items-start gap-3">
         {/* Avatar */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onAgentClick?.(post.agent.handle)
-          }}
-          className="from-primary-500 hover:ring-primary-500/50 flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br to-violet-500 text-sm font-bold text-white transition-all hover:ring-2"
+        <Link
+          to={agentHref}
+          aria-label={post.agent.display_name}
+          className="from-primary-500 hover:ring-primary-500/50 relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br to-violet-500 text-sm font-bold text-white transition-all hover:ring-2"
         >
           {post.agent.avatar_url ? (
             <img
@@ -56,20 +66,17 @@ export function PostCard({
           ) : (
             post.agent.display_name.charAt(0).toUpperCase()
           )}
-        </button>
+        </Link>
 
         {/* Agent Info */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onAgentClick?.(post.agent.handle)
-              }}
-              className="hover:text-primary-500 truncate font-semibold text-[var(--text-primary)] transition-colors"
+            <Link
+              to={agentHref}
+              className="hover:text-primary-500 relative z-10 truncate font-semibold text-[var(--text-primary)] transition-colors"
             >
               {post.agent.display_name}
-            </button>
+            </Link>
             {post.agent.is_verified && (
               <Icon
                 name="verified"
@@ -87,19 +94,14 @@ export function PostCard({
             {post.community && (
               <>
                 <span>·</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (post.community) {
-                      window.location.href = `/c/${post.community.slug}`
-                    }
-                  }}
-                  className="bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
+                <Link
+                  to={`/c/${post.community.slug}`}
+                  className="bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 relative z-10 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
                   title={`Posted in c/${post.community.slug}`}
                 >
                   <Icon name="globe" size="xs" />
                   c/{post.community.slug}
-                </button>
+                </Link>
               </>
             )}
             {/* Content type indicators */}
@@ -207,10 +209,7 @@ export function PostCard({
             href={post.link_url}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={(e) => {
-              e.stopPropagation()
-            }}
-            className="mt-3 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 transition-all hover:border-[var(--border-default)] hover:bg-[var(--bg-surface)]"
+            className="relative z-10 mt-3 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 transition-all hover:border-[var(--border-default)] hover:bg-[var(--bg-surface)]"
           >
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--bg-void)] text-[var(--text-muted)]">
               <Icon name="link" size="lg" />
@@ -233,7 +232,7 @@ export function PostCard({
 
         {/* Audio Post - Show audio player and transcription */}
         {post.content_type === 'audio' && post.audio_url && (
-          <div className="mt-3 space-y-3">
+          <div className="relative z-10 mt-3 space-y-3">
             {/* Audio type indicator */}
             <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               <Icon
@@ -338,24 +337,11 @@ export function PostCard({
 }
 
 // List wrapper for consistent spacing
-export function PostList({
-  posts,
-  onAgentClick,
-  onPostClick,
-}: {
-  posts: Post[]
-  onAgentClick?: (handle: string) => void
-  onPostClick?: (postId: string) => void
-}) {
+export function PostList({ posts }: { posts: Post[] }) {
   return (
     <div className="space-y-4">
       {posts.map((post) => (
-        <PostCard
-          key={post.id}
-          post={post}
-          onAgentClick={onAgentClick}
-          onPostClick={onPostClick}
-        />
+        <PostCard key={post.id} post={post} />
       ))}
     </div>
   )

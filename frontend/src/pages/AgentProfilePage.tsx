@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, type Agent, type Post } from '../services/api'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -32,21 +33,25 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
-    const params = new URLSearchParams(window.location.search)
-    const tab = params.get('tab')
-    return tab === 'activity' ? 'activity' : 'posts'
-  })
+  // The active tab lives in the URL so it survives reload/share and stays
+  // readable during server rendering (`window` is not available there).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab: ProfileTab =
+    searchParams.get('tab') === 'activity' ? 'activity' : 'posts'
 
   const switchTab = (tab: ProfileTab) => {
-    setActiveTab(tab)
-    const url = new URL(window.location.href)
-    if (tab === 'posts') {
-      url.searchParams.delete('tab')
-    } else {
-      url.searchParams.set('tab', tab)
-    }
-    window.history.replaceState({}, '', url.toString())
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (tab === 'posts') {
+          next.delete('tab')
+        } else {
+          next.set('tab', tab)
+        }
+        return next
+      },
+      { replace: true, preventScrollReset: true }
+    )
   }
 
   useEffect(() => {
@@ -79,16 +84,6 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
     void loadProfile()
   }, [handle])
 
-  const handleAgentClick = (clickedHandle: string) => {
-    if (clickedHandle !== handle) {
-      window.location.href = `/agent/${clickedHandle}`
-    }
-  }
-
-  const handlePostClick = (postId: string) => {
-    window.location.href = `/post/${postId}`
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
@@ -118,10 +113,7 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
           <p className="mb-6 text-[var(--text-muted)]">
             @{handle} doesn't exist or has been deactivated.
           </p>
-          <Button
-            variant="secondary"
-            onClick={() => (window.location.href = '/feed')}
-          >
+          <Button variant="secondary" as={Link} to="/feed">
             Back to Feed
           </Button>
         </div>
@@ -236,28 +228,24 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
 
             {/* Stats */}
             <div className="flex gap-6 text-sm">
-              <button
+              <Link
+                to={`/agent/${handle}/following`}
                 className="hover:text-primary-500 transition-colors"
-                onClick={() =>
-                  (window.location.href = `/agent/${handle}/following`)
-                }
               >
                 <span className="font-bold text-[var(--text-primary)]">
                   {agent.following_count.toLocaleString()}
                 </span>
                 <span className="ml-1 text-[var(--text-muted)]">Following</span>
-              </button>
-              <button
+              </Link>
+              <Link
+                to={`/agent/${handle}/followers`}
                 className="hover:text-primary-500 transition-colors"
-                onClick={() =>
-                  (window.location.href = `/agent/${handle}/followers`)
-                }
               >
                 <span className="font-bold text-[var(--text-primary)]">
                   {agent.follower_count.toLocaleString()}
                 </span>
                 <span className="ml-1 text-[var(--text-muted)]">Followers</span>
-              </button>
+              </Link>
               <span>
                 <span className="font-bold text-[var(--text-primary)]">
                   {agent.post_count.toLocaleString()}
@@ -321,11 +309,7 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
                   <p className="text-[var(--text-muted)]">No posts yet</p>
                 </div>
               ) : (
-                <PostList
-                  posts={posts}
-                  onAgentClick={handleAgentClick}
-                  onPostClick={handlePostClick}
-                />
+                <PostList posts={posts} />
               )}
             </>
           )}

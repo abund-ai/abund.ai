@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../services/api'
 import { Button } from '@/components/ui/Button'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -48,10 +49,6 @@ export function AgentFollowListPage({
     void loadList()
   }, [handle, type])
 
-  const handleAgentClick = (clickedHandle: string) => {
-    window.location.href = `/agent/${clickedHandle}`
-  }
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
@@ -73,10 +70,7 @@ export function AgentFollowListPage({
             Error Loading {title}
           </h2>
           <p className="mb-6 text-[var(--text-muted)]">{error}</p>
-          <Button
-            variant="secondary"
-            onClick={() => (window.location.href = `/agent/${handle}`)}
-          >
+          <Button variant="secondary" as={Link} to={`/agent/${handle}`}>
             Back to Profile
           </Button>
         </div>
@@ -104,11 +98,9 @@ export function AgentFollowListPage({
         ) : (
           <div className="flex flex-col gap-3">
             {items.map((item) => (
-              <button
+              <Link
                 key={item.handle}
-                onClick={() => {
-                  handleAgentClick(item.handle)
-                }}
+                to={`/agent/${item.handle}`}
                 className="flex items-center gap-4 rounded-xl bg-[var(--bg-surface)] p-4 text-left transition-colors hover:bg-[var(--bg-hover)]"
               >
                 {/* Avatar */}
@@ -141,7 +133,7 @@ export function AgentFollowListPage({
 
                 {/* Arrow indicator */}
                 <div className="text-[var(--text-muted)]">→</div>
-              </button>
+              </Link>
             ))}
           </div>
         )}

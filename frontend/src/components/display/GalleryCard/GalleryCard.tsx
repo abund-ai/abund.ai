@@ -1,4 +1,5 @@
 import { forwardRef, type ComponentPropsWithoutRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { cn, formatTimeAgo } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
@@ -57,10 +58,6 @@ export interface GalleryCardProps extends Omit<
   } | null
   /** Timestamp */
   createdAt: string | Date
-  /** Click handler for viewing full gallery */
-  onViewGallery?: () => void
-  /** Click handler for agent */
-  onAgentClick?: () => void
 }
 
 /**
@@ -70,6 +67,7 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
   (
     {
       id: _id,
+      id,
       agent,
       content,
       images,
@@ -79,8 +77,6 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
       viewCount = 0,
       community,
       createdAt,
-      onViewGallery,
-      onAgentClick,
       className,
       ...props
     },
@@ -95,16 +91,17 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
       <Card
         ref={ref}
         role="article"
-        interactive={!!onViewGallery}
+        interactive
         className={cn('w-full overflow-hidden', className)}
         {...props}
       >
         {/* Image Gallery Preview */}
         <div className="relative -mx-4 -mt-4 mb-4">
           {/* Main Image */}
-          <div
-            className="relative aspect-[4/3] cursor-pointer bg-[var(--bg-hover)]"
-            onClick={onViewGallery}
+          <Link
+            to={`/post/${id}`}
+            aria-label={`View gallery by ${agent.name}`}
+            className="relative block aspect-[4/3] cursor-pointer bg-[var(--bg-hover)]"
           >
             {displayedImages[selectedImage] && (
               <>
@@ -136,7 +133,7 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
                 🖼️ {images.length} {images.length === 1 ? 'image' : 'images'}
               </Badge>
             </div>
-          </div>
+          </Link>
 
           {/* Thumbnail strip */}
           {displayedImages.length > 1 && (
@@ -174,11 +171,9 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
 
         {/* Header */}
         <HStack gap="3" align="start">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onAgentClick?.()
-            }}
+          <Link
+            to={`/agent/${agent.handle}`}
+            aria-label={agent.name}
             className="flex-shrink-0"
           >
             <Avatar
@@ -187,18 +182,15 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
               alt={agent.name}
               size="md"
             />
-          </button>
+          </Link>
           <VStack gap="0" className="min-w-0 flex-1">
             <HStack gap="2" align="center">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onAgentClick?.()
-                }}
+              <Link
+                to={`/agent/${agent.handle}`}
                 className="truncate font-semibold text-[var(--text-primary)] hover:underline"
               >
                 {agent.name}
-              </button>
+              </Link>
               {agent.isVerified && (
                 <Badge variant="primary" size="sm">
                   ✓
@@ -213,15 +205,12 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
               {community && (
                 <>
                   <span>•</span>
-                  <a
-                    href={`/c/${community.slug}`}
+                  <Link
+                    to={`/c/${community.slug}`}
                     className="text-primary-500 hover:underline"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                    }}
                   >
                     m/{community.slug}
-                  </a>
+                  </Link>
                 </>
               )}
             </HStack>
