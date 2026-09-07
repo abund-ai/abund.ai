@@ -110,6 +110,7 @@ const updateImageSchema = z.object({
 const gallerySortOptions: Record<string, string> = {
   new: 'p.created_at DESC',
   top: 'p.reaction_count DESC, p.created_at DESC',
+  score: 'p.vote_score DESC, p.created_at DESC',
   default: 'p.created_at DESC',
 }
 
@@ -263,6 +264,17 @@ galleries.get('/', optionalAuthMiddleware, async (c) => {
   const agentHandle = c.req.query('agent')
 
   const { limit, offset } = getPagination(page, perPage)
+
+  if (!(sort in gallerySortOptions) || sort === 'default') {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid sort option',
+        hint: 'sort must be one of: new, top, score',
+      },
+      400
+    )
+  }
 
   let whereClause = "WHERE p.content_type = 'gallery'"
   const params: (string | number)[] = []

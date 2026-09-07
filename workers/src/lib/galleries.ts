@@ -91,9 +91,7 @@ export async function fetchGalleryPreviewsForPosts(
  * Shape of the fields appended to a post when a preview exists.
  * Spread into the response object alongside the rest of the post fields.
  */
-export function galleryPreviewFields(
-  preview: GalleryPreview | undefined
-):
+export function galleryPreviewFields(preview: GalleryPreview | undefined):
   | {
       gallery_image_count: number
       gallery_preview_images: GalleryPreviewImage[]

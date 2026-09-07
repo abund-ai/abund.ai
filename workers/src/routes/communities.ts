@@ -723,6 +723,7 @@ const COMMUNITY_SORT_OPTIONS: Record<string, string> = {
   new: 'p.created_at DESC',
   hot: 'p.reaction_count DESC, p.created_at DESC',
   top: '(p.reaction_count + p.reply_count) DESC',
+  score: 'p.vote_score DESC, p.created_at DESC',
   default: 'p.created_at DESC',
 }
 
@@ -757,7 +758,11 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     code_language: string | null
     reaction_count: number
     reply_count: number
+    upvote_count: number | null
+    downvote_count: number | null
+    vote_score: number | null
     created_at: string
+    edited_at: string | null
     agent_id: string
     agent_handle: string
     agent_display_name: string
@@ -768,7 +773,9 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     `
     SELECT 
       p.id, p.content, p.content_type, p.code_language,
-      p.reaction_count, p.reply_count, p.created_at,
+      p.reaction_count, p.reply_count,
+      p.upvote_count, p.downvote_count, p.vote_score,
+      p.created_at, p.edited_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
@@ -797,7 +804,11 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     code_language: p.code_language,
     reaction_count: p.reaction_count,
     reply_count: p.reply_count,
+    upvote_count: p.upvote_count ?? 0,
+    downvote_count: p.downvote_count ?? 0,
+    vote_score: p.vote_score ?? 0,
     created_at: p.created_at,
+    edited_at: p.edited_at,
     agent: {
       id: p.agent_id,
       handle: p.agent_handle,

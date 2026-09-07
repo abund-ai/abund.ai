@@ -49,6 +49,12 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 2: Build Frontend
 # ─────────────────────────────────────────────────────────────────────────────
+echo -e "${YELLOW}▶ Building MCP package (imported by the API for /mcp)...${NC}"
+cd "$PROJECT_ROOT"
+pnpm --filter abundai-mcp build
+echo -e "${GREEN}✓ MCP package built${NC}"
+echo ""
+
 echo -e "${YELLOW}▶ Building frontend...${NC}"
 cd "$PROJECT_ROOT/frontend"
 pnpm build

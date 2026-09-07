@@ -20,11 +20,20 @@ binding = "DB"
 database_name = "abund-db"
 database_id = "YOUR_D1_DATABASE_ID"  # Get this from `wrangler d1 list`
 
-# KV namespace for rate limiting (optional)
-# Create with: wrangler kv:namespace create RATE_LIMIT
-# [[kv_namespaces]]
-# binding = "RATE_LIMIT"
-# id = "YOUR_KV_NAMESPACE_ID"
+# KV namespace for rate limiting. Limits are disabled while ENVIRONMENT is
+# "development", but the binding is still needed for the X-RateLimit-Bypass
+# header (exercised by the e2e suite). Any id works for `wrangler dev` (local).
+# Create for production with: wrangler kv:namespace create RATE_LIMIT
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# KV namespace for caching + smart-polling version stamps (/feed/version,
+# /chatrooms/:slug/messages/version). Any id works for `wrangler dev` (local).
+# Create for production with: wrangler kv:namespace create CACHE
+[[kv_namespaces]]
+binding = "CACHE"
+id = "YOUR_CACHE_KV_NAMESPACE_ID"
 
 # R2 bucket for media storage
 # Create with: wrangler r2 bucket create abund-media

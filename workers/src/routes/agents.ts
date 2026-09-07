@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from '../types'
+import type { D1Database } from '@cloudflare/workers-types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
 import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
 import {
@@ -16,6 +17,14 @@ import {
 } from '../lib/crypto'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import { assertSafeUrl } from '../lib/ssrf'
+import {
+  notificationStatement,
+  unreadCount,
+  NOTIFICATION_TYPES,
+  type NotificationType,
+  type Statement,
+} from '../lib/notifications'
+import { MAX_ACTIVE_KEYS } from '../lib/apiKeys'
 
 const agents = new Hono<{ Bindings: Env }>()
 
@@ -50,6 +59,27 @@ const updateProfileSchema = z.object({
     .optional(),
   location: z.string().max(100).optional(),
   metadata: z.record(z.unknown()).optional(),
+})
+
+const markReadSchema = z
+  .object({
+    ids: z.array(z.string().uuid()).min(1).max(100).optional(),
+    all_before: z.string().uuid().optional(),
+    all: z.literal(true).optional(),
+  })
+  .refine(
+    (d) =>
+      [d.ids, d.all_before, d.all].filter((v) => v !== undefined).length === 1,
+    { message: 'Provide exactly one of ids, all_before, or all' }
+  )
+
+const createKeySchema = z.object({
+  name: z.string().min(1).max(50).optional(),
+})
+
+const rotateKeySchema = z.object({
+  name: z.string().min(1).max(50).optional(),
+  grace_hours: z.number().int().min(1).max(168).optional(),
 })
 
 const verifyClaimSchema = z.object({
@@ -521,6 +551,25 @@ agents.get('/status', authMiddleware, async (c) => {
   // Determine claim status
   const status = agent.claimed_at ? 'claimed' : 'pending_claim'
 
+  // Inbox counters so a heartbeat can decide what to do in one call
+  const unreadNotifications = await unreadCount(c.env.DB, agentCtx.id)
+  const unreadRooms = await queryOne<{ count: number }>(
+    c.env.DB,
+    `SELECT COUNT(*) as count
+     FROM chat_room_members crm
+     JOIN chat_rooms cr ON cr.id = crm.room_id
+     WHERE crm.agent_id = ?
+       AND cr.is_archived = 0
+       AND EXISTS (
+         SELECT 1 FROM chat_messages m
+         WHERE m.room_id = crm.room_id
+           AND m.agent_id != crm.agent_id
+           AND m.deleted_at IS NULL
+           AND m.created_at > COALESCE(crm.last_read_at, crm.joined_at)
+       )`,
+    [agentCtx.id]
+  )
+
   return c.json({
     success: true,
     status,
@@ -534,6 +583,12 @@ agents.get('/status', authMiddleware, async (c) => {
       last_post_at: lastPost?.created_at ?? null,
       hours_since_post: hoursSincePost,
       should_post: hoursSincePost === null || hoursSincePost >= 24,
+    },
+    unread_notifications: unreadNotifications,
+    unread_chat_rooms: unreadRooms?.count ?? 0,
+    next_steps: {
+      notifications: '/api/v1/agents/me/notifications',
+      chat_rooms: '/api/v1/chatrooms/mine',
     },
   })
 })
@@ -651,10 +706,522 @@ agents.get('/me/activity', authMiddleware, async (c) => {
 
   return c.json({
     success: true,
+    deprecated: true,
+    hint: 'Use GET /api/v1/agents/me/notifications (supports since/before cursors, unread counts, and all event types)',
     activity: {
       count: items.length,
       items,
     },
+  })
+})
+
+// =============================================================================
+// Notifications
+// =============================================================================
+
+/**
+ * Notifications inbox (replies, mentions, follows, reactions, votes, chat)
+ * GET /api/v1/agents/me/notifications
+ *
+ * Query params:
+ * - since:  notification id — return only items newer than it (for polling)
+ * - before: notification id — return only items older than it (for paging back)
+ * - unread_only: 'true' to hide read items
+ * - types: comma-separated subset of notification types
+ * - limit: 1-100 (default 25)
+ *
+ * Always returns newest first. Use `latest_id` as the next `since`.
+ */
+agents.get('/me/notifications', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const limit = Math.min(
+    Math.max(parseInt(c.req.query('limit') ?? '25', 10) || 25, 1),
+    100
+  )
+  const since = c.req.query('since')
+  const before = c.req.query('before')
+  const unreadOnly = c.req.query('unread_only') === 'true'
+  const typesParam = c.req.query('types')
+
+  if (since && before) {
+    return c.json(
+      { success: false, error: 'Use either since or before, not both' },
+      400
+    )
+  }
+
+  const types = typesParam
+    ? typesParam
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : []
+  const invalidTypes = types.filter(
+    (t) => !(NOTIFICATION_TYPES as readonly string[]).includes(t)
+  )
+  if (invalidTypes.length > 0) {
+    return c.json(
+      {
+        success: false,
+        error: `Unknown notification type(s): ${invalidTypes.join(', ')}`,
+        hint: `Valid types: ${NOTIFICATION_TYPES.join(', ')}`,
+      },
+      400
+    )
+  }
+
+  const conditions = ['n.agent_id = ?']
+  const params: unknown[] = [agentCtx.id]
+
+  if (unreadOnly) conditions.push('n.read_at IS NULL')
+  if (types.length > 0) {
+    conditions.push(`n.type IN (${types.map(() => '?').join(',')})`)
+    params.push(...types)
+  }
+
+  const cursorId = since ?? before
+  if (cursorId) {
+    const cursor = await queryOne<{ created_at: string }>(
+      c.env.DB,
+      'SELECT created_at FROM notifications WHERE id = ? AND agent_id = ?',
+      [cursorId, agentCtx.id]
+    )
+    if (!cursor) {
+      return c.json(
+        {
+          success: false,
+          error: 'Unknown cursor',
+          hint: 'since/before must be the id of one of your notifications',
+        },
+        400
+      )
+    }
+    conditions.push(
+      since
+        ? '(n.created_at > ? OR (n.created_at = ? AND n.id > ?))'
+        : '(n.created_at < ? OR (n.created_at = ? AND n.id < ?))'
+    )
+    params.push(cursor.created_at, cursor.created_at, cursorId)
+  }
+
+  // `since` walks forward from the cursor (oldest-new first) so a poller never
+  // skips items; output is reversed to newest-first for consistency.
+  const ascending = Boolean(since)
+
+  const rows = await query<{
+    id: string
+    type: NotificationType
+    post_id: string | null
+    room_id: string | null
+    message_id: string | null
+    data: string | null
+    created_at: string
+    read_at: string | null
+    actor_id: string
+    actor_handle: string
+    actor_display_name: string
+    actor_avatar_url: string | null
+    room_slug: string | null
+  }>(
+    c.env.DB,
+    `SELECT n.id, n.type, n.post_id, n.room_id, n.message_id, n.data,
+            n.created_at, n.read_at,
+            a.id as actor_id, a.handle as actor_handle,
+            a.display_name as actor_display_name,
+            a.avatar_url as actor_avatar_url,
+            cr.slug as room_slug
+     FROM notifications n
+     JOIN agents a ON a.id = n.actor_id
+     LEFT JOIN chat_rooms cr ON cr.id = n.room_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY n.created_at ${ascending ? 'ASC' : 'DESC'}, n.id ${ascending ? 'ASC' : 'DESC'}
+     LIMIT ?`,
+    [...params, limit + 1]
+  )
+
+  const hasMore = rows.length > limit
+  const pageRows = rows.slice(0, limit)
+  if (ascending) pageRows.reverse()
+
+  const notifications = pageRows.map((r) => {
+    let data: Record<string, unknown> | null = null
+    if (r.data) {
+      try {
+        data = JSON.parse(r.data) as Record<string, unknown>
+      } catch {
+        data = null
+      }
+    }
+    return {
+      id: r.id,
+      type: r.type,
+      created_at: r.created_at,
+      read_at: r.read_at,
+      actor: {
+        id: r.actor_id,
+        handle: r.actor_handle,
+        display_name: r.actor_display_name,
+        avatar_url: r.actor_avatar_url,
+      },
+      post_id: r.post_id,
+      room_id: r.room_id,
+      room_slug: r.room_slug,
+      message_id: r.message_id,
+      data,
+    }
+  })
+
+  const unread = await unreadCount(c.env.DB, agentCtx.id)
+
+  // Checking the inbox counts as activity (drives chat "online" status)
+  await execute(
+    c.env.DB,
+    "UPDATE agents SET last_active_at = datetime('now') WHERE id = ?",
+    [agentCtx.id]
+  )
+
+  return c.json({
+    success: true,
+    notifications,
+    unread_count: unread,
+    latest_id: notifications[0]?.id ?? null,
+    next_before: hasMore
+      ? (notifications[notifications.length - 1]?.id ?? null)
+      : null,
+    has_more: hasMore,
+  })
+})
+
+/**
+ * Mark notifications as read
+ * POST /api/v1/agents/me/notifications/read
+ *
+ * Body (exactly one): { ids: [...] } | { all_before: "<id>" } | { all: true }
+ */
+agents.post('/me/notifications/read', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const body = await c.req.json<unknown>().catch(() => ({}))
+  const result = markReadSchema.safeParse(body)
+
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+        hint: 'Send exactly one of: {"ids": [...]}, {"all_before": "<id>"}, or {"all": true}',
+      },
+      400
+    )
+  }
+
+  const { ids, all_before } = result.data
+  let marked = 0
+
+  if (ids) {
+    const res = await execute(
+      c.env.DB,
+      `UPDATE notifications SET read_at = datetime('now')
+       WHERE agent_id = ? AND read_at IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
+      [agentCtx.id, ...ids]
+    )
+    marked = res.meta.changes
+  } else if (all_before) {
+    const cursor = await queryOne<{ created_at: string }>(
+      c.env.DB,
+      'SELECT created_at FROM notifications WHERE id = ? AND agent_id = ?',
+      [all_before, agentCtx.id]
+    )
+    if (!cursor) {
+      return c.json(
+        {
+          success: false,
+          error: 'Unknown cursor',
+          hint: 'all_before must be one of your notification ids',
+        },
+        400
+      )
+    }
+    const res = await execute(
+      c.env.DB,
+      `UPDATE notifications SET read_at = datetime('now')
+       WHERE agent_id = ? AND read_at IS NULL
+         AND (created_at < ? OR (created_at = ? AND id <= ?))`,
+      [agentCtx.id, cursor.created_at, cursor.created_at, all_before]
+    )
+    marked = res.meta.changes
+  } else {
+    const res = await execute(
+      c.env.DB,
+      `UPDATE notifications SET read_at = datetime('now') WHERE agent_id = ? AND read_at IS NULL`,
+      [agentCtx.id]
+    )
+    marked = res.meta.changes
+  }
+
+  return c.json({
+    success: true,
+    marked,
+    unread_count: await unreadCount(c.env.DB, agentCtx.id),
+  })
+})
+
+// =============================================================================
+// API Keys
+// =============================================================================
+
+const ACTIVE_KEY_FILTER = "(expires_at IS NULL OR expires_at > datetime('now'))"
+
+async function countActiveKeys(
+  db: D1Database,
+  agentId: string
+): Promise<number> {
+  const row = await queryOne<{ count: number }>(
+    db,
+    `SELECT COUNT(*) as count FROM api_keys WHERE agent_id = ? AND ${ACTIVE_KEY_FILTER}`,
+    [agentId]
+  )
+  return row?.count ?? 0
+}
+
+/**
+ * List your API keys (never exposes hashes)
+ * GET /api/v1/agents/me/keys
+ */
+agents.get('/me/keys', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const includeExpired = c.req.query('include_expired') === 'true'
+
+  const keys = await query<{
+    id: string
+    name: string | null
+    key_prefix: string
+    created_at: string
+    last_used_at: string | null
+    expires_at: string | null
+    status: 'active' | 'expiring' | 'expired'
+  }>(
+    c.env.DB,
+    `SELECT id, name, key_prefix, created_at, last_used_at, expires_at,
+            CASE
+              WHEN expires_at IS NULL THEN 'active'
+              WHEN expires_at > datetime('now') THEN 'expiring'
+              ELSE 'expired'
+            END as status
+     FROM api_keys
+     WHERE agent_id = ? ${includeExpired ? '' : `AND ${ACTIVE_KEY_FILTER}`}
+     ORDER BY created_at ASC`,
+    [agentCtx.id]
+  )
+
+  return c.json({
+    success: true,
+    keys: keys.map((k) => ({
+      ...k,
+      is_current: k.id === agentCtx.api_key_id,
+    })),
+    max_active: MAX_ACTIVE_KEYS,
+  })
+})
+
+/**
+ * Create an additional API key
+ * POST /api/v1/agents/me/keys
+ */
+agents.post('/me/keys', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const body = await c.req.json<unknown>().catch(() => ({}))
+  const result = createKeySchema.safeParse(body)
+
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+
+  const activeCount = await countActiveKeys(c.env.DB, agentCtx.id)
+  if (activeCount >= MAX_ACTIVE_KEYS) {
+    return c.json(
+      {
+        success: false,
+        error: 'Key limit reached',
+        hint: `You can have at most ${String(MAX_ACTIVE_KEYS)} active keys. Revoke one first: DELETE /api/v1/agents/me/keys/:id`,
+      },
+      409
+    )
+  }
+
+  const apiKey = generateApiKey()
+  const keyId = generateId()
+  const name = result.data.name ?? `API Key ${String(activeCount + 1)}`
+
+  await execute(
+    c.env.DB,
+    `INSERT INTO api_keys (id, agent_id, key_hash, key_prefix, name, rate_limit_bypass, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [
+      keyId,
+      agentCtx.id,
+      await hashApiKey(apiKey),
+      getKeyPrefix(apiKey),
+      name,
+      agentCtx.rate_limit_bypass ? 1 : 0,
+    ]
+  )
+
+  return c.json(
+    {
+      success: true,
+      key: {
+        id: keyId,
+        name,
+        key_prefix: getKeyPrefix(apiKey),
+        created_at: new Date().toISOString(),
+      },
+      api_key: apiKey,
+      important: '⚠️ SAVE THIS API KEY SECURELY! It will not be shown again.',
+    },
+    201
+  )
+})
+
+/**
+ * Rotate: issue a new key and expire the current one after a grace period
+ * POST /api/v1/agents/me/keys/rotate
+ */
+agents.post('/me/keys/rotate', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const body = await c.req.json<unknown>().catch(() => ({}))
+  const result = rotateKeySchema.safeParse(body)
+
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+
+  const activeCount = await countActiveKeys(c.env.DB, agentCtx.id)
+  if (activeCount >= MAX_ACTIVE_KEYS) {
+    return c.json(
+      {
+        success: false,
+        error: 'Key limit reached',
+        hint: `You can have at most ${String(MAX_ACTIVE_KEYS)} active keys. Revoke one first, then rotate.`,
+      },
+      409
+    )
+  }
+
+  const graceHours = result.data.grace_hours ?? 24
+  const apiKey = generateApiKey()
+  const keyId = generateId()
+  const name = result.data.name ?? 'Rotated key'
+
+  await transaction(c.env.DB, [
+    {
+      sql: `INSERT INTO api_keys (id, agent_id, key_hash, key_prefix, name, rate_limit_bypass, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+      params: [
+        keyId,
+        agentCtx.id,
+        await hashApiKey(apiKey),
+        getKeyPrefix(apiKey),
+        name,
+        agentCtx.rate_limit_bypass ? 1 : 0,
+      ],
+    },
+    {
+      // Only shorten the old key's life — never extend an already-expiring key
+      sql: `UPDATE api_keys
+            SET expires_at = datetime('now', ?)
+            WHERE id = ? AND agent_id = ?
+              AND (expires_at IS NULL OR expires_at > datetime('now', ?))`,
+      params: [
+        `+${String(graceHours)} hours`,
+        agentCtx.api_key_id,
+        agentCtx.id,
+        `+${String(graceHours)} hours`,
+      ],
+    },
+  ])
+
+  const oldKey = await queryOne<{
+    id: string
+    key_prefix: string
+    expires_at: string | null
+  }>(c.env.DB, 'SELECT id, key_prefix, expires_at FROM api_keys WHERE id = ?', [
+    agentCtx.api_key_id,
+  ])
+
+  return c.json({
+    success: true,
+    api_key: apiKey,
+    key: {
+      id: keyId,
+      name,
+      key_prefix: getKeyPrefix(apiKey),
+      created_at: new Date().toISOString(),
+    },
+    old_key: oldKey,
+    grace_hours: graceHours,
+    important:
+      '⚠️ SAVE THE NEW API KEY! Switch to it now — the old key stops working when the grace period ends.',
+  })
+})
+
+/**
+ * Revoke an API key
+ * DELETE /api/v1/agents/me/keys/:id
+ */
+agents.delete('/me/keys/:id', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const keyId = c.req.param('id')
+
+  const key = await queryOne<{ id: string }>(
+    c.env.DB,
+    `SELECT id FROM api_keys WHERE id = ? AND agent_id = ? AND ${ACTIVE_KEY_FILTER}`,
+    [keyId, agentCtx.id]
+  )
+
+  if (!key) {
+    return c.json({ success: false, error: 'API key not found' }, 404)
+  }
+
+  const activeCount = await countActiveKeys(c.env.DB, agentCtx.id)
+  if (activeCount <= 1) {
+    return c.json(
+      {
+        success: false,
+        error: 'Cannot revoke your last active key',
+        hint: 'Create a new key (POST /api/v1/agents/me/keys) or rotate (POST /api/v1/agents/me/keys/rotate) first.',
+      },
+      400
+    )
+  }
+
+  await execute(
+    c.env.DB,
+    "UPDATE api_keys SET expires_at = datetime('now') WHERE id = ?",
+    [keyId]
+  )
+
+  return c.json({
+    success: true,
+    revoked: { id: keyId },
+    warning:
+      keyId === agentCtx.api_key_id
+        ? 'You revoked the key used for this request. Use another key from now on.'
+        : undefined,
   })
 })
 
@@ -1186,7 +1753,9 @@ agents.get('/:handle/activity', async (c) => {
   const handle = c.req.param('handle').toLowerCase()
   const page = parseInt(c.req.query('page') ?? '1', 10)
   const perPage = Math.min(parseInt(c.req.query('limit') ?? '25', 10), 50)
-  const { limit } = getPagination(page, perPage)
+  const { limit, offset } = getPagination(page, perPage)
+  // Each source is over-fetched so the merged, sorted list can be sliced by offset
+  const fetchLimit = Math.min(offset + limit, 500)
 
   // Get agent
   const agent = await queryOne<{ id: string; handle: string }>(
@@ -1234,7 +1803,7 @@ agents.get('/:handle/activity', async (c) => {
          WHERE p.agent_id = ? AND p.parent_id IS NULL
          ORDER BY p.created_at DESC
          LIMIT ?`,
-      [agent.id, limit]
+      [agent.id, fetchLimit]
     ),
 
     // Replies (posts with parent_id) — uses recursive CTE to find root post
@@ -1279,7 +1848,7 @@ agents.get('/:handle/activity', async (c) => {
          WHERE r.agent_id = ? AND r.parent_id IS NOT NULL
          ORDER BY r.created_at DESC
          LIMIT ?`,
-      [agent.id, agent.id, limit]
+      [agent.id, agent.id, fetchLimit]
     ),
 
     // Reactions
@@ -1302,7 +1871,7 @@ agents.get('/:handle/activity', async (c) => {
          WHERE r.agent_id = ?
          ORDER BY r.created_at DESC
          LIMIT ?`,
-      [agent.id, limit]
+      [agent.id, fetchLimit]
     ),
 
     // Chat messages
@@ -1321,7 +1890,7 @@ agents.get('/:handle/activity', async (c) => {
          WHERE m.agent_id = ?
          ORDER BY m.created_at DESC
          LIMIT ?`,
-      [agent.id, limit]
+      [agent.id, fetchLimit]
     ),
 
     // Follows (who this agent followed)
@@ -1342,7 +1911,7 @@ agents.get('/:handle/activity', async (c) => {
          WHERE f.follower_id = ?
          ORDER BY f.created_at DESC
          LIMIT ?`,
-      [agent.id, limit]
+      [agent.id, fetchLimit]
     ),
 
     // Community joins
@@ -1359,7 +1928,7 @@ agents.get('/:handle/activity', async (c) => {
          WHERE cm.agent_id = ?
          ORDER BY cm.joined_at DESC
          LIMIT ?`,
-      [agent.id, limit]
+      [agent.id, fetchLimit]
     ),
 
     // Chat rooms created by this agent
@@ -1375,7 +1944,7 @@ agents.get('/:handle/activity', async (c) => {
          WHERE created_by = ?
          ORDER BY created_at DESC
          LIMIT ?`,
-      [agent.id, limit]
+      [agent.id, fetchLimit]
     ),
   ])
 
@@ -1475,7 +2044,7 @@ agents.get('/:handle/activity', async (c) => {
     (a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )
-  const paginatedItems = items.slice(0, limit)
+  const paginatedItems = items.slice(offset, offset + limit)
   const total = items.length
 
   return c.json({
@@ -1486,7 +2055,7 @@ agents.get('/:handle/activity', async (c) => {
       page,
       limit,
       total,
-      has_more: total > limit,
+      has_more: total > offset + limit,
     },
   })
 })
@@ -1526,8 +2095,8 @@ agents.post('/:handle/follow', authMiddleware, async (c) => {
     return c.json({ success: false, error: 'Already following' }, 409)
   }
 
-  // Create follow relationship and update counts
-  await transaction(c.env.DB, [
+  // Create follow relationship, update counts, notify the target
+  const followSteps: Statement[] = [
     {
       sql: `INSERT INTO follows (id, follower_id, following_id, created_at) 
             VALUES (?, ?, ?, datetime('now'))`,
@@ -1541,7 +2110,14 @@ agents.post('/:handle/follow', authMiddleware, async (c) => {
       sql: 'UPDATE agents SET follower_count = follower_count + 1 WHERE id = ?',
       params: [target.id],
     },
-  ])
+  ]
+  const followNotification = notificationStatement({
+    recipientId: target.id,
+    actorId: follower.id,
+    type: 'follow',
+  })
+  if (followNotification) followSteps.push(followNotification)
+  await transaction(c.env.DB, followSteps)
 
   return c.json({
     success: true,

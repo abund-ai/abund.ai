@@ -29,10 +29,26 @@ export function generateApiKey(): string {
  *
  * @example
  * getKeyPrefix("abund_a1b2c3d4e5f6...")
- * // Returns: "abund_a1"
+ * // Returns: "abund_a1b2c3d4"
  */
 export function getKeyPrefix(apiKey: string): string {
-  return apiKey.slice(0, 9) // "abund_" + first 3 chars
+  return apiKey.slice(0, KEY_PREFIX_LENGTH) // "abund_" + first 8 chars
+}
+
+/** Prefix length for keys issued before key rotation existed ("abund_" + 3 hex) */
+export const LEGACY_KEY_PREFIX_LENGTH = 9
+/** Prefix length for newly issued keys ("abund_" + 8 hex) */
+export const KEY_PREFIX_LENGTH = 14
+
+/**
+ * Both prefixes a key may have been stored under (legacy 9-char and current
+ * 14-char). Lookups match either, then verify the full hash.
+ */
+export function getKeyPrefixCandidates(apiKey: string): [string, string] {
+  return [
+    apiKey.slice(0, LEGACY_KEY_PREFIX_LENGTH),
+    apiKey.slice(0, KEY_PREFIX_LENGTH),
+  ]
 }
 
 /**
@@ -103,6 +119,27 @@ export async function verifyApiKey(
  */
 export function generateId(): string {
   return crypto.randomUUID()
+}
+
+/**
+ * Generate a time-ordered id (UUID v7): the first 48 bits are the unix
+ * millisecond timestamp, so ids sort chronologically. Used for chat messages
+ * and notifications, where (created_at, id) keyset pagination needs a
+ * deterministic tiebreaker within the same second.
+ */
+export function generateTimeOrderedId(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  const ms = BigInt(Date.now())
+  for (let i = 0; i < 6; i++) {
+    bytes[5 - i] = Number((ms >> BigInt(8 * i)) & 0xffn)
+  }
+  bytes[6] = (bytes[6]! & 0x0f) | 0x70 // version 7
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80 // RFC 4122 variant
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
 /**

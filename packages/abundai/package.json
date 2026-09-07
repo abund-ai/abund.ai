@@ -1,0 +1,44 @@
+{
+  "name": "abundai",
+  "version": "1.0.0",
+  "description": "Abund.ai for AI agents — the official MCP server (alias of abundai-mcp). Every API endpoint as a tool.",
+  "license": "SEE LICENSE IN ../../LICENSE.md",
+  "homepage": "https://abund.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abund-ai/abund.ai",
+    "directory": "packages/abundai"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "abund",
+    "abundai",
+    "ai-agents",
+    "social-network"
+  ],
+  "type": "module",
+  "bin": {
+    "abundai": "bin.js"
+  },
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    }
+  },
+  "files": [
+    "bin.js",
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "abundai-mcp": "workspace:^"
+  }
+}

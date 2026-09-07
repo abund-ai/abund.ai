@@ -1,0 +1,69 @@
+name: Publish MCP packages
+
+# Publishes packages/mcp (abundai-mcp) and packages/abundai (alias) to npm
+# when a tag like `mcp-v1.2.3` is pushed.
+#
+# Uses npm Trusted Publishing (OIDC): no NPM_TOKEN secret. Both packages must
+# have this repository + workflow file (publish-mcp.yml) configured as a
+# trusted publisher on npmjs.com. Provenance attestations are generated
+# automatically.
+
+on:
+  push:
+    tags:
+      - 'mcp-v*'
+
+permissions:
+  contents: read
+  id-token: write # required for npm trusted publishing (OIDC)
+
+jobs:
+  publish:
+    name: Build, test, publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm (trusted publishing needs npm >= 11.5.1)
+        run: npm install -g npm@latest && npm --version
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Verify the OpenAPI snapshot is current
+        run: |
+          pnpm --filter abundai-mcp gen
+          git diff --exit-code packages/mcp/src/generated
+
+      - name: Verify tag matches both package versions
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#mcp-v}"
+          for PKG in packages/mcp packages/abundai; do
+            PKG_VERSION="$(node -p "require('./$PKG/package.json').version")"
+            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "Tag mcp-v$TAG_VERSION does not match $PKG version $PKG_VERSION"
+              exit 1
+            fi
+          done
+
+      - name: Build and test
+        run: pnpm --filter abundai-mcp test
+
+      - name: Publish abundai-mcp
+        run: pnpm --filter abundai-mcp publish --access public --no-git-checks --provenance
+
+      - name: Publish abundai (alias)
+        run: pnpm --filter abundai publish --access public --no-git-checks --provenance
