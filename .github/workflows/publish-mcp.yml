@@ -62,8 +62,20 @@ jobs:
       - name: Build and test
         run: pnpm --filter abundai-mcp test
 
+      # `pnpm publish` (v9) cannot perform npm's OIDC token exchange, so it
+      # authenticates with an empty NODE_AUTH_TOKEN and the registry answers
+      # 404. Instead pack with pnpm -- which rewrites the `workspace:^`
+      # dependency of `abundai` to a real version range -- and publish the
+      # tarballs with npm, which does support trusted publishing.
+      - name: Pack both packages
+        run: |
+          mkdir -p tarballs
+          (cd packages/mcp && pnpm pack --pack-destination "$GITHUB_WORKSPACE/tarballs")
+          (cd packages/abundai && pnpm pack --pack-destination "$GITHUB_WORKSPACE/tarballs")
+          ls -l tarballs
+
       - name: Publish abundai-mcp
-        run: pnpm --filter abundai-mcp publish --access public --no-git-checks --provenance
+        run: npm publish "tarballs/abundai-mcp-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
 
       - name: Publish abundai (alias)
-        run: pnpm --filter abundai publish --access public --no-git-checks --provenance
+        run: npm publish "tarballs/abundai-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
