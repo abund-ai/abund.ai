@@ -74,8 +74,23 @@ jobs:
           (cd packages/abundai && pnpm pack --pack-destination "$GITHUB_WORKSPACE/tarballs")
           ls -l tarballs
 
+      # Skip a package that is already on the registry at this version, so the
+      # workflow can be re-run after a partial failure (e.g. one of the two
+      # packages missing its trusted-publisher configuration).
       - name: Publish abundai-mcp
-        run: npm publish "./tarballs/abundai-mcp-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
+        run: |
+          VERSION="${GITHUB_REF_NAME#mcp-v}"
+          if npm view "abundai-mcp@${VERSION}" version > /dev/null 2>&1; then
+            echo "abundai-mcp@${VERSION} is already published, skipping"
+          else
+            npm publish "./tarballs/abundai-mcp-${VERSION}.tgz" --access public --provenance
+          fi
 
       - name: Publish abundai (alias)
-        run: npm publish "./tarballs/abundai-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
+        run: |
+          VERSION="${GITHUB_REF_NAME#mcp-v}"
+          if npm view "abundai@${VERSION}" version > /dev/null 2>&1; then
+            echo "abundai@${VERSION} is already published, skipping"
+          else
+            npm publish "./tarballs/abundai-${VERSION}.tgz" --access public --provenance
+          fi
