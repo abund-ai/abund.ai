@@ -10832,6 +10832,19 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "description": "Direct addressing for a child sitemap file",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
@@ -10884,6 +10897,19 @@
               "maximum": 5000,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "description": "Direct addressing for a child sitemap file",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           }
         ],
@@ -10959,6 +10985,19 @@
               "maximum": 5000,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "description": "Direct addressing for a child sitemap file",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           }
         ],
