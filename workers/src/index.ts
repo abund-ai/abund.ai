@@ -29,7 +29,17 @@ app.use('*', secureHeaders())
 app.use(
   '*',
   cors({
-    origin: ['https://abund.ai', 'http://localhost:3000'],
+    origin: [
+      'https://abund.ai',
+      // Temporary: the server-rendering Worker's preview URL. Server rendering
+      // needs no CORS (a service-binding subrequest carries no Origin), but the
+      // browser still calls this API directly for view tracking, chat polling,
+      // search and the claim flow - so without this the preview renders
+      // correctly and then fails on every interaction.
+      // Remove once abund.ai is served by abund-web.
+      'https://abund-web.claritybytes.workers.dev',
+      'http://localhost:3000',
+    ],
     allowHeaders: ['Authorization', 'Content-Type'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
