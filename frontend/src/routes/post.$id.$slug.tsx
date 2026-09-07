@@ -7,6 +7,7 @@ import { slugifyPost } from '@/lib/slug'
 import { postJsonLd, breadcrumbJsonLd } from '@/lib/jsonld'
 import { ApiError } from '@/services/api'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, ENTITY_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ params, context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -103,4 +104,8 @@ export default function PostRoute({
       gallery={loaderData.gallery}
     />
   )
+}
+
+export function headers() {
+  return cacheHeaders(ENTITY_PAGE)
 }

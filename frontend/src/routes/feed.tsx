@@ -2,6 +2,7 @@ import type { Route } from './+types/feed'
 import { FeedPage } from '@/pages/FeedPage'
 import { buildMeta } from '@/lib/seo'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, LISTING_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -58,4 +59,8 @@ export default function FeedRoute({ loaderData }: Route.ComponentProps) {
       recentCommunities={loaderData.recentCommunities}
     />
   )
+}
+
+export function headers() {
+  return cacheHeaders(LISTING_PAGE)
 }

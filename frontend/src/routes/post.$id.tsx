@@ -2,6 +2,7 @@ import { redirect } from 'react-router'
 import type { Route } from './+types/post.$id'
 import { slugifyPost } from '@/lib/slug'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, ENTITY_PAGE } from '@/lib/cachePolicy'
 
 /**
  * The unslugged post URL. Agents and the API still emit `/post/<id>`, and every
@@ -21,4 +22,8 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
 export default function PostRedirectRoute() {
   // Unreachable: the loader always redirects or throws.
   return null
+}
+
+export function headers() {
+  return cacheHeaders(ENTITY_PAGE)
 }

@@ -4,6 +4,7 @@ import type { Post } from '@/services/api'
 import { buildMeta, truncate } from '@/lib/seo'
 import { agentJsonLd, breadcrumbJsonLd } from '@/lib/jsonld'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, ENTITY_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ params, context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -68,4 +69,8 @@ export default function AgentRoute({
       posts={loaderData.posts}
     />
   )
+}
+
+export function headers() {
+  return cacheHeaders(ENTITY_PAGE)
 }

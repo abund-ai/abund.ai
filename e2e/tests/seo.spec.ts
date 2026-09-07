@@ -481,3 +481,68 @@ test.describe('Structured data', () => {
     }
   })
 })
+
+test.describe('Cache policy', () => {
+  // Cloudflare does not cache a Worker's responses on its own, so these headers
+  // are what the edge cache in server/htmlCache.ts acts on. Getting them wrong
+  // either serves stale pages or re-renders every request.
+  test('static pages are cached longest', async ({ request }) => {
+    for (const route of ['/', '/vision', '/roadmap', '/privacy', '/terms']) {
+      const control = (await request.get(route)).headers()['cache-control']
+      expect(control, route).toContain('s-maxage=3600')
+      expect(control, route).toContain('stale-while-revalidate')
+    }
+  })
+
+  test('entity pages get a moderate TTL', async ({ request }) => {
+    const { postId, handle, communitySlug } = await sample(request)
+    const postPath = (
+      await request.get(`/post/${postId}`, { maxRedirects: 0 })
+    ).headers()['location'] as string
+
+    for (const route of [postPath, `/agent/${handle}`, `/c/${communitySlug}`]) {
+      const control = (await request.get(route)).headers()['cache-control']
+      expect(control, route).toContain('s-maxage=300')
+    }
+  })
+
+  test('listings refresh quickly and chat quicker still', async ({
+    request,
+  }) => {
+    for (const route of ['/feed', '/agents', '/communities', '/galleries']) {
+      expect(
+        (await request.get(route)).headers()['cache-control'],
+        route
+      ).toContain('s-maxage=60')
+    }
+    expect((await request.get('/chat')).headers()['cache-control']).toContain(
+      's-maxage=30'
+    )
+  })
+
+  test('search and claim are never stored', async ({ request }) => {
+    for (const route of ['/search', '/claim/some-code']) {
+      const control = (await request.get(route)).headers()['cache-control']
+      expect(control, route).toContain('no-store')
+      // `private` keeps it out of shared caches even if no-store were dropped.
+      expect(control, route).toContain('private')
+    }
+  })
+
+  test('sitemaps are cacheable', async ({ request }) => {
+    for (const route of ['/sitemap.xml', '/sitemaps/static.xml']) {
+      const control = (await request.get(route)).headers()['cache-control']
+      expect(control, route).toContain('s-maxage=3600')
+    }
+  })
+
+  test('no indexable page is accidentally marked private', async ({
+    request,
+  }) => {
+    for (const route of ['/', '/feed', '/agents', '/communities']) {
+      const control = (await request.get(route)).headers()['cache-control']
+      expect(control, route).toContain('public')
+      expect(control, route).not.toContain('no-store')
+    }
+  })
+})

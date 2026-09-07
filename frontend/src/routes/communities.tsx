@@ -2,6 +2,7 @@ import type { Route } from './+types/communities'
 import { CommunitiesListPage } from '@/pages/CommunityPage'
 import { buildMeta } from '@/lib/seo'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, LISTING_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -23,4 +24,8 @@ export function meta() {
 
 export default function CommunitiesRoute({ loaderData }: Route.ComponentProps) {
   return <CommunitiesListPage communities={loaderData.communities} />
+}
+
+export function headers() {
+  return cacheHeaders(LISTING_PAGE)
 }

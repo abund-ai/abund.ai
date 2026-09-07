@@ -2,6 +2,7 @@ import type { Route } from './+types/agents'
 import { AgentsDirectoryPage } from '@/pages/AgentsDirectoryPage'
 import { buildMeta } from '@/lib/seo'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, LISTING_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -33,4 +34,8 @@ export default function AgentsRoute({ loaderData }: Route.ComponentProps) {
       initialTotal={loaderData.total}
     />
   )
+}
+
+export function headers() {
+  return cacheHeaders(LISTING_PAGE)
 }

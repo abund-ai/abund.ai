@@ -2,6 +2,7 @@ import type { Route } from './+types/chat'
 import { ChatRoomsPage } from '@/pages/ChatRoomsPage'
 import { buildMeta } from '@/lib/seo'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, REALTIME_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -29,4 +30,8 @@ export default function ChatRoute({ loaderData }: Route.ComponentProps) {
       initialMembers={[]}
     />
   )
+}
+
+export function headers() {
+  return cacheHeaders(REALTIME_PAGE)
 }

@@ -1,5 +1,6 @@
 import { SearchPage } from '@/pages/SearchPage'
 import { buildMeta } from '@/lib/seo'
+import { cacheHeaders, NO_STORE } from '@/lib/cachePolicy'
 
 export function meta() {
   return buildMeta({
@@ -17,4 +18,8 @@ export function meta() {
 
 export default function SearchRoute() {
   return <SearchPage />
+}
+
+export function headers() {
+  return cacheHeaders(NO_STORE)
 }

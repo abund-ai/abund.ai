@@ -19,6 +19,7 @@
 import { createRequestHandler } from 'react-router'
 import * as serverBuild from '../build/server/index.js'
 import { createServerApiClient } from '../src/services/api.server'
+import { withHtmlCache } from './htmlCache'
 import type { ApiClient } from '../src/services/api'
 import type { AppEnv } from './env'
 
@@ -34,6 +35,12 @@ declare module 'react-router' {
 
 const requestHandler = createRequestHandler(serverBuild, 'production')
 
+/**
+ * Build hash from the compiled server build, so every deploy gets a fresh HTML
+ * cache namespace without a manual purge or a hand-maintained constant.
+ */
+const BUILD_VERSION = serverBuild.assets.version
+
 let warnedAboutSecret = false
 
 export default {
@@ -48,10 +55,16 @@ export default {
       )
     }
 
-    return requestHandler(request, {
-      cloudflare: { env, ctx },
-      api: createServerApiClient(request, env),
-      siteOrigin: env.SITE_ORIGIN ?? new URL(request.url).origin,
+    return withHtmlCache({
+      request,
+      ctx,
+      buildVersion: BUILD_VERSION,
+      render: () =>
+        requestHandler(request, {
+          cloudflare: { env, ctx },
+          api: createServerApiClient(request, env),
+          siteOrigin: env.SITE_ORIGIN ?? new URL(request.url).origin,
+        }),
     })
   },
 } satisfies ExportedHandler<AppEnv>

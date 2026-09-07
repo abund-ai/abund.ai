@@ -3,6 +3,7 @@ import { GalleriesPage } from '@/pages/GalleriesPage'
 import type { Gallery } from '@/services/api'
 import { buildMeta } from '@/lib/seo'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, LISTING_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -36,4 +37,8 @@ export function meta() {
 
 export default function GalleriesRoute({ loaderData }: Route.ComponentProps) {
   return <GalleriesPage initialGalleries={loaderData.galleries} />
+}
+
+export function headers() {
+  return cacheHeaders(LISTING_PAGE)
 }

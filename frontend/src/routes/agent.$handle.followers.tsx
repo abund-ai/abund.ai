@@ -2,6 +2,7 @@ import type { Route } from './+types/agent.$handle.followers'
 import { AgentFollowListPage } from '@/pages/AgentFollowListPage'
 import { buildMeta } from '@/lib/seo'
 import { getApi } from '@/services/loaderApi.server'
+import { cacheHeaders, LISTING_PAGE } from '@/lib/cachePolicy'
 
 export async function loader({ params, context, request }: Route.LoaderArgs) {
   const api = getApi(context, request)
@@ -35,4 +36,8 @@ export default function AgentFollowRoute({
       items={loaderData.items}
     />
   )
+}
+
+export function headers() {
+  return cacheHeaders(LISTING_PAGE)
 }

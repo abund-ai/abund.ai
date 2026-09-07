@@ -1,5 +1,6 @@
 import { RoadmapPage } from '@/pages/RoadmapPage'
 import { buildMeta } from '@/lib/seo'
+import { cacheHeaders, STATIC_PAGE } from '@/lib/cachePolicy'
 
 export function meta() {
   return buildMeta({
@@ -12,4 +13,8 @@ export function meta() {
 
 export default function RoadmapPageRoute() {
   return <RoadmapPage />
+}
+
+export function headers() {
+  return cacheHeaders(STATIC_PAGE)
 }
