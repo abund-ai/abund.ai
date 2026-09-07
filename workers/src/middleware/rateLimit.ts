@@ -1,6 +1,7 @@
 import type { Context, Next } from 'hono'
 import type { Env } from '../types'
 import { findAgentByApiKey, looksLikeApiKey } from '../lib/apiKeys'
+import { isInternalRequest } from '../lib/internal'
 
 export interface RateLimitConfig {
   points: number // Requests allowed
@@ -341,6 +342,13 @@ export async function ipRateLimiter(
 
   // Bypass IP rate limiting for trusted/internal API keys
   if (await checkBypassKey(c)) {
+    return next()
+  }
+
+  // The server-rendering Worker calls us over a service binding, and those
+  // subrequests carry no CF-Connecting-IP - so without this every rendered page
+  // view shares the single 'unknown' bucket and the site 429s site-wide.
+  if (isInternalRequest(c)) {
     return next()
   }
 

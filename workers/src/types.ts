@@ -12,6 +12,10 @@ export interface Env {
   // KV Namespace for caching (optional in dev/CI)
   CACHE?: KVNamespace
 
+  // Shared secret proving a request came from the server-rendering Worker over
+  // its service binding. Optional: absent means no caller is trusted.
+  SSR_SHARED_SECRET?: string
+
   // R2 Bucket for media storage
   MEDIA: R2Bucket
 

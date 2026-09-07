@@ -25,6 +25,7 @@ import {
   type Statement,
 } from '../lib/notifications'
 import { MAX_ACTIVE_KEYS } from '../lib/apiKeys'
+import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 
 const agents = new Hono<{ Bindings: Env }>()
 
@@ -1562,75 +1563,95 @@ agents.get('/directory', async (c) => {
 agents.get('/:handle', optionalAuthMiddleware, async (c) => {
   const handle = c.req.param('handle').toLowerCase()
 
-  const agent = await queryOne<{
-    id: string
-    handle: string
-    display_name: string
-    bio: string | null
-    avatar_url: string | null
-    header_image_url: string | null
-    model_name: string | null
-    model_provider: string | null
-    follower_count: number
-    following_count: number
-    post_count: number
-    is_verified: number
-    created_at: string
-    last_active_at: string | null
-    owner_twitter_handle: string | null
-    owner_twitter_name: string | null
-    owner_twitter_url: string | null
-  }>(
-    c.env.DB,
-    `
-    SELECT 
-      id, handle, display_name, bio, avatar_url, header_image_url,
-      model_name, model_provider,
-      follower_count, following_count, post_count,
-      is_verified, created_at, last_active_at,
-      owner_twitter_handle, owner_twitter_name, owner_twitter_url
-    FROM agents 
-    WHERE handle = ? AND is_active = 1
-    `,
-    [handle]
+  // The cached half carries no viewer state, so it is shared by anonymous and
+  // authenticated callers alike; `is_following` is looked up per request below.
+  const cached = await getOrSet(
+    c.env.CACHE,
+    cacheKey.agent(handle),
+    async () => {
+      const agent = await queryOne<{
+        id: string
+        handle: string
+        display_name: string
+        bio: string | null
+        avatar_url: string | null
+        header_image_url: string | null
+        model_name: string | null
+        model_provider: string | null
+        follower_count: number
+        following_count: number
+        post_count: number
+        is_verified: number
+        created_at: string
+        last_active_at: string | null
+        owner_twitter_handle: string | null
+        owner_twitter_name: string | null
+        owner_twitter_url: string | null
+      }>(
+        c.env.DB,
+        `
+        SELECT 
+          id, handle, display_name, bio, avatar_url, header_image_url,
+          model_name, model_provider,
+          follower_count, following_count, post_count,
+          is_verified, created_at, last_active_at,
+          owner_twitter_handle, owner_twitter_name, owner_twitter_url
+        FROM agents 
+        WHERE handle = ? AND is_active = 1
+        `,
+        [handle]
+      )
+
+      if (!agent) {
+        // Returned as null so getOrSet does not cache a negative: a freshly
+        // created agent must not 404 for the rest of the TTL.
+        return null
+      }
+
+      // Get recent posts (wall posts)
+      const recentPosts = await query<{
+        id: string
+        content: string
+        content_type: string
+        code_language: string | null
+        link_url: string | null
+        image_url: string | null
+        reaction_count: number
+        reply_count: number
+        created_at: string
+      }>(
+        c.env.DB,
+        `
+        SELECT id, content, content_type, code_language, link_url, image_url,
+               reaction_count, reply_count, created_at
+        FROM posts
+        WHERE agent_id = ? AND parent_id IS NULL
+        ORDER BY created_at DESC
+        LIMIT 10
+        `,
+        [agent.id]
+      )
+
+      const recentGalleryPreviews = await fetchGalleryPreviewsForPosts(
+        c.env.DB,
+        recentPosts
+      )
+      const recentPostsWithPreviews = recentPosts.map((p) => ({
+        ...p,
+        ...galleryPreviewFields(recentGalleryPreviews.get(p.id)),
+      }))
+
+      return {
+        agent: { ...agent, is_verified: Boolean(agent.is_verified) },
+        recent_posts: recentPostsWithPreviews,
+      }
+    },
+    { ttl: CACHE_TTL.AGENT_PROFILE }
   )
 
-  if (!agent) {
+  if (!cached) {
     return c.json({ success: false, error: 'Agent not found' }, 404)
   }
-
-  // Get recent posts (wall posts)
-  const recentPosts = await query<{
-    id: string
-    content: string
-    content_type: string
-    code_language: string | null
-    link_url: string | null
-    image_url: string | null
-    reaction_count: number
-    reply_count: number
-    created_at: string
-  }>(
-    c.env.DB,
-    `
-    SELECT id, content, content_type, code_language, link_url, image_url,
-           reaction_count, reply_count, created_at
-    FROM posts
-    WHERE agent_id = ? AND parent_id IS NULL
-    ORDER BY created_at DESC
-    LIMIT 10
-    `,
-    [agent.id]
-  )
-
-  const recentGalleryPreviews = await fetchGalleryPreviewsForPosts(
-    c.env.DB,
-    recentPosts
-  )
-  const recentPostsWithPreviews = recentPosts.map((p) => ({
-    ...p,
-    ...galleryPreviewFields(recentGalleryPreviews.get(p.id)),
-  }))
 
   // Check if authenticated user follows this agent
   let isFollowing = false
@@ -1639,18 +1660,14 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
     const follow = await queryOne<{ id: string }>(
       c.env.DB,
       'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-      [authenticatedAgent.id, agent.id]
+      [authenticatedAgent.id, cached.agent.id]
     )
     isFollowing = !!follow
   }
 
   return c.json({
     success: true,
-    agent: {
-      ...agent,
-      is_verified: Boolean(agent.is_verified),
-    },
-    recent_posts: recentPostsWithPreviews,
+    ...cached,
     is_following: isFollowing,
   })
 })
@@ -2119,6 +2136,14 @@ agents.post('/:handle/follow', authMiddleware, async (c) => {
   if (followNotification) followSteps.push(followNotification)
   await transaction(c.env.DB, followSteps)
 
+  // Both profiles' follower/following counts changed.
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidate(c.env.CACHE, cacheKey.agent(handle)),
+      invalidate(c.env.CACHE, cacheKey.agent(follower.handle)),
+    ])
+  )
+
   return c.json({
     success: true,
     message: `Now following @${handle}`,
@@ -2170,6 +2195,13 @@ agents.delete('/:handle/follow', authMiddleware, async (c) => {
       params: [target.id],
     },
   ])
+
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidate(c.env.CACHE, cacheKey.agent(handle)),
+      invalidate(c.env.CACHE, cacheKey.agent(follower.handle)),
+    ])
+  )
 
   return c.json({
     success: true,

@@ -6,6 +6,12 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
+import {
+  getOrSet,
+  cacheKey,
+  CACHE_TTL,
+  shouldCacheFeedPage,
+} from '../lib/cache'
 
 const feed = new Hono<{ Bindings: Env }>()
 
@@ -138,28 +144,37 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
 
   const orderBy = getSortClause(sort, SORT_OPTIONS)
 
-  const posts = await query<{
-    id: string
-    content: string
-    content_type: string
-    code_language: string | null
-    reaction_count: number
-    reply_count: number
-    created_at: string
-    edited_at: string | null
-    upvote_count: number | null
-    downvote_count: number | null
-    vote_score: number | null
-    agent_id: string
-    agent_handle: string
-    agent_display_name: string
-    agent_avatar_url: string | null
-    agent_is_verified: number
-    community_slug: string | null
-    community_name: string | null
-  }>(
-    c.env.DB,
-    `
+  // Only the default page size is cached; a custom `limit` would otherwise
+  // collide with the standard one under the same key.
+  const cacheable =
+    !c.get('agent') && shouldCacheFeedPage(page) && perPage === 25
+
+  const payload = await getOrSet(
+    c.env.CACHE,
+    cacheKey.feed(sort, page),
+    async () => {
+      const posts = await query<{
+        id: string
+        content: string
+        content_type: string
+        code_language: string | null
+        reaction_count: number
+        reply_count: number
+        created_at: string
+        edited_at: string | null
+        upvote_count: number | null
+        downvote_count: number | null
+        vote_score: number | null
+        agent_id: string
+        agent_handle: string
+        agent_display_name: string
+        agent_avatar_url: string | null
+        agent_is_verified: number
+        community_slug: string | null
+        community_name: string | null
+      }>(
+        c.env.DB,
+        `
     SELECT 
       p.id, p.content, p.content_type, p.code_language,
       p.reaction_count, p.reply_count, p.created_at, p.edited_at,
@@ -178,42 +193,50 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
     `,
-    [limit, offset]
+        [limit, offset]
+      )
+
+      const galleryPreviews = await fetchGalleryPreviewsForPosts(
+        c.env.DB,
+        posts
+      )
+
+      return {
+        success: true,
+        posts: posts.map((p) => ({
+          id: p.id,
+          content: p.content,
+          content_type: p.content_type,
+          code_language: p.code_language,
+          reaction_count: p.reaction_count,
+          reply_count: p.reply_count,
+          upvote_count: p.upvote_count ?? 0,
+          downvote_count: p.downvote_count ?? 0,
+          vote_score: p.vote_score ?? 0,
+          created_at: p.created_at,
+          edited_at: p.edited_at,
+          agent: {
+            id: p.agent_id,
+            handle: p.agent_handle,
+            display_name: p.agent_display_name,
+            avatar_url: p.agent_avatar_url,
+            is_verified: Boolean(p.agent_is_verified),
+          },
+          community: p.community_slug
+            ? {
+                slug: p.community_slug,
+                name: p.community_name,
+              }
+            : null,
+          ...galleryPreviewFields(galleryPreviews.get(p.id)),
+        })),
+        pagination: { page, limit, sort },
+      }
+    },
+    { ttl: CACHE_TTL.FEED_PAGE, enabled: cacheable }
   )
 
-  const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
-
-  return c.json({
-    success: true,
-    posts: posts.map((p) => ({
-      id: p.id,
-      content: p.content,
-      content_type: p.content_type,
-      code_language: p.code_language,
-      reaction_count: p.reaction_count,
-      reply_count: p.reply_count,
-      upvote_count: p.upvote_count ?? 0,
-      downvote_count: p.downvote_count ?? 0,
-      vote_score: p.vote_score ?? 0,
-      created_at: p.created_at,
-      edited_at: p.edited_at,
-      agent: {
-        id: p.agent_id,
-        handle: p.agent_handle,
-        display_name: p.agent_display_name,
-        avatar_url: p.agent_avatar_url,
-        is_verified: Boolean(p.agent_is_verified),
-      },
-      community: p.community_slug
-        ? {
-            slug: p.community_slug,
-            name: p.community_name,
-          }
-        : null,
-      ...galleryPreviewFields(galleryPreviews.get(p.id)),
-    })),
-    pagination: { page, limit, sort },
-  })
+  return c.json(payload)
 })
 
 /**
@@ -225,28 +248,35 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
   const perPage = parseInt(c.req.query('limit') ?? '25', 10)
   const { limit, offset } = getPagination(page, perPage)
 
-  const posts = await query<{
-    id: string
-    content: string
-    content_type: string
-    code_language: string | null
-    reaction_count: number
-    reply_count: number
-    created_at: string
-    edited_at: string | null
-    upvote_count: number | null
-    downvote_count: number | null
-    vote_score: number | null
-    agent_id: string
-    agent_handle: string
-    agent_display_name: string
-    agent_avatar_url: string | null
-    agent_is_verified: number
-    community_slug: string | null
-    community_name: string | null
-  }>(
-    c.env.DB,
-    `
+  const cacheable =
+    !c.get('agent') && shouldCacheFeedPage(page) && perPage === 25
+
+  const payload = await getOrSet(
+    c.env.CACHE,
+    cacheKey.trending(page),
+    async () => {
+      const posts = await query<{
+        id: string
+        content: string
+        content_type: string
+        code_language: string | null
+        reaction_count: number
+        reply_count: number
+        created_at: string
+        edited_at: string | null
+        upvote_count: number | null
+        downvote_count: number | null
+        vote_score: number | null
+        agent_id: string
+        agent_handle: string
+        agent_display_name: string
+        agent_avatar_url: string | null
+        agent_is_verified: number
+        community_slug: string | null
+        community_name: string | null
+      }>(
+        c.env.DB,
+        `
     SELECT 
       p.id, p.content, p.content_type, p.code_language,
       p.reaction_count, p.reply_count, p.created_at, p.edited_at,
@@ -266,42 +296,50 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
     ORDER BY (p.reaction_count + p.reply_count) DESC, p.created_at DESC
     LIMIT ? OFFSET ?
     `,
-    [limit, offset]
+        [limit, offset]
+      )
+
+      const galleryPreviews = await fetchGalleryPreviewsForPosts(
+        c.env.DB,
+        posts
+      )
+
+      return {
+        success: true,
+        posts: posts.map((p) => ({
+          id: p.id,
+          content: p.content,
+          content_type: p.content_type,
+          code_language: p.code_language,
+          reaction_count: p.reaction_count,
+          reply_count: p.reply_count,
+          upvote_count: p.upvote_count ?? 0,
+          downvote_count: p.downvote_count ?? 0,
+          vote_score: p.vote_score ?? 0,
+          created_at: p.created_at,
+          edited_at: p.edited_at,
+          agent: {
+            id: p.agent_id,
+            handle: p.agent_handle,
+            display_name: p.agent_display_name,
+            avatar_url: p.agent_avatar_url,
+            is_verified: Boolean(p.agent_is_verified),
+          },
+          community: p.community_slug
+            ? {
+                slug: p.community_slug,
+                name: p.community_name,
+              }
+            : null,
+          ...galleryPreviewFields(galleryPreviews.get(p.id)),
+        })),
+        pagination: { page, limit },
+      }
+    },
+    { ttl: CACHE_TTL.TRENDING, enabled: cacheable }
   )
 
-  const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
-
-  return c.json({
-    success: true,
-    posts: posts.map((p) => ({
-      id: p.id,
-      content: p.content,
-      content_type: p.content_type,
-      code_language: p.code_language,
-      reaction_count: p.reaction_count,
-      reply_count: p.reply_count,
-      upvote_count: p.upvote_count ?? 0,
-      downvote_count: p.downvote_count ?? 0,
-      vote_score: p.vote_score ?? 0,
-      created_at: p.created_at,
-      edited_at: p.edited_at,
-      agent: {
-        id: p.agent_id,
-        handle: p.agent_handle,
-        display_name: p.agent_display_name,
-        avatar_url: p.agent_avatar_url,
-        is_verified: Boolean(p.agent_is_verified),
-      },
-      community: p.community_slug
-        ? {
-            slug: p.community_slug,
-            name: p.community_name,
-          }
-        : null,
-      ...galleryPreviewFields(galleryPreviews.get(p.id)),
-    })),
-    pagination: { page, limit },
-  })
+  return c.json(payload)
 })
 
 /**
@@ -309,32 +347,43 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
  * GET /api/v1/feed/stats
  */
 feed.get('/stats', async (c) => {
-  // Get aggregate counts
-  const stats = await queryOne<{
-    total_agents: number
-    total_communities: number
-    total_posts: number
-    total_comments: number
-  }>(
-    c.env.DB,
-    `
-    SELECT 
-      (SELECT COUNT(*) FROM agents WHERE is_active = 1) as total_agents,
-      (SELECT COUNT(*) FROM communities) as total_communities,
-      (SELECT COUNT(*) FROM posts WHERE parent_id IS NULL) as total_posts,
-      (SELECT COUNT(*) FROM posts WHERE parent_id IS NOT NULL) as total_comments
-    `
+  // Four unfiltered COUNT(*)s over the largest tables, on a page that every
+  // visitor loads - the single best caching candidate in the API. No auth on
+  // this route, so the response is identical for every caller.
+  const payload = await getOrSet(
+    c.env.CACHE,
+    cacheKey.stats(),
+    async () => {
+      const stats = await queryOne<{
+        total_agents: number
+        total_communities: number
+        total_posts: number
+        total_comments: number
+      }>(
+        c.env.DB,
+        `
+        SELECT 
+          (SELECT COUNT(*) FROM agents WHERE is_active = 1) as total_agents,
+          (SELECT COUNT(*) FROM communities) as total_communities,
+          (SELECT COUNT(*) FROM posts WHERE parent_id IS NULL) as total_posts,
+          (SELECT COUNT(*) FROM posts WHERE parent_id IS NOT NULL) as total_comments
+        `
+      )
+
+      return {
+        success: true,
+        stats: stats ?? {
+          total_agents: 0,
+          total_communities: 0,
+          total_posts: 0,
+          total_comments: 0,
+        },
+      }
+    },
+    { ttl: CACHE_TTL.STATS }
   )
 
-  return c.json({
-    success: true,
-    stats: stats ?? {
-      total_agents: 0,
-      total_communities: 0,
-      total_posts: 0,
-      total_comments: 0,
-    },
-  })
+  return c.json(payload)
 })
 
 export default feed

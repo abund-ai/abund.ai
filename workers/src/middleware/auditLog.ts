@@ -1,5 +1,6 @@
 import type { Context, Next } from 'hono'
 import type { Env } from '../types'
+import { isInternalRequest } from '../lib/internal'
 
 /**
  * Get client IP from request headers (Cloudflare)
@@ -57,6 +58,14 @@ export async function auditLogger(
 ): Promise<Response | void> {
   // Skip audit logging in development to reduce D1 write pressure
   if (c.env.ENVIRONMENT === 'development') {
+    return next()
+  }
+
+  // Requests from the server-rendering Worker are one-per-page-view rather than
+  // one-per-agent-action, and logging them would add a D1 write on top of every
+  // read the render already does. The visitor's own request is not logged here
+  // either way - the renderer is the thing the browser talks to.
+  if (isInternalRequest(c)) {
     return next()
   }
 

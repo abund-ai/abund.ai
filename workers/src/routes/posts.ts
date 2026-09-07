@@ -34,10 +34,45 @@ import {
 } from '../lib/notifications'
 import { generateEmbedding } from '../lib/embedding'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
-import { bumpVersion, versionKey } from '../lib/cache'
+import {
+  bumpVersion,
+  versionKey,
+  getOrSet,
+  invalidate,
+  invalidatePrefix,
+  invalidateFeeds,
+  cacheKey,
+  CACHE_TTL,
+} from '../lib/cache'
 import { assertSafeUrl } from '../lib/ssrf'
 
 const posts = new Hono<{ Bindings: Env }>()
+
+/**
+ * Drop a post's cached representation after any successful mutation on it.
+ *
+ * `reaction_count`, `vote_score` and `reply_count` all live inside the cached
+ * GET /posts/:id payload, so without this a reaction or vote would not show up
+ * on the post for the rest of the TTL - the user's own action appearing to do
+ * nothing. One middleware rather than a call in each of react/unreact/reply/
+ * vote, so a new mutation route cannot forget it.
+ *
+ * `/view` is deliberately exempt: it fires on every page load, and invalidating
+ * there would mean the cache never survives long enough to be worth having.
+ * View counts are approximate and tolerate a TTL of staleness.
+ */
+posts.use('/:id/*', async (c, next) => {
+  await next()
+
+  if (c.req.method === 'GET') return
+  if (c.res.status < 200 || c.res.status >= 300) return
+  if (new URL(c.req.url).pathname.endsWith('/view')) return
+
+  const postId = c.req.param('id')
+  if (!postId) return
+
+  c.executionCtx.waitUntil(invalidatePrefix(c.env.CACHE, cacheKey.post(postId)))
+})
 
 // =============================================================================
 // Image Proxying Helpers
@@ -572,6 +607,15 @@ posts.post('/', authMiddleware, async (c) => {
   // Bump feed version so polling clients detect the new post
   await bumpVersion(c.env.CACHE, versionKey.feed())
 
+  // Drop cached feed pages and stats. Off the critical path: the short TTLs in
+  // CACHE_TTL are what actually bound staleness, this just tightens it.
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidateFeeds(c.env.CACHE),
+      invalidate(c.env.CACHE, cacheKey.agent(agent.handle)),
+    ])
+  )
+
   // Generate embedding and upsert to Vectorize for semantic search
   // Do this async after response to not block post creation
   // Skip in development to avoid Cloudflare AI rate limits during testing
@@ -736,104 +780,190 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
 posts.get('/:id', optionalAuthMiddleware, async (c) => {
   const postId = c.req.param('id')
 
-  const post = await queryOne<{
-    id: string
-    content: string
-    content_type: string
-    code_language: string | null
-    link_url: string | null
-    audio_url: string | null
-    audio_type: string | null
-    audio_transcription: string | null
-    audio_duration: number | null
-    reaction_count: number
-    reply_count: number
+  const maxDepth = Math.min(parseInt(c.req.query('max_depth') ?? '10', 10), 20)
+
+  // The cached half carries no viewer state, so it is shared by anonymous and
+  // authenticated callers alike; reaction/vote state is looked up per request.
+  const cached = await getOrSet(
+    c.env.CACHE,
+    `${cacheKey.post(postId)}:d${String(maxDepth)}`,
+    async () => {
+      const post = await queryOne<{
+        id: string
+        content: string
+        content_type: string
+        code_language: string | null
+        link_url: string | null
+        audio_url: string | null
+        audio_type: string | null
+        audio_transcription: string | null
+        audio_duration: number | null
+        reaction_count: number
+        reply_count: number
+        view_count: number | null
+        human_view_count: number | null
+        agent_view_count: number | null
+        agent_unique_views: number | null
+        upvote_count: number | null
+        downvote_count: number | null
+        vote_score: number | null
+        created_at: string
+        edited_at: string | null
+        agent_id: string
+        agent_handle: string
+        agent_display_name: string
+        agent_avatar_url: string | null
+        agent_is_verified: number
+        community_slug: string | null
+        community_name: string | null
+      }>(
+        c.env.DB,
+        `
+        SELECT 
+          p.id, p.content, p.content_type, p.code_language, p.link_url,
+          p.audio_url, p.audio_type, p.audio_transcription, p.audio_duration,
+          p.reaction_count, p.reply_count, p.view_count,
+          p.human_view_count, p.agent_view_count, p.agent_unique_views,
+          p.upvote_count, p.downvote_count, p.vote_score,
+          p.created_at, p.edited_at,
+          a.id as agent_id, a.handle as agent_handle,
+          a.display_name as agent_display_name,
+          a.avatar_url as agent_avatar_url,
+          a.is_verified as agent_is_verified,
+          c.slug as community_slug,
+          c.name as community_name
+        FROM posts p
+        JOIN agents a ON p.agent_id = a.id
+        LEFT JOIN community_posts cp ON cp.post_id = p.id
+        LEFT JOIN communities c ON cp.community_id = c.id
+        WHERE p.id = ?
+        `,
+        [postId]
+      )
+
+      if (!post) {
+        // Returned as null so getOrSet does not cache a negative.
+        return null
+      }
+
+      // Get reactions summary
+      const reactions = await query<{ reaction_type: string; count: number }>(
+        c.env.DB,
+        `
+        SELECT reaction_type, COUNT(*) as count
+        FROM reactions
+        WHERE post_id = ?
+        GROUP BY reaction_type
+        `,
+        [postId]
+      )
+
+      // Get individual reaction activity (who reacted, what, when)
+      const reactionActivity = await query<{
+        reaction_type: string
+        created_at: string
+        agent_handle: string
+        agent_display_name: string
+        agent_avatar_url: string | null
+        agent_is_verified: number
+      }>(
+        c.env.DB,
+        `
+        SELECT r.reaction_type, r.created_at,
+               a.handle as agent_handle, a.display_name as agent_display_name,
+               a.avatar_url as agent_avatar_url, a.is_verified as agent_is_verified
+        FROM reactions r
+        JOIN agents a ON r.agent_id = a.id
+        WHERE r.post_id = ?
+        ORDER BY r.created_at DESC
+        LIMIT 10
+        `,
+        [postId]
+      )
+
+      // Get nested reply tree (max_depth is part of the cache key)
+      const replies = await fetchReplyTree(c.env.DB, postId, maxDepth)
+
+      const postMentions =
+        (await fetchMentionsFor(c.env.DB, 'post_id', [postId])).get(postId) ??
+        []
+
+      return {
+        post: {
+          id: post.id,
+          content: post.content,
+          content_type: post.content_type,
+          code_language: post.code_language,
+          link_url: post.link_url,
+          audio_url: post.audio_url,
+          audio_type: post.audio_type,
+          audio_transcription: post.audio_transcription,
+          audio_duration: post.audio_duration,
+          reaction_count: post.reaction_count,
+          reply_count: post.reply_count,
+          upvote_count: post.upvote_count ?? 0,
+          downvote_count: post.downvote_count ?? 0,
+          vote_score: post.vote_score ?? 0,
+          created_at: post.created_at,
+          edited_at: post.edited_at,
+          mentions: postMentions,
+          agent: {
+            id: post.agent_id,
+            handle: post.agent_handle,
+            display_name: post.agent_display_name,
+            avatar_url: post.agent_avatar_url,
+            is_verified: Boolean(post.agent_is_verified),
+          },
+          community: post.community_slug
+            ? {
+                slug: post.community_slug,
+                name: post.community_name,
+              }
+            : null,
+          reactions: reactions.reduce(
+            (acc, r) => {
+              acc[r.reaction_type] = r.count
+              return acc
+            },
+            {} as Record<string, number>
+          ),
+          reaction_activity: reactionActivity.map((r) => ({
+            reaction_type: r.reaction_type,
+            created_at: r.created_at,
+            agent: {
+              handle: r.agent_handle,
+              display_name: r.agent_display_name,
+              avatar_url: r.agent_avatar_url,
+              is_verified: Boolean(r.agent_is_verified),
+            },
+          })),
+        },
+        replies,
+      }
+    },
+    { ttl: CACHE_TTL.POST }
+  )
+
+  if (!cached) {
+    return c.json({ success: false, error: 'Post not found' }, 404)
+  }
+
+  // View counters are bumped by a fire-and-forget POST on every page load, so
+  // they are deliberately kept out of the cached payload - invalidating on each
+  // view would mean the cache never lived long enough to pay for itself. This
+  // is one primary-key lookup, against a cached payload that otherwise costs a
+  // post + agent + community join, the reactions list and the whole reply tree.
+  const views = await queryOne<{
     view_count: number | null
     human_view_count: number | null
     agent_view_count: number | null
     agent_unique_views: number | null
-    upvote_count: number | null
-    downvote_count: number | null
-    vote_score: number | null
-    created_at: string
-    edited_at: string | null
-    agent_id: string
-    agent_handle: string
-    agent_display_name: string
-    agent_avatar_url: string | null
-    agent_is_verified: number
-    community_slug: string | null
-    community_name: string | null
   }>(
     c.env.DB,
-    `
-    SELECT 
-      p.id, p.content, p.content_type, p.code_language, p.link_url,
-      p.audio_url, p.audio_type, p.audio_transcription, p.audio_duration,
-      p.reaction_count, p.reply_count, p.view_count,
-      p.human_view_count, p.agent_view_count, p.agent_unique_views,
-      p.upvote_count, p.downvote_count, p.vote_score,
-      p.created_at, p.edited_at,
-      a.id as agent_id, a.handle as agent_handle,
-      a.display_name as agent_display_name,
-      a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified,
-      c.slug as community_slug,
-      c.name as community_name
-    FROM posts p
-    JOIN agents a ON p.agent_id = a.id
-    LEFT JOIN community_posts cp ON cp.post_id = p.id
-    LEFT JOIN communities c ON cp.community_id = c.id
-    WHERE p.id = ?
-    `,
+    `SELECT view_count, human_view_count, agent_view_count, agent_unique_views
+     FROM posts WHERE id = ?`,
     [postId]
   )
-
-  if (!post) {
-    return c.json({ success: false, error: 'Post not found' }, 404)
-  }
-
-  // Get reactions summary
-  const reactions = await query<{ reaction_type: string; count: number }>(
-    c.env.DB,
-    `
-    SELECT reaction_type, COUNT(*) as count
-    FROM reactions
-    WHERE post_id = ?
-    GROUP BY reaction_type
-    `,
-    [postId]
-  )
-
-  // Get individual reaction activity (who reacted, what, when)
-  const reactionActivity = await query<{
-    reaction_type: string
-    created_at: string
-    agent_handle: string
-    agent_display_name: string
-    agent_avatar_url: string | null
-    agent_is_verified: number
-  }>(
-    c.env.DB,
-    `
-    SELECT r.reaction_type, r.created_at,
-           a.handle as agent_handle, a.display_name as agent_display_name,
-           a.avatar_url as agent_avatar_url, a.is_verified as agent_is_verified
-    FROM reactions r
-    JOIN agents a ON r.agent_id = a.id
-    WHERE r.post_id = ?
-    ORDER BY r.created_at DESC
-    LIMIT 10
-    `,
-    [postId]
-  )
-
-  // Get nested reply tree (supports max_depth query param)
-  const maxDepth = parseInt(c.req.query('max_depth') ?? '10', 10)
-  const replies = await fetchReplyTree(c.env.DB, postId, Math.min(maxDepth, 20))
-
-  const postMentions =
-    (await fetchMentionsFor(c.env.DB, 'post_id', [postId])).get(postId) ?? []
 
   // Check if authenticated user has reacted and voted
   let userReaction: string | null = null
@@ -858,61 +988,15 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
   return c.json({
     success: true,
     post: {
-      id: post.id,
-      content: post.content,
-      content_type: post.content_type,
-      code_language: post.code_language,
-      link_url: post.link_url,
-      audio_url: post.audio_url,
-      audio_type: post.audio_type,
-      audio_transcription: post.audio_transcription,
-      audio_duration: post.audio_duration,
-      reaction_count: post.reaction_count,
-      reply_count: post.reply_count,
-      view_count: post.view_count ?? 0,
-      human_view_count: post.human_view_count ?? 0,
-      agent_view_count: post.agent_view_count ?? 0,
-      agent_unique_views: post.agent_unique_views ?? 0,
-      upvote_count: post.upvote_count ?? 0,
-      downvote_count: post.downvote_count ?? 0,
-      vote_score: post.vote_score ?? 0,
-      created_at: post.created_at,
-      edited_at: post.edited_at,
-      mentions: postMentions,
-      agent: {
-        id: post.agent_id,
-        handle: post.agent_handle,
-        display_name: post.agent_display_name,
-        avatar_url: post.agent_avatar_url,
-        is_verified: Boolean(post.agent_is_verified),
-      },
-      community: post.community_slug
-        ? {
-            slug: post.community_slug,
-            name: post.community_name,
-          }
-        : null,
-      reactions: reactions.reduce(
-        (acc, r) => {
-          acc[r.reaction_type] = r.count
-          return acc
-        },
-        {} as Record<string, number>
-      ),
-      reaction_activity: reactionActivity.map((r) => ({
-        reaction_type: r.reaction_type,
-        created_at: r.created_at,
-        agent: {
-          handle: r.agent_handle,
-          display_name: r.agent_display_name,
-          avatar_url: r.agent_avatar_url,
-          is_verified: Boolean(r.agent_is_verified),
-        },
-      })),
+      ...cached.post,
+      view_count: views?.view_count ?? 0,
+      human_view_count: views?.human_view_count ?? 0,
+      agent_view_count: views?.agent_view_count ?? 0,
+      agent_unique_views: views?.agent_unique_views ?? 0,
       user_reaction: userReaction,
       user_vote: userVote,
     },
-    replies,
+    replies: cached.replies,
   })
 })
 
@@ -1014,6 +1098,13 @@ posts.patch('/:id', authMiddleware, async (c) => {
   ])
 
   await bumpVersion(c.env.CACHE, versionKey.feed())
+
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidateFeeds(c.env.CACHE),
+      invalidatePrefix(c.env.CACHE, cacheKey.post(postId)),
+    ])
+  )
 
   // Refresh the semantic search embedding for edited root posts
   if (
@@ -1201,6 +1292,19 @@ posts.delete('/:id', authMiddleware, async (c) => {
 
   // Bump feed version so polling clients detect the deletion
   await bumpVersion(c.env.CACHE, versionKey.feed())
+
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidateFeeds(c.env.CACHE),
+      invalidatePrefix(c.env.CACHE, cacheKey.post(postId)),
+      // Deleting a reply decrements the root post's reply_count, and that
+      // count is part of the root post's cached payload.
+      rootPostId
+        ? invalidatePrefix(c.env.CACHE, cacheKey.post(rootPostId))
+        : Promise.resolve(),
+      invalidate(c.env.CACHE, cacheKey.agent(agent.handle)),
+    ])
+  )
 
   return c.json({
     success: true,
