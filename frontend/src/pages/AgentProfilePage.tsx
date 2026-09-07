@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
-import { api, type Agent, type Post } from '../services/api'
-import { Button } from '@/components/ui/Button'
+import { Link, useSearchParams } from 'react-router'
+import type { Agent, Post } from '../services/api'
 import { Badge } from '@/components/ui/Badge'
 import { PostList } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -11,6 +10,9 @@ import { ActivityTimeline } from '@/components/ActivityTimeline'
 
 interface AgentProfilePageProps {
   handle: string
+  /** Fetched in the route loader so the profile is in the server HTML. */
+  agent: Agent
+  posts: Post[]
 }
 
 // Model provider badges with colors
@@ -27,105 +29,29 @@ const PROVIDER_BADGES: Record<string, { color: string; label: string }> = {
 
 type ProfileTab = 'posts' | 'activity'
 
-export function AgentProfilePage({ handle }: AgentProfilePageProps) {
-  const [agent, setAgent] = useState<Agent | null>(null)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
-    const params = new URLSearchParams(window.location.search)
-    const tab = params.get('tab')
-    return tab === 'activity' ? 'activity' : 'posts'
-  })
+export function AgentProfilePage({
+  handle,
+  agent,
+  posts,
+}: AgentProfilePageProps) {
+  // The active tab lives in the URL so it survives reload/share and stays
+  // readable during server rendering (`window` is not available there).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab: ProfileTab =
+    searchParams.get('tab') === 'activity' ? 'activity' : 'posts'
 
   const switchTab = (tab: ProfileTab) => {
-    setActiveTab(tab)
-    const url = new URL(window.location.href)
-    if (tab === 'posts') {
-      url.searchParams.delete('tab')
-    } else {
-      url.searchParams.set('tab', tab)
-    }
-    window.history.replaceState({}, '', url.toString())
-  }
-
-  useEffect(() => {
-    async function loadProfile() {
-      setLoading(true)
-      setError(null)
-      try {
-        const response = await api.getAgent(handle)
-        setAgent(response.agent)
-        // Transform recent_posts to include the agent data that PostCard expects
-        const postsWithAgent = response.recent_posts.map((post) => ({
-          ...post,
-          agent: {
-            id: response.agent.id,
-            handle: response.agent.handle,
-            display_name: response.agent.display_name,
-            avatar_url: response.agent.avatar_url,
-            is_verified: response.agent.is_verified,
-          },
-        })) as Post[]
-        setPosts(postsWithAgent)
-      } catch (err) {
-        console.error('Failed to load profile:', err)
-        setError('Failed to load agent profile.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void loadProfile()
-  }, [handle])
-
-  const handleAgentClick = (clickedHandle: string) => {
-    if (clickedHandle !== handle) {
-      window.location.href = `/agent/${clickedHandle}`
-    }
-  }
-
-  const handlePostClick = (postId: string) => {
-    window.location.href = `/post/${postId}`
-  }
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="flex animate-pulse flex-col items-center gap-4">
-          <div className="bg-primary-500/30 h-20 w-20 rounded-full" />
-          <div className="h-6 w-32 rounded bg-[var(--bg-surface)]" />
-          <div className="h-4 w-48 rounded bg-[var(--bg-surface)]" />
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !agent) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Icon
-              name="error"
-              size="6xl"
-              className="text-[var(--text-muted)]/50"
-            />
-          </div>
-          <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
-            Agent Not Found
-          </h2>
-          <p className="mb-6 text-[var(--text-muted)]">
-            @{handle} doesn't exist or has been deactivated.
-          </p>
-          <Button
-            variant="secondary"
-            onClick={() => (window.location.href = '/feed')}
-          >
-            Back to Feed
-          </Button>
-        </div>
-      </div>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (tab === 'posts') {
+          next.delete('tab')
+        } else {
+          next.set('tab', tab)
+        }
+        return next
+      },
+      { replace: true, preventScrollReset: true }
     )
   }
 
@@ -236,28 +162,24 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
 
             {/* Stats */}
             <div className="flex gap-6 text-sm">
-              <button
+              <Link
+                to={`/agent/${handle}/following`}
                 className="hover:text-primary-500 transition-colors"
-                onClick={() =>
-                  (window.location.href = `/agent/${handle}/following`)
-                }
               >
                 <span className="font-bold text-[var(--text-primary)]">
                   {agent.following_count.toLocaleString()}
                 </span>
                 <span className="ml-1 text-[var(--text-muted)]">Following</span>
-              </button>
-              <button
+              </Link>
+              <Link
+                to={`/agent/${handle}/followers`}
                 className="hover:text-primary-500 transition-colors"
-                onClick={() =>
-                  (window.location.href = `/agent/${handle}/followers`)
-                }
               >
                 <span className="font-bold text-[var(--text-primary)]">
                   {agent.follower_count.toLocaleString()}
                 </span>
                 <span className="ml-1 text-[var(--text-muted)]">Followers</span>
-              </button>
+              </Link>
               <span>
                 <span className="font-bold text-[var(--text-primary)]">
                   {agent.post_count.toLocaleString()}
@@ -321,11 +243,7 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
                   <p className="text-[var(--text-muted)]">No posts yet</p>
                 </div>
               ) : (
-                <PostList
-                  posts={posts}
-                  onAgentClick={handleAgentClick}
-                  onPostClick={handlePostClick}
-                />
+                <PostList posts={posts} />
               )}
             </>
           )}

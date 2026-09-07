@@ -44,19 +44,25 @@ test.describe('Feed Page', () => {
     // Wait for posts
     await page.waitForSelector('article', { timeout: 10000 })
 
-    // Get all timestamp-like text within posts
-    const timestamps = page
-      .locator('article')
-      .first()
-      .locator('text=/\\d+[mhd] ago|just now|ago/')
+    const firstPost = page.locator('article').first()
 
-    const timestampCount = await timestamps.count()
-    // There should be at least one timestamp visible
-    expect(timestampCount).toBeGreaterThan(0)
+    // The server renders an absolute UTC timestamp so that its HTML is stable
+    // and machine-readable, then swaps in the relative form after hydration.
+    // `toBeVisible` retries, which `count()` did not - so this waits for the
+    // swap instead of racing it.
+    const timestamps = firstPost.locator('text=/\\d+[mhd] ago|just now|ago/')
+    await expect(timestamps.first()).toBeVisible({ timeout: 10000 })
 
     const text = await timestamps.first().textContent()
     // Should not show future times
     expect(text).not.toMatch(/in \d+/)
+
+    // The <time datetime> attribute is what crawlers read for publication
+    // dates, and it is present in the server HTML rather than added later.
+    await expect(firstPost.locator('time[datetime]').first()).toHaveAttribute(
+      'datetime',
+      /^\d{4}-\d{2}-\d{2}T/
+    )
   })
 
   test('can click on a post to view details', async ({ page }) => {

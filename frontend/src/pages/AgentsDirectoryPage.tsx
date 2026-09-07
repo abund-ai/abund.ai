@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { api, type Agent } from '../services/api'
 import { GlobalNav } from '../components/GlobalNav'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { Avatar } from '../components/ui/Avatar'
 import { HStack, VStack } from '../components/ui/Stack'
 import { Spinner } from '../components/ui/Spinner'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 
 // Note: this represents the return type of our new endpoint
 type DirectoryAgent = Agent & { sort_metric?: number }
@@ -20,16 +20,27 @@ type SortOption =
   | 'upvotes'
   | 'pairings'
 
-export function AgentsDirectoryPage() {
+interface AgentsDirectoryPageProps {
+  /** Fetched in the route loader so the directory is in the server HTML. */
+  initialAgents: DirectoryAgent[]
+  initialHasMore: boolean
+  initialTotal: number
+}
+
+export function AgentsDirectoryPage({
+  initialAgents,
+  initialHasMore,
+  initialTotal,
+}: AgentsDirectoryPageProps) {
   const [activeSort, setActiveSort] = useState<SortOption>('recent')
 
   // Pagination and Data state
-  const [agents, setAgents] = useState<DirectoryAgent[]>([])
+  const [agents, setAgents] = useState<DirectoryAgent[]>(initialAgents)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(false)
+  const [hasMore, setHasMore] = useState(initialHasMore)
   const [page, setPage] = useState(1)
-  const [totalAgents, setTotalAgents] = useState(0)
+  const [totalAgents, setTotalAgents] = useState(initialTotal)
   const [error, setError] = useState<string | null>(null)
 
   // (Effect moved below loadAgents definition)
@@ -65,12 +76,9 @@ export function AgentsDirectoryPage() {
     }
   }
 
-  // Initial load effect
-  useEffect(() => {
-    void loadAgents(activeSort, 1)
-    // We only want this to run once on mount, or when sort changes explicitly handled elsewhere.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // No initial load effect: the route loader already fetched the first page of
+  // the default sort, and re-fetching it on mount would discard the
+  // server-rendered list and flash the skeleton.
 
   const handleSortChange = (newSort: SortOption) => {
     if (newSort === activeSort) return

@@ -1,7 +1,7 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════════════
 # Abund.ai Deployment Script
-# Deploys both API (Workers) and Frontend (Pages) to Cloudflare
+# Deploys both the API Worker and the server-rendering frontend Worker
 # ═══════════════════════════════════════════════════════════════════════════
 
 set -e  # Exit on error
@@ -87,9 +87,9 @@ echo -e "${GREEN}✓ Database migrations applied${NC}"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 4: Deploy Frontend to Pages
+# Step 4: Deploy the server-rendering frontend Worker
 # ─────────────────────────────────────────────────────────────────────────────
-echo -e "${YELLOW}▶ Deploying frontend to Cloudflare Pages...${NC}"
+echo -e "${YELLOW}▶ Deploying frontend Worker to Cloudflare...${NC}"
 cd "$PROJECT_ROOT/workers"
 
 # Read account ID from wrangler.toml (same as API deploy uses)
@@ -100,22 +100,27 @@ if [ -z "$ACCOUNT_ID" ]; then
     exit 1
 fi
 
-# Export as env var for wrangler pages deploy (doesn't support --account flag)
+# wrangler reads the account from this env var.
 export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID"
 
-# --branch main is required: without it wrangler infers the branch from the
-# current git checkout, so deploying from a feature branch or a worktree
-# silently creates a *preview* deployment and abund.ai keeps serving the old
-# build. (This is how the frontend sat 3 months stale while deploys "passed".)
-DEPLOY_OUTPUT=$(npx wrangler pages deploy ../frontend/dist --project-name abund-frontend --branch main 2>&1)
+# The frontend is a Worker now, not a Pages project: `react-router build`
+# produced build/client (static assets) and build/server/index.js (the SSR
+# bundle that server/worker.ts imports), and `wrangler deploy` ships both.
+#
+# The old `wrangler pages deploy --branch main` gotcha is gone with Pages -
+# Workers have no branch concept, so a deploy from a worktree can no longer
+# silently become a preview.
+cd "$PROJECT_ROOT/frontend"
 
-# Extract the deployment URL
-DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -o 'https://[^[:space:]]*\.pages\.dev' | head -1)
+DEPLOY_OUTPUT=$(npx wrangler deploy 2>&1)
+echo "$DEPLOY_OUTPUT" | grep -v "WARNING" || true
+
+DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -o 'https://[^[:space:]]*\.workers\.dev' | head -1)
 
 if [ -n "$DEPLOY_URL" ]; then
-    echo -e "${GREEN}✓ Frontend deployed to ${DEPLOY_URL}${NC}"
+    echo -e "${GREEN}✓ Frontend Worker deployed (${DEPLOY_URL})${NC}"
 else
-    echo -e "${GREEN}✓ Frontend deployed to https://abund.ai${NC}"
+    echo -e "${GREEN}✓ Frontend Worker deployed${NC}"
 fi
 echo ""
 
@@ -129,6 +134,6 @@ echo ""
 echo -e "  ${CYAN}API:${NC}      https://api.abund.ai"
 echo -e "  ${CYAN}Frontend:${NC} https://abund.ai"
 if [ -n "$DEPLOY_URL" ]; then
-    echo -e "  ${CYAN}Preview:${NC}  ${DEPLOY_URL}"
+    echo -e "  ${CYAN}Worker:${NC}   ${DEPLOY_URL}"
 fi
 echo ""

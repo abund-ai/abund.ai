@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router'
 import { api } from '../services/api'
 import type { ChatRoom, ChatMessage, ChatMember } from '../services/api'
 import { Icon } from '../components/ui/Icon'
@@ -531,39 +531,52 @@ function MemberItem({ member }: { member: ChatMember }) {
 // Main Page Component
 // =============================================================================
 
-export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
-  const [rooms, setRooms] = useState<ChatRoom[]>([])
+interface ChatRoomsPageProps {
+  slug?: string | undefined
+  /** Fetched in the route loader so rooms and messages are in the server HTML. */
+  initialRooms: ChatRoom[]
+  initialMessages: ChatMessage[]
+  initialMembers: ChatMember[]
+}
+
+export function ChatRoomsPage({
+  slug,
+  initialRooms,
+  initialMessages,
+  initialMembers,
+}: ChatRoomsPageProps) {
+  const [rooms, setRooms] = useState<ChatRoom[]>(initialRooms)
   const [activeSlug, setActiveSlug] = useState<string | null>(slug ?? null)
-  const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [members, setMembers] = useState<ChatMember[]>([])
-  const [loadingRooms, setLoadingRooms] = useState(true)
+  const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(
+    initialRooms.find((r) => r.slug === slug) ?? null
+  )
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const [members, setMembers] = useState<ChatMember[]>(initialMembers)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
   const [mobileView, setMobileView] = useState<'sidebar' | 'chat'>('sidebar')
   const navigate = useNavigate()
+  // The loader already fetched the room named in the URL.
+  const loadedSlug = useRef<string | null>(slug ?? null)
 
-  // Load rooms on mount
+  // Auto-select the first room on desktop. Must run after mount rather than in
+  // the fetch callback: `window.innerWidth` does not exist on the server.
   useEffect(() => {
-    void api
-      .getChatRooms()
-      .then((data) => {
-        setRooms(data.rooms)
-        // Auto-select first room if none specified and on desktop
-        if (!slug && data.rooms.length > 0 && window.innerWidth >= 768) {
-          setActiveSlug(data.rooms[0]?.slug ?? '')
-        }
-      })
-      .catch(console.error)
-      .finally(() => {
-        setLoadingRooms(false)
-      })
-  }, [slug])
+    if (slug || activeSlug || rooms.length === 0) return
+    if (window.innerWidth < 768) return
+    setActiveSlug(rooms[0]?.slug ?? '')
+  }, [slug, activeSlug, rooms])
+
+  useEffect(() => {
+    setRooms(initialRooms)
+  }, [initialRooms])
 
   // Load room data when active slug changes
   useEffect(() => {
     if (!activeSlug) return
+    if (loadedSlug.current === activeSlug) return
+    loadedSlug.current = activeSlug
 
     setLoadingMessages(true)
     setLoadingMembers(true)
@@ -639,11 +652,7 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
             mobileView === 'sidebar' ? 'block' : 'hidden'
           }`}
         >
-          {loadingRooms ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="border-primary-500 h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" />
-            </div>
-          ) : rooms.length === 0 ? (
+          {rooms.length === 0 ? (
             <div className="p-6 text-center">
               <span className="text-4xl">🏗️</span>
               <p className="mt-3 text-sm text-[var(--text-muted)]">

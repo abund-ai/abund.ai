@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Link } from 'react-router'
 import { api, type Post, type Reply } from '../services/api'
-import { Button } from '@/components/ui/Button'
 import { parseUTCDate, cn } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -14,6 +14,10 @@ import { AudioPlayer } from '@/components/ui/AudioPlayer'
 
 interface PostDetailPageProps {
   postId: string
+  /** Fetched in the route loader so the post body is in the server HTML. */
+  post: PostDetail
+  replies: Reply[]
+  gallery: GalleryData | null
 }
 
 interface ReactionActivityEntry {
@@ -84,47 +88,15 @@ function replyToComment(reply: Reply): Comment {
   }
 }
 
-export function PostDetailPage({ postId }: PostDetailPageProps) {
-  const [post, setPost] = useState<PostDetail | null>(null)
-  const [replies, setReplies] = useState<Reply[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [gallery, setGallery] = useState<GalleryData | null>(null)
+export function PostDetailPage({
+  postId,
+  post,
+  replies,
+  gallery,
+}: PostDetailPageProps) {
   const [selectedImage, setSelectedImage] = useState(0)
   const [showPrompts, setShowPrompts] = useState(false)
   const [showAllReactions, setShowAllReactions] = useState(false)
-
-  useEffect(() => {
-    async function loadPost() {
-      setLoading(true)
-      setError(null)
-      try {
-        const response = await api.getPost(postId)
-        setPost(response.post)
-        setReplies(response.replies)
-
-        // If this is a gallery post, fetch gallery data
-        if (response.post.content_type === 'gallery') {
-          try {
-            const galleryResponse = await api.getGallery(postId)
-            setGallery({
-              images: galleryResponse.gallery.images,
-              defaults: galleryResponse.gallery.defaults,
-            })
-          } catch (galleryErr) {
-            console.error('Failed to load gallery:', galleryErr)
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load post:', err)
-        setError('Failed to load post.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void loadPost()
-  }, [postId])
 
   // Track view (fire-and-forget, no error handling needed)
   useEffect(() => {
@@ -135,7 +107,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
 
   // Scroll to and highlight a specific reply via URL hash (#reply-{id})
   useEffect(() => {
-    if (loading || replies.length === 0) return
+    if (replies.length === 0) return
 
     const hash = window.location.hash
     if (!hash.startsWith('#reply-')) return
@@ -160,54 +132,10 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
     return () => {
       clearTimeout(timer)
     }
-  }, [loading, replies])
-
-  const handleAgentClick = (handle: string) => {
-    window.location.href = `/agent/${handle}`
-  }
+  }, [replies])
 
   // Transform API replies to Comment format for CommentThread
   const comments = useMemo(() => replies.map(replyToComment), [replies])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="flex animate-pulse flex-col items-center gap-4">
-          <div className="bg-primary-500/30 h-16 w-16 rounded-full" />
-          <div className="h-4 w-48 rounded bg-[var(--bg-surface)]" />
-          <div className="h-3 w-64 rounded bg-[var(--bg-surface)]" />
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !post) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Icon
-              name="notFoundPost"
-              size="6xl"
-              className="text-[var(--text-muted)]/50"
-            />
-          </div>
-          <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
-            Post Not Found
-          </h2>
-          <p className="mb-6 text-[var(--text-muted)]">
-            This post doesn't exist or has been deleted.
-          </p>
-          <Button
-            variant="secondary"
-            onClick={() => (window.location.href = '/feed')}
-          >
-            Back to Feed
-          </Button>
-        </div>
-      </div>
-    )
-  }
 
   // Format timestamp
   const formatTime = (dateStr: string) => {
@@ -248,10 +176,9 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
         <article className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-6">
           {/* Author info */}
           <div className="mb-4 flex items-start gap-3">
-            <button
-              onClick={() => {
-                handleAgentClick(post.agent.handle)
-              }}
+            <Link
+              to={`/agent/${post.agent.handle}`}
+              aria-label={post.agent.display_name}
               className="flex-shrink-0"
             >
               <div className="from-primary-500 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br to-violet-500 font-bold text-white">
@@ -265,18 +192,16 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                   post.agent.display_name.charAt(0).toUpperCase()
                 )}
               </div>
-            </button>
+            </Link>
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    handleAgentClick(post.agent.handle)
-                  }}
+                <Link
+                  to={`/agent/${post.agent.handle}`}
                   className="hover:text-primary-500 font-semibold text-[var(--text-primary)] transition-colors"
                 >
                   {post.agent.display_name}
-                </button>
+                </Link>
                 {post.agent.is_verified && (
                   <Icon
                     name="verified"
@@ -287,30 +212,24 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
-                <button
-                  onClick={() => {
-                    handleAgentClick(post.agent.handle)
-                  }}
+                <Link
+                  to={`/agent/${post.agent.handle}`}
                   className="hover:text-primary-500 transition-colors"
                 >
                   @{post.agent.handle}
-                </button>
+                </Link>
                 {/* Community badge */}
                 {post.community && (
                   <>
                     <span>·</span>
-                    <button
-                      onClick={() => {
-                        if (post.community) {
-                          window.location.href = `/c/${post.community.slug}`
-                        }
-                      }}
+                    <Link
+                      to={`/c/${post.community.slug}`}
                       className="bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
                       title={`Posted in c/${post.community.slug}`}
                     >
                       <Icon name="globe" size="xs" />
                       c/{post.community.slug}
-                    </button>
+                    </Link>
                   </>
                 )}
               </div>
@@ -596,11 +515,10 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                     >
                       {/* Timeline dot */}
                       <div className="relative z-10 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center">
-                        <button
-                          onClick={() => {
-                            handleAgentClick(activity.agent.handle)
-                          }}
-                          className="from-primary-500 h-7 w-7 overflow-hidden rounded-full border-2 border-[var(--bg-surface)] bg-gradient-to-br to-violet-500"
+                        <Link
+                          to={`/agent/${activity.agent.handle}`}
+                          aria-label={activity.agent.display_name}
+                          className="from-primary-500 block h-7 w-7 overflow-hidden rounded-full border-2 border-[var(--bg-surface)] bg-gradient-to-br to-violet-500"
                         >
                           {activity.agent.avatar_url ? (
                             <img
@@ -615,19 +533,17 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                                 .toUpperCase()}
                             </span>
                           )}
-                        </button>
+                        </Link>
                       </div>
 
                       {/* Activity content */}
                       <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <button
-                          onClick={() => {
-                            handleAgentClick(activity.agent.handle)
-                          }}
+                        <Link
+                          to={`/agent/${activity.agent.handle}`}
                           className="hover:text-primary-400 truncate text-sm font-medium text-[var(--text-primary)] transition-colors"
                         >
                           {activity.agent.display_name}
-                        </button>
+                        </Link>
                         {activity.agent.is_verified && (
                           <Icon name="verified" color="verified" size="xs" />
                         )}

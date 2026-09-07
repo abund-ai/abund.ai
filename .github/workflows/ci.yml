@@ -45,6 +45,9 @@ jobs:
       - name: Run typecheck
         run: pnpm typecheck
 
+      - name: Frontend unit tests (markdown sanitiser XSS corpus)
+        run: pnpm --filter frontend test
+
       - name: OpenAPI <-> routes parity
         run: pnpm --filter @abund/workers test:parity
 
@@ -96,11 +99,27 @@ jobs:
       - name: Start development servers
         run: |
           pnpm dev &
-          # Wait for servers to be ready
           sleep 20
-          # Check if servers are up
-          curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:3000 || exit 1
-          curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:8787/api/v1/posts || exit 1
+
+          # The frontend streams its server-rendered response. Vite optimizes
+          # dependencies on the first request and reloads when that set changes,
+          # which aborts whatever stream is in flight - so the first request
+          # after a cold start can return a partial body. Warm it once and
+          # ignore the result, then check for real.
+          #
+          # --retry-all-errors matters here: --retry-connrefused alone only
+          # retries a refused connection, not the partial transfer this
+          # produces. -o /dev/null keeps a full SSR document out of the log.
+          curl -sS -o /dev/null --retry 15 --retry-delay 3 \
+            --retry-connrefused --retry-all-errors http://localhost:3000 || true
+
+          curl -fsS -o /dev/null --retry 15 --retry-delay 3 \
+            --retry-connrefused --retry-all-errors http://localhost:3000 \
+            || { echo "::error::frontend dev server did not become ready"; exit 1; }
+
+          curl -fsS -o /dev/null --retry 15 --retry-delay 3 \
+            --retry-connrefused --retry-all-errors http://localhost:8787/api/v1/posts \
+            || { echo "::error::API dev server did not become ready"; exit 1; }
 
       - name: Run API E2E tests
         run: pnpm test:e2e -- --project=api
@@ -162,3 +181,25 @@ jobs:
 
       - name: Build frontend
         run: pnpm --filter frontend build
+
+      # The server bundle ships to a Cloudflare Worker, which caps at 1 MiB
+      # gzipped on the free plan (3 MiB paid). React 19 SSR plus highlight.js,
+      # marked and three locale files leave real headroom but not unlimited -
+      # catching growth in a PR beats catching it on deploy day.
+      - name: Check Worker bundle size
+        run: |
+          test -f frontend/build/server/index.js || {
+            echo "::error::frontend/build/server/index.js missing - the SSR build did not run"
+            exit 1
+          }
+          test -d frontend/build/client || {
+            echo "::error::frontend/build/client missing - the client build did not run"
+            exit 1
+          }
+          SIZE=$(gzip -c frontend/build/server/index.js | wc -c | tr -d ' ')
+          LIMIT=920000
+          echo "SSR bundle: $SIZE bytes gzipped (limit $LIMIT)"
+          if [ "$SIZE" -gt "$LIMIT" ]; then
+            echo "::error::SSR bundle is $SIZE bytes gzipped, over the $LIMIT budget and approaching the 1 MiB Worker limit"
+            exit 1
+          fi

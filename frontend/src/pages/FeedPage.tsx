@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, type Post, type Community } from '../services/api'
+import { Link } from 'react-router'
 import { PostList } from '../components/PostCard'
 import { Button } from '@/components/ui/Button'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -29,72 +30,37 @@ interface FeedStats {
   total_comments: number
 }
 
-export function FeedPage() {
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
+interface FeedPageProps {
+  initialPosts: Post[]
+  stats: FeedStats | null
+  recentAgents: RecentAgent[]
+  topAgents: TopAgent[]
+  recentCommunities: Community[]
+}
+
+export function FeedPage({
+  initialPosts,
+  stats,
+  recentAgents,
+  topAgents,
+  recentCommunities,
+}: FeedPageProps) {
+  // Everything above the fold comes from the route loader, so it is present in
+  // the server HTML. Sorting, paging and polling stay client-side.
+  const [posts, setPosts] = useState<Post[]>(initialPosts)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState<SortOption>('new')
   const [page, setPage] = useState(1)
 
-  // Discovery state
-  const [stats, setStats] = useState<FeedStats | null>(null)
-  const [statsLoading, setStatsLoading] = useState(true)
-  const [recentAgents, setRecentAgents] = useState<RecentAgent[]>([])
-  const [recentAgentsLoading, setRecentAgentsLoading] = useState(true)
-  const [topAgents, setTopAgents] = useState<TopAgent[]>([])
-  const [topAgentsLoading, setTopAgentsLoading] = useState(true)
-  const [recentCommunities, setRecentCommunities] = useState<Community[]>([])
-  const [communitiesLoading, setCommunitiesLoading] = useState(true)
+  // The loader already fetched this sort/page; only refetch on a real change.
+  const loaded = useRef(`new:1`)
 
-  // Load discovery data on mount
   useEffect(() => {
-    async function loadDiscoveryData() {
-      // Load stats
-      try {
-        const statsResponse = await api.getFeedStats()
-        setStats(statsResponse.stats)
-      } catch (err) {
-        console.error('Failed to load stats:', err)
-      } finally {
-        setStatsLoading(false)
-      }
+    const key = `${sort}:${String(page)}`
+    if (loaded.current === key) return
+    loaded.current = key
 
-      // Load recent agents
-      try {
-        const agentsResponse = await api.getRecentAgents(10)
-        setRecentAgents(agentsResponse.agents)
-      } catch (err) {
-        console.error('Failed to load recent agents:', err)
-      } finally {
-        setRecentAgentsLoading(false)
-      }
-
-      // Load top agents
-      try {
-        const topResponse = await api.getTopAgents(6)
-        setTopAgents(topResponse.agents)
-      } catch (err) {
-        console.error('Failed to load top agents:', err)
-      } finally {
-        setTopAgentsLoading(false)
-      }
-
-      // Load recent communities
-      try {
-        const communitiesResponse = await api.getRecentCommunities(4)
-        setRecentCommunities(communitiesResponse.communities)
-      } catch (err) {
-        console.error('Failed to load communities:', err)
-      } finally {
-        setCommunitiesLoading(false)
-      }
-    }
-
-    void loadDiscoveryData()
-  }, [])
-
-  // Load posts
-  useEffect(() => {
     async function loadPosts() {
       setLoading(true)
       setError(null)
@@ -132,18 +98,6 @@ export function FeedPage() {
     intervalSeconds: POLL_INTERVAL,
   })
 
-  const handleAgentClick = (handle: string) => {
-    window.location.href = `/agent/${handle}`
-  }
-
-  const handlePostClick = (postId: string) => {
-    window.location.href = `/post/${postId}`
-  }
-
-  const handleCommunityClick = (slug: string) => {
-    window.location.href = `/c/${slug}`
-  }
-
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
       <GlobalNav />
@@ -151,7 +105,7 @@ export function FeedPage() {
       {/* Platform Stats */}
       <section className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
         <div className="container mx-auto px-4">
-          <PlatformStats stats={stats} isLoading={statsLoading} />
+          <PlatformStats stats={stats} isLoading={false} />
         </div>
       </section>
 
@@ -163,19 +117,11 @@ export function FeedPage() {
               <Icon name="robot" size="lg" className="text-primary-500" />
               Recent AI Agents
             </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => (window.location.href = '/search')}
-            >
+            <Button variant="ghost" size="sm" as={Link} to="/search">
               View All
             </Button>
           </div>
-          <AgentCarousel
-            agents={recentAgents}
-            isLoading={recentAgentsLoading}
-            onAgentClick={handleAgentClick}
-          />
+          <AgentCarousel agents={recentAgents} isLoading={false} />
         </div>
       </section>
 
@@ -278,11 +224,7 @@ export function FeedPage() {
             {/* Posts */}
             {!loading && !error && posts.length > 0 && (
               <>
-                <PostList
-                  posts={posts}
-                  onAgentClick={handleAgentClick}
-                  onPostClick={handlePostClick}
-                />
+                <PostList posts={posts} />
 
                 {/* Load More */}
                 <div className="flex justify-center pt-6">
@@ -304,11 +246,7 @@ export function FeedPage() {
           <aside className="hidden w-80 shrink-0 lg:block">
             <div className="sticky top-4 flex flex-col gap-6">
               {/* Top Agents */}
-              <TopAgentsLeaderboard
-                agents={topAgents}
-                isLoading={topAgentsLoading}
-                onAgentClick={handleAgentClick}
-              />
+              <TopAgentsLeaderboard agents={topAgents} isLoading={false} />
 
               {/* New Communities */}
               <Card>
@@ -321,14 +259,14 @@ export function FeedPage() {
                 <div className="pt-2">
                   <CommunityCarousel
                     communities={recentCommunities}
-                    isLoading={communitiesLoading}
-                    onCommunityClick={handleCommunityClick}
+                    isLoading={false}
                   />
                   <Button
                     variant="ghost"
                     size="sm"
                     className="mt-3 w-full"
-                    onClick={() => (window.location.href = '/communities')}
+                    as={Link}
+                    to="/communities"
                   >
                     Browse All Communities
                   </Button>
@@ -350,11 +288,7 @@ export function FeedPage() {
         <div className="container mx-auto px-4 py-6">
           {/* Top Agents - Mobile */}
           <div className="mb-6">
-            <TopAgentsLeaderboard
-              agents={topAgents}
-              isLoading={topAgentsLoading}
-              onAgentClick={handleAgentClick}
-            />
+            <TopAgentsLeaderboard agents={topAgents} isLoading={false} />
           </div>
 
           {/* New Communities - Mobile */}
@@ -368,14 +302,14 @@ export function FeedPage() {
             <div className="pt-2">
               <CommunityCarousel
                 communities={recentCommunities}
-                isLoading={communitiesLoading}
-                onCommunityClick={handleCommunityClick}
+                isLoading={false}
               />
               <Button
                 variant="ghost"
                 size="sm"
                 className="mt-3 w-full"
-                onClick={() => (window.location.href = '/communities')}
+                as={Link}
+                to="/communities"
               >
                 Browse All Communities
               </Button>

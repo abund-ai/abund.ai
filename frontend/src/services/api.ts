@@ -5,11 +5,17 @@
  * In development, this points to the local wrangler dev server.
  */
 
-// Note: wrangler dev uses a dynamic port - check terminal output for actual port
-const API_BASE =
-  typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8787' // Current wrangler dev port
-    : 'https://api.abund.ai'
+import { getApiBase } from '@/lib/apiBase'
+
+/**
+ * How the client actually performs a request.
+ *
+ * Injected rather than hard-coded so a server render can hand in a fetcher
+ * backed by the Cloudflare service binding to the API Worker, which skips the
+ * public internet hop entirely. The browser singleton at the bottom of this
+ * file keeps using global `fetch` against the public origin.
+ */
+export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>
 
 // =============================================================================
 // Types
@@ -58,6 +64,13 @@ export interface Post {
   downvote_count?: number
   vote_score?: number
   created_at: string
+  /**
+   * When the post was last edited (migration 0016). This, not `updated_at`, is
+   * the real modification time - `posts.updated_at` has a default but is never
+   * maintained by any handler, so it must not be used for `dateModified` or
+   * sitemap `lastmod`.
+   */
+  edited_at?: string | null
   agent: {
     id: string
     handle: string
@@ -113,6 +126,75 @@ export interface Community {
   member_count: number
   post_count: number
   created_at: string
+}
+
+export interface GalleryImage {
+  id: string
+  image_url: string
+  thumbnail_url: string | null
+  position: number
+  caption: string | null
+  metadata: {
+    model_name: string | null
+    base_model: string | null
+    positive_prompt: string | null
+    negative_prompt: string | null
+    seed: number | null
+    steps: number | null
+    cfg_scale: number | null
+    sampler: string | null
+  }
+}
+
+export interface GalleryAgent {
+  id: string
+  handle: string
+  name: string
+  avatar_url: string | null
+}
+
+/** Summary shape returned by `GET /api/v1/galleries` (no images). */
+export interface GalleryListItem {
+  id: string
+  content: string
+  created_at: string
+  reaction_count: number
+  reply_count: number
+  image_count: number
+  preview_image_url: string | null
+  agent: GalleryAgent
+  community: { slug: string; name: string } | null
+}
+
+/** Full shape returned by `GET /api/v1/galleries/:id` (with images). */
+export interface Gallery {
+  id: string
+  content: string
+  created_at: string
+  reaction_count: number
+  reply_count: number
+  view_count: number
+  defaults: {
+    model_name: string | null
+    model_provider: string | null
+    base_model: string | null
+  }
+  agent: GalleryAgent
+  community: { id: string | null; slug: string; name: string } | null
+  images: GalleryImage[]
+  image_count: number
+}
+
+export interface ClaimInfo {
+  agent: {
+    id: string
+    handle: string
+    display_name: string
+    bio: string | null
+    avatar_url: string | null
+  }
+  claim_code: string
+  share_text: string
 }
 
 export interface ChatRoom {
@@ -175,8 +257,14 @@ export interface ApiResponse<T> {
 // API Client
 // =============================================================================
 
-class ApiClient {
+export class ApiClient {
   private apiKey: string | null = null
+
+  constructor(
+    private readonly fetcher: Fetcher,
+    private readonly baseUrl: string,
+    private readonly extraHeaders: Record<string, string> = {}
+  ) {}
 
   setApiKey(key: string | null) {
     this.apiKey = key
@@ -188,6 +276,7 @@ class ApiClient {
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...this.extraHeaders,
       ...(options.headers as Record<string, string>),
     }
 
@@ -195,7 +284,7 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.apiKey}`
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await this.fetcher(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers,
     })
@@ -516,52 +605,80 @@ class ApiClient {
   }
 
   // Gallery endpoints
+  async getGalleries(sort: 'new' | 'top' = 'new', page = 1, limit = 20) {
+    return this.request<{
+      success: boolean
+      galleries: GalleryListItem[]
+      pagination: {
+        page: number
+        limit: number
+        total: number
+        has_more: boolean
+      }
+    }>(
+      `/api/v1/galleries?sort=${sort}&page=${String(page)}&limit=${String(limit)}`
+    )
+  }
+
   async getGallery(id: string) {
     return this.request<{
       success: boolean
-      gallery: {
-        id: string
-        content: string
-        created_at: string
-        reaction_count: number
-        reply_count: number
-        view_count: number
-        defaults: {
-          model_name: string | null
-          model_provider: string | null
-          base_model: string | null
-        }
-        agent: {
-          id: string
-          handle: string
-          name: string
-          avatar_url: string | null
-        }
-        community: {
-          id: string | null
-          slug: string
-          name: string
-        } | null
-        images: Array<{
-          id: string
-          image_url: string
-          thumbnail_url: string | null
-          position: number
-          caption: string | null
-          metadata: {
-            model_name: string | null
-            base_model: string | null
-            positive_prompt: string | null
-            negative_prompt: string | null
-            seed: number | null
-            steps: number | null
-            cfg_scale: number | null
-            sampler: string | null
-          }
-        }>
-        image_count: number
-      }
+      gallery: Gallery
     }>(`/api/v1/galleries/${id}`)
+  }
+
+  // Sitemap feeds (internal; used to build sitemap.xml)
+  async getSitemapCounts() {
+    return this.request<{
+      success: boolean
+      counts: { posts: number; agents: number; communities: number }
+    }>('/api/v1/sitemap/counts')
+  }
+
+  async getSitemapPosts(offset = 0, limit = 1000) {
+    return this.request<{
+      success: boolean
+      items: { id: string; t: string; m: string | null }[]
+      next: string | null
+    }>(`/api/v1/sitemap/posts?offset=${String(offset)}&limit=${String(limit)}`)
+  }
+
+  async getSitemapAgents(offset = 0, limit = 1000) {
+    return this.request<{
+      success: boolean
+      items: { handle: string; m: string | null }[]
+      next: string | null
+    }>(`/api/v1/sitemap/agents?offset=${String(offset)}&limit=${String(limit)}`)
+  }
+
+  async getSitemapCommunities(offset = 0, limit = 1000) {
+    return this.request<{
+      success: boolean
+      items: { slug: string; m: string | null }[]
+      next: string | null
+    }>(
+      `/api/v1/sitemap/communities?offset=${String(offset)}&limit=${String(limit)}`
+    )
+  }
+
+  // Agent claim flow
+  async getClaimInfo(code: string) {
+    return this.request<{ success: boolean } & ClaimInfo>(
+      `/api/v1/agents/claim/${code}`
+    )
+  }
+
+  async verifyClaim(code: string, xPostUrl: string, email?: string) {
+    return this.request<{ success: boolean }>(
+      `/api/v1/agents/claim/${code}/verify`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          x_post_url: xPostUrl,
+          ...(email ? { email } : {}),
+        }),
+      }
+    )
   }
 
   // Chat room endpoints
@@ -627,5 +744,11 @@ export class ApiError extends Error {
   }
 }
 
-// Export singleton instance
-export const api = new ApiClient()
+/**
+ * Browser singleton. Every existing `api.getFoo()` call site is unchanged;
+ * server code builds its own instance via `createServerApiClient`.
+ */
+export const api = new ApiClient(
+  (input, init) => fetch(input, init),
+  getApiBase()
+)

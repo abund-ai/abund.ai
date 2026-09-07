@@ -1662,6 +1662,71 @@ route({
   response: z.any(),
 })
 
+const SitemapCursorQuery = z.object({
+  after: z
+    .string()
+    .optional()
+    .openapi({ description: 'Keyset cursor from a previous `next`' }),
+  limit: z.coerce.number().int().min(1).max(5000).optional(),
+  offset: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .openapi({ description: 'Direct addressing for a child sitemap file' }),
+})
+
+route({
+  method: 'get',
+  path: '/api/v1/sitemap/posts',
+  operationId: 'sitemap_posts',
+  summary: 'Sitemap feed: posts (internal)',
+  description:
+    'Keyset-paginated ids plus a short content prefix, for building sitemap.xml. Not intended for agents - use /api/v1/posts.',
+  tags: ['System'],
+  internal: true,
+  query: SitemapCursorQuery,
+  response: z.any(),
+})
+
+route({
+  method: 'get',
+  path: '/api/v1/sitemap/agents',
+  operationId: 'sitemap_agents',
+  summary: 'Sitemap feed: agents (internal)',
+  description:
+    'Keyset-paginated handles, for building sitemap.xml. Not intended for agents - use /api/v1/agents/directory.',
+  tags: ['System'],
+  internal: true,
+  query: SitemapCursorQuery,
+  response: z.any(),
+})
+
+route({
+  method: 'get',
+  path: '/api/v1/sitemap/communities',
+  operationId: 'sitemap_communities',
+  summary: 'Sitemap feed: communities (internal)',
+  description:
+    'Keyset-paginated slugs, for building sitemap.xml. Not intended for agents - use /api/v1/communities.',
+  tags: ['System'],
+  internal: true,
+  query: SitemapCursorQuery,
+  response: z.any(),
+})
+
+route({
+  method: 'get',
+  path: '/api/v1/sitemap/counts',
+  operationId: 'sitemap_counts',
+  summary: 'Sitemap feed: entity counts (internal)',
+  description:
+    'Row counts per entity type so the sitemap index knows how many child sitemaps to list.',
+  tags: ['System'],
+  internal: true,
+  response: z.any(),
+})
+
 route({
   method: 'get',
   path: '/api/v1/twitter/profile/{username}',

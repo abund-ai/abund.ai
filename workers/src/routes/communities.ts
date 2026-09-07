@@ -8,6 +8,7 @@ import {
   galleryPreviewFields,
 } from '../lib/galleries'
 import { generateId } from '../lib/crypto'
+import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 
 const communities = new Hono<{ Bindings: Env }>()
 
@@ -132,23 +133,72 @@ communities.get('/recent', async (c) => {
 communities.get('/:slug', optionalAuthMiddleware, async (c) => {
   const slug = c.req.param('slug').toLowerCase()
 
-  const community = await queryOne<{
-    id: string
-    slug: string
-    name: string
-    description: string | null
-    icon_emoji: string | null
-    banner_url: string | null
-    theme_color: string | null
-    is_private: number
-    is_system: number
-    member_count: number
-    post_count: number
-    created_by: string | null
-    created_at: string
-  }>(c.env.DB, 'SELECT * FROM communities WHERE slug = ?', [slug])
+  // The cached half carries no viewer state, so it is shared by anonymous and
+  // authenticated callers alike; membership is looked up per request below.
+  const cached = await getOrSet(
+    c.env.CACHE,
+    cacheKey.community(slug),
+    async () => {
+      const community = await queryOne<{
+        id: string
+        slug: string
+        name: string
+        description: string | null
+        icon_emoji: string | null
+        banner_url: string | null
+        theme_color: string | null
+        is_private: number
+        is_system: number
+        member_count: number
+        post_count: number
+        created_by: string | null
+        created_at: string
+      }>(c.env.DB, 'SELECT * FROM communities WHERE slug = ?', [slug])
 
-  if (!community) {
+      if (!community) {
+        // Returned as null so getOrSet does not cache a negative: a freshly
+        // created community must not 404 for the rest of the TTL.
+        return null
+      }
+
+      // Get recent posts
+      const recentPosts = await query<{
+        post_id: string
+        content: string
+        reaction_count: number
+        created_at: string
+        agent_handle: string
+        agent_display_name: string
+      }>(
+        c.env.DB,
+        `
+        SELECT 
+          p.id as post_id, p.content, p.reaction_count, p.created_at,
+          a.handle as agent_handle, a.display_name as agent_display_name
+        FROM community_posts cp
+        JOIN posts p ON cp.post_id = p.id
+        JOIN agents a ON p.agent_id = a.id
+        WHERE cp.community_id = ?
+        ORDER BY cp.created_at DESC
+        LIMIT 10
+        `,
+        [community.id]
+      )
+
+      return {
+        id: community.id,
+        community: {
+          ...community,
+          is_private: Boolean(community.is_private),
+          is_system: Boolean(community.is_system),
+        },
+        recent_posts: recentPosts,
+      }
+    },
+    { ttl: CACHE_TTL.COMMUNITY }
+  )
+
+  if (!cached) {
     return c.json({ success: false, error: 'Community not found' }, 404)
   }
 
@@ -160,7 +210,7 @@ communities.get('/:slug', optionalAuthMiddleware, async (c) => {
     const membership = await queryOne<{ role: string }>(
       c.env.DB,
       'SELECT role FROM community_members WHERE community_id = ? AND agent_id = ?',
-      [community.id, authAgent.id]
+      [cached.id, authAgent.id]
     )
     if (membership) {
       isMember = true
@@ -168,40 +218,12 @@ communities.get('/:slug', optionalAuthMiddleware, async (c) => {
     }
   }
 
-  // Get recent posts
-  const recentPosts = await query<{
-    post_id: string
-    content: string
-    reaction_count: number
-    created_at: string
-    agent_handle: string
-    agent_display_name: string
-  }>(
-    c.env.DB,
-    `
-    SELECT 
-      p.id as post_id, p.content, p.reaction_count, p.created_at,
-      a.handle as agent_handle, a.display_name as agent_display_name
-    FROM community_posts cp
-    JOIN posts p ON cp.post_id = p.id
-    JOIN agents a ON p.agent_id = a.id
-    WHERE cp.community_id = ?
-    ORDER BY cp.created_at DESC
-    LIMIT 10
-    `,
-    [community.id]
-  )
-
   return c.json({
     success: true,
-    community: {
-      ...community,
-      is_private: Boolean(community.is_private),
-      is_system: Boolean(community.is_system),
-    },
+    community: cached.community,
     is_member: isMember,
     role,
-    recent_posts: recentPosts,
+    recent_posts: cached.recent_posts,
   })
 })
 
@@ -600,6 +622,8 @@ communities.post('/:slug/join', authMiddleware, async (c) => {
     },
   ])
 
+  c.executionCtx.waitUntil(invalidate(c.env.CACHE, cacheKey.community(slug)))
+
   return c.json({
     success: true,
     message: `Joined ${slug}!`,
@@ -657,6 +681,8 @@ communities.delete('/:slug/membership', authMiddleware, async (c) => {
       params: [community.id],
     },
   ])
+
+  c.executionCtx.waitUntil(invalidate(c.env.CACHE, cacheKey.community(slug)))
 
   return c.json({
     success: true,

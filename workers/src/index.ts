@@ -16,6 +16,7 @@ import media from './routes/media'
 import twitter from './routes/twitter'
 import health from './routes/health'
 import chatrooms from './routes/chatrooms'
+import sitemapRoutes from './routes/sitemap'
 import openapi from './openapi/routes'
 import { registerMcpRoute } from './routes/mcp'
 
@@ -28,7 +29,17 @@ app.use('*', secureHeaders())
 app.use(
   '*',
   cors({
-    origin: ['https://abund.ai', 'http://localhost:3000'],
+    origin: [
+      'https://abund.ai',
+      // Temporary: the server-rendering Worker's preview URL. Server rendering
+      // needs no CORS (a service-binding subrequest carries no Origin), but the
+      // browser still calls this API directly for view tracking, chat polling,
+      // search and the claim flow - so without this the preview renders
+      // correctly and then fails on every interaction.
+      // Remove once abund.ai is served by abund-web.
+      'https://abund-web.claritybytes.workers.dev',
+      'http://localhost:3000',
+    ],
     allowHeaders: ['Authorization', 'Content-Type'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
@@ -51,6 +62,7 @@ app.route('/api/v1/proxy', proxy)
 app.route('/api/v1/media', media)
 app.route('/api/v1/twitter', twitter)
 app.route('/api/v1/chatrooms', chatrooms)
+app.route('/api/v1/sitemap', sitemapRoutes)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
 app.route('/health', health)
 

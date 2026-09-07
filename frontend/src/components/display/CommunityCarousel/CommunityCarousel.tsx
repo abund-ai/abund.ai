@@ -1,4 +1,5 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
+import { Link } from 'react-router'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/Card'
 import { Icon } from '@/components/ui/Icon'
@@ -9,8 +10,6 @@ export interface CommunityCarouselProps extends ComponentPropsWithoutRef<'div'> 
   communities: Community[]
   /** Loading state */
   isLoading?: boolean
-  /** Click handler for community */
-  onCommunityClick?: (slug: string) => void
 }
 
 /**
@@ -19,64 +18,51 @@ export interface CommunityCarouselProps extends ComponentPropsWithoutRef<'div'> 
 export const CommunityCarousel = forwardRef<
   HTMLDivElement,
   CommunityCarouselProps
->(
-  (
-    { communities, isLoading = false, onCommunityClick, className, ...props },
-    ref
-  ) => {
-    if (isLoading) {
-      return (
-        <div
-          ref={ref}
-          className={cn('flex flex-col gap-2', className)}
-          {...props}
-        >
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="flex h-16 animate-pulse items-center gap-3 rounded-xl bg-[var(--bg-surface)] p-3"
-            >
-              <div className="h-10 w-10 rounded-lg bg-[var(--bg-hover)]" />
-              <div className="flex-1">
-                <div className="mb-2 h-4 w-24 rounded bg-[var(--bg-hover)]" />
-                <div className="h-3 w-16 rounded bg-[var(--bg-hover)]" />
-              </div>
-            </div>
-          ))}
-        </div>
-      )
-    }
-
-    if (communities.length === 0) {
-      return (
-        <div
-          ref={ref}
-          className={cn(
-            'flex items-center justify-center py-6 text-[var(--text-muted)]',
-            className
-          )}
-          {...props}
-        >
-          <Icon name="globe" size="xl" className="mr-2 opacity-50" />
-          <span>No communities yet</span>
-        </div>
-      )
-    }
-
+>(({ communities, isLoading = false, className, ...props }, ref) => {
+  if (isLoading) {
     return (
       <div
         ref={ref}
         className={cn('flex flex-col gap-2', className)}
         {...props}
       >
-        {communities.map((community) => (
-          <Card
-            key={community.id}
-            interactive
-            padding="sm"
-            onClick={() => onCommunityClick?.(community.slug)}
-            className="group"
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="flex h-16 animate-pulse items-center gap-3 rounded-xl bg-[var(--bg-surface)] p-3"
           >
+            <div className="h-10 w-10 rounded-lg bg-[var(--bg-hover)]" />
+            <div className="flex-1">
+              <div className="mb-2 h-4 w-24 rounded bg-[var(--bg-hover)]" />
+              <div className="h-3 w-16 rounded bg-[var(--bg-hover)]" />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (communities.length === 0) {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'flex items-center justify-center py-6 text-[var(--text-muted)]',
+          className
+        )}
+        {...props}
+      >
+        <Icon name="globe" size="xl" className="mr-2 opacity-50" />
+        <span>No communities yet</span>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={ref} className={cn('flex flex-col gap-2', className)} {...props}>
+      {communities.map((community) => (
+        <Link key={community.id} to={`/c/${community.slug}`}>
+          <Card interactive padding="sm" className="group">
             <div className="flex items-center gap-3">
               {/* Icon */}
               <div
@@ -116,9 +102,9 @@ export const CommunityCarousel = forwardRef<
               />
             </div>
           </Card>
-        ))}
-      </div>
-    )
-  }
-)
+        </Link>
+      ))}
+    </div>
+  )
+})
 CommunityCarousel.displayName = 'CommunityCarousel'

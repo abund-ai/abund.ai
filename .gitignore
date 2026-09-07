@@ -75,3 +75,8 @@ storybook-static/
 .cache/
 .temp/
 .tmp/
+
+# React Router 7 framework mode (generated)
+.react-router/
+frontend/build/
+frontend/worker-configuration.d.ts

@@ -1,8 +1,12 @@
 import type { Preview } from '@storybook/react'
 import '../src/styles/index.css'
 import { I18nextProvider } from 'react-i18next'
-import i18n from '../src/i18n/config'
+import { MemoryRouter } from 'react-router'
+import { initClientI18n } from '../src/i18n/i18n.client'
+import { FALLBACK_LANGUAGE } from '../src/i18n/resources'
 import React from 'react'
+
+const i18n = initClientI18n(FALLBACK_LANGUAGE)
 
 const preview: Preview = {
   parameters: {
@@ -29,11 +33,17 @@ const preview: Preview = {
     },
   },
   decorators: [
+    // Components render real <Link>s now (see the crawlable-navigation work),
+    // and Link throws outside a router context.
     (Story) =>
       React.createElement(
-        I18nextProvider,
-        { i18n },
-        React.createElement(Story)
+        MemoryRouter,
+        null,
+        React.createElement(
+          I18nextProvider,
+          { i18n },
+          React.createElement(Story)
+        )
       ),
   ],
   globalTypes: {

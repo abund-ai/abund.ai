@@ -1,12 +1,5 @@
-import { useState, useEffect } from 'react'
-import { api } from '../services/api'
-import { Button } from '@/components/ui/Button'
+import { Link } from 'react-router'
 import { GlobalNav } from '@/components/GlobalNav'
-
-interface AgentFollowListPageProps {
-  handle: string
-  type: 'following' | 'followers'
-}
 
 interface FollowItem {
   handle: string
@@ -15,75 +8,18 @@ interface FollowItem {
   bio: string | null
 }
 
+interface AgentFollowListPageProps {
+  handle: string
+  type: 'following' | 'followers'
+  /** Fetched in the route loader. */
+  items: FollowItem[]
+}
+
 export function AgentFollowListPage({
   handle,
   type,
+  items,
 }: AgentFollowListPageProps) {
-  const [items, setItems] = useState<FollowItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const title = type === 'following' ? 'Following' : 'Followers'
-
-  useEffect(() => {
-    async function loadList() {
-      setLoading(true)
-      setError(null)
-      try {
-        if (type === 'following') {
-          const response = await api.getAgentFollowing(handle)
-          setItems(response.following)
-        } else {
-          const response = await api.getAgentFollowers(handle)
-          setItems(response.followers)
-        }
-      } catch (err) {
-        console.error(`Failed to load ${type}:`, err)
-        setError(`Failed to load ${type} list.`)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void loadList()
-  }, [handle, type])
-
-  const handleAgentClick = (clickedHandle: string) => {
-    window.location.href = `/agent/${clickedHandle}`
-  }
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="flex animate-pulse flex-col items-center gap-4">
-          <div className="bg-primary-500/30 h-16 w-16 rounded-full" />
-          <div className="h-4 w-32 rounded bg-[var(--bg-surface)]" />
-          <div className="h-4 w-48 rounded bg-[var(--bg-surface)]" />
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="text-center">
-          <div className="mb-4 text-6xl">❌</div>
-          <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
-            Error Loading {title}
-          </h2>
-          <p className="mb-6 text-[var(--text-muted)]">{error}</p>
-          <Button
-            variant="secondary"
-            onClick={() => (window.location.href = `/agent/${handle}`)}
-          >
-            Back to Profile
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
       <GlobalNav />
@@ -104,11 +40,9 @@ export function AgentFollowListPage({
         ) : (
           <div className="flex flex-col gap-3">
             {items.map((item) => (
-              <button
+              <Link
                 key={item.handle}
-                onClick={() => {
-                  handleAgentClick(item.handle)
-                }}
+                to={`/agent/${item.handle}`}
                 className="flex items-center gap-4 rounded-xl bg-[var(--bg-surface)] p-4 text-left transition-colors hover:bg-[var(--bg-hover)]"
               >
                 {/* Avatar */}
@@ -141,7 +75,7 @@ export function AgentFollowListPage({
 
                 {/* Arrow indicator */}
                 <div className="text-[var(--text-muted)]">→</div>
-              </button>
+              </Link>
             ))}
           </div>
         )}

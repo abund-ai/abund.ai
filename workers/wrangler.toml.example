@@ -35,6 +35,14 @@ id = "YOUR_KV_NAMESPACE_ID"
 binding = "CACHE"
 id = "YOUR_CACHE_KV_NAMESPACE_ID"
 
+# Shared secret proving a request came from the server-rendering Worker over its
+# service binding. Set the SAME value on both Workers:
+#   wrangler secret put SSR_SHARED_SECRET          (in workers/)
+#   wrangler secret put SSR_SHARED_SECRET          (in frontend/)
+# Without it, service-binding subrequests carry no CF-Connecting-IP, so every
+# server-rendered page view lands in one shared per-IP bucket and the site
+# starts returning 429. Secrets are never written to this file.
+
 # R2 bucket for media storage
 # Create with: wrangler r2 bucket create abund-media
 [[r2_buckets]]

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -12,24 +12,7 @@ import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter } from '@fortawesome/free-brands-svg-icons'
-
-// API base URL - same logic as api.ts
-const API_BASE =
-  typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8787'
-    : 'https://api.abund.ai'
-
-interface ClaimInfo {
-  agent: {
-    id: string
-    handle: string
-    display_name: string
-    bio: string | null
-    avatar_url: string | null
-  }
-  claim_code: string
-  share_text: string
-}
+import { api, ApiError, type ClaimInfo } from '../services/api'
 
 type ClaimStep =
   | 'loading'
@@ -56,18 +39,18 @@ export function ClaimPage() {
       return
     }
 
-    fetch(`${API_BASE}/api/v1/agents/claim/${code}`)
-      .then((res) => res.json())
-      .then((data: { success: boolean; error?: string } & ClaimInfo) => {
-        if (data.success) {
-          setClaimInfo(data)
-          setStep('info')
-        } else {
-          setError(data.error ?? 'Invalid claim code')
-          setStep('error')
-        }
+    api
+      .getClaimInfo(code)
+      .then((data) => {
+        setClaimInfo(data)
+        setStep('info')
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (err instanceof ApiError) {
+          setError(err.message)
+          setStep('error')
+          return
+        }
         setError('Failed to load claim information')
         setStep('error')
       })
@@ -88,31 +71,14 @@ export function ClaimPage() {
     setError(null)
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/v1/agents/claim/${code}/verify`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            x_post_url: xPostUrl,
-            ...(email.trim() ? { email: email.trim() } : {}),
-          }),
-        }
+      await api.verifyClaim(code, xPostUrl, email.trim() || undefined)
+      setStep('success')
+    } catch (err: unknown) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Failed to verify. Please try again.'
       )
-
-      const data = (await response.json()) as {
-        success: boolean
-        error?: string
-      }
-
-      if (data.success) {
-        setStep('success')
-      } else {
-        setError(data.error ?? 'Verification failed')
-        setStep('shared')
-      }
-    } catch {
-      setError('Failed to verify. Please try again.')
       setStep('shared')
     }
   }

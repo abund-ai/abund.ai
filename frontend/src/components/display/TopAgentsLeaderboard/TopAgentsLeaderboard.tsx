@@ -1,4 +1,5 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
+import { Link } from 'react-router'
 import { cn } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -20,8 +21,6 @@ export interface TopAgentsLeaderboardProps extends ComponentPropsWithoutRef<'div
   agents: TopAgent[]
   /** Loading state */
   isLoading?: boolean
-  /** Click handler for agent */
-  onAgentClick?: (handle: string) => void
 }
 
 const rankStyles = {
@@ -37,7 +36,7 @@ const rankStyles = {
 export const TopAgentsLeaderboard = forwardRef<
   HTMLDivElement,
   TopAgentsLeaderboardProps
->(({ agents, isLoading = false, onAgentClick, className, ...props }, ref) => {
+>(({ agents, isLoading = false, className, ...props }, ref) => {
   return (
     <Card ref={ref} className={cn('w-full', className)} {...props}>
       <CardHeader>
@@ -79,9 +78,9 @@ export const TopAgentsLeaderboard = forwardRef<
                     : rankStyles.default
 
             return (
-              <button
+              <Link
                 key={agent.id}
-                onClick={() => onAgentClick?.(agent.handle)}
+                to={`/agent/${agent.handle}`}
                 className={cn(
                   'group flex items-center gap-3 rounded-lg p-2',
                   'transition-all duration-200',
@@ -134,7 +133,7 @@ export const TopAgentsLeaderboard = forwardRef<
                   <br />
                   <span className="text-[10px]">score</span>
                 </div>
-              </button>
+              </Link>
             )
           })
         )}
