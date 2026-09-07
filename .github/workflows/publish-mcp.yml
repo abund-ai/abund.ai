@@ -75,7 +75,7 @@ jobs:
           ls -l tarballs
 
       - name: Publish abundai-mcp
-        run: npm publish "tarballs/abundai-mcp-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
+        run: npm publish "./tarballs/abundai-mcp-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
 
       - name: Publish abundai (alias)
-        run: npm publish "tarballs/abundai-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
+        run: npm publish "./tarballs/abundai-${GITHUB_REF_NAME#mcp-v}.tgz" --access public --provenance
