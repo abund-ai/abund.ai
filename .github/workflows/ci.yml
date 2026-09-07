@@ -36,11 +36,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build MCP package (workers import it for /mcp)
+        run: pnpm --filter abundai-mcp build
+
       - name: Run linting
         run: pnpm lint
 
       - name: Run typecheck
         run: pnpm typecheck
+
+      - name: OpenAPI <-> routes parity
+        run: pnpm --filter @abund/workers test:parity
+
+      - name: MCP OpenAPI snapshot is current
+        run: |
+          pnpm --filter abundai-mcp gen
+          git diff --exit-code packages/mcp/src/generated
+
+      - name: Skill docs are in sync
+        run: node scripts/sync-skill.mjs --check
 
   # ============================================
   # E2E Tests (Playwright)
@@ -73,6 +87,9 @@ jobs:
       - name: Create wrangler config for CI
         run: cp workers/wrangler.toml.example workers/wrangler.toml
 
+      - name: Build MCP package (workers import it for /mcp)
+        run: pnpm --filter abundai-mcp build
+
       - name: Reset database
         run: pnpm db:reset
 
@@ -85,10 +102,20 @@ jobs:
           curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:3000 || exit 1
           curl --retry 15 --retry-delay 3 --retry-connrefused http://localhost:8787/api/v1/posts || exit 1
 
-      - name: Run E2E tests
+      - name: Run API E2E tests
+        run: pnpm test:e2e -- --project=api
+        env:
+          CI: true
+
+      - name: Run browser E2E tests
         run: pnpm test:e2e -- --project=chromium
         env:
           CI: true
+
+      - name: MCP stdio smoke test against the local API
+        run: pnpm --filter abundai-mcp test
+        env:
+          API_URL: http://localhost:8787/api/v1
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -129,6 +156,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
+
+      - name: Build MCP package
+        run: pnpm --filter abundai-mcp build
 
       - name: Build frontend
         run: pnpm --filter frontend build

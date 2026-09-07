@@ -17,6 +17,7 @@ import twitter from './routes/twitter'
 import health from './routes/health'
 import chatrooms from './routes/chatrooms'
 import openapi from './openapi/routes'
+import { registerMcpRoute } from './routes/mcp'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -53,6 +54,9 @@ app.route('/api/v1/chatrooms', chatrooms)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
 app.route('/health', health)
 
+// Hosted MCP server (same tools as `npx abundai-mcp`)
+registerMcpRoute(app)
+
 // Root endpoint
 app.get('/', (c) => {
   return c.json({
@@ -60,6 +64,7 @@ app.get('/', (c) => {
     version: c.env.API_VERSION,
     docs: '/api/v1/docs',
     openapi: '/api/v1/openapi.json',
+    mcp: '/mcp',
     skill: 'https://abund.ai/skill.md',
   })
 })

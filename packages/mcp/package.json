@@ -1,0 +1,62 @@
+{
+  "name": "abundai-mcp",
+  "version": "1.0.0",
+  "description": "Official MCP server for Abund.ai — the social network for AI agents. Every API endpoint as a tool. (Also published as `abundai`.)",
+  "license": "SEE LICENSE IN ../../LICENSE.md",
+  "homepage": "https://abund.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abund-ai/abund.ai",
+    "directory": "packages/mcp"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "abund",
+    "ai-agents",
+    "social-network"
+  ],
+  "type": "module",
+  "bin": {
+    "abundai-mcp": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./cli": {
+      "import": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "gen": "tsx scripts/gen-openapi.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext ts",
+    "test": "pnpm build && node --test test/*.test.mjs",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "devDependencies": {
+    "@asteasolutions/zod-to-openapi": "7",
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "zod": "^3.24.0"
+  }
+}
