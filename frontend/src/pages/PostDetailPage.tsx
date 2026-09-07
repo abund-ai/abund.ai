@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { api, type Post, type Reply } from '../services/api'
-import { Button } from '@/components/ui/Button'
 import { parseUTCDate, cn } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -15,6 +14,10 @@ import { AudioPlayer } from '@/components/ui/AudioPlayer'
 
 interface PostDetailPageProps {
   postId: string
+  /** Fetched in the route loader so the post body is in the server HTML. */
+  post: PostDetail
+  replies: Reply[]
+  gallery: GalleryData | null
 }
 
 interface ReactionActivityEntry {
@@ -85,47 +88,15 @@ function replyToComment(reply: Reply): Comment {
   }
 }
 
-export function PostDetailPage({ postId }: PostDetailPageProps) {
-  const [post, setPost] = useState<PostDetail | null>(null)
-  const [replies, setReplies] = useState<Reply[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [gallery, setGallery] = useState<GalleryData | null>(null)
+export function PostDetailPage({
+  postId,
+  post,
+  replies,
+  gallery,
+}: PostDetailPageProps) {
   const [selectedImage, setSelectedImage] = useState(0)
   const [showPrompts, setShowPrompts] = useState(false)
   const [showAllReactions, setShowAllReactions] = useState(false)
-
-  useEffect(() => {
-    async function loadPost() {
-      setLoading(true)
-      setError(null)
-      try {
-        const response = await api.getPost(postId)
-        setPost(response.post)
-        setReplies(response.replies)
-
-        // If this is a gallery post, fetch gallery data
-        if (response.post.content_type === 'gallery') {
-          try {
-            const galleryResponse = await api.getGallery(postId)
-            setGallery({
-              images: galleryResponse.gallery.images,
-              defaults: galleryResponse.gallery.defaults,
-            })
-          } catch (galleryErr) {
-            console.error('Failed to load gallery:', galleryErr)
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load post:', err)
-        setError('Failed to load post.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void loadPost()
-  }, [postId])
 
   // Track view (fire-and-forget, no error handling needed)
   useEffect(() => {
@@ -136,7 +107,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
 
   // Scroll to and highlight a specific reply via URL hash (#reply-{id})
   useEffect(() => {
-    if (loading || replies.length === 0) return
+    if (replies.length === 0) return
 
     const hash = window.location.hash
     if (!hash.startsWith('#reply-')) return
@@ -161,47 +132,10 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
     return () => {
       clearTimeout(timer)
     }
-  }, [loading, replies])
+  }, [replies])
 
   // Transform API replies to Comment format for CommentThread
   const comments = useMemo(() => replies.map(replyToComment), [replies])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="flex animate-pulse flex-col items-center gap-4">
-          <div className="bg-primary-500/30 h-16 w-16 rounded-full" />
-          <div className="h-4 w-48 rounded bg-[var(--bg-surface)]" />
-          <div className="h-3 w-64 rounded bg-[var(--bg-surface)]" />
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !post) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Icon
-              name="notFoundPost"
-              size="6xl"
-              className="text-[var(--text-muted)]/50"
-            />
-          </div>
-          <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
-            Post Not Found
-          </h2>
-          <p className="mb-6 text-[var(--text-muted)]">
-            This post doesn't exist or has been deleted.
-          </p>
-          <Button variant="secondary" as={Link} to="/feed">
-            Back to Feed
-          </Button>
-        </div>
-      </div>
-    )
-  }
 
   // Format timestamp
   const formatTime = (dateStr: string) => {

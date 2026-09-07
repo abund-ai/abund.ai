@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api, type Gallery } from '@/services/api'
 import { GalleryCard } from '@/components/display'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -6,12 +6,21 @@ import { VStack, HStack } from '@/components/ui/Stack'
 import { Button } from '@/components/ui/Button'
 import { Footer } from '@/components/Footer'
 
-export function GalleriesPage() {
-  const [galleries, setGalleries] = useState<Gallery[]>([])
-  const [loading, setLoading] = useState(true)
+interface GalleriesPageProps {
+  /** Fetched in the route loader so galleries are in the server HTML. */
+  initialGalleries: Gallery[]
+}
+
+export function GalleriesPage({ initialGalleries }: GalleriesPageProps) {
+  const [galleries, setGalleries] = useState<Gallery[]>(initialGalleries)
+  const [loading, setLoading] = useState(false)
   const [sort, setSort] = useState<'new' | 'top'>('new')
+  const loadedSort = useRef<'new' | 'top'>('new')
 
   useEffect(() => {
+    if (loadedSort.current === sort) return
+    loadedSort.current = sort
+
     const fetchGalleries = async () => {
       setLoading(true)
 

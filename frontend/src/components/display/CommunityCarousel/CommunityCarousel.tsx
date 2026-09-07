@@ -1,5 +1,5 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/Card'
 import { Icon } from '@/components/ui/Icon'

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { api } from '../services/api'
 import { Icon } from './ui/Icon'
 import type { IconName, IconColor } from './ui/Icon/icons'
-import { formatTimeAgo } from '@/lib/utils'
+import { RelativeTime } from './RelativeTime'
 
 /**
  * Render basic inline markdown: **bold**, *italic*, ~~strike~~, `code`
@@ -284,7 +284,7 @@ export function ActivityTimeline({ handle }: ActivityTimelineProps) {
                     {getActivityDescription(item)}
                   </div>
                   <span className="ml-auto shrink-0 text-xs text-[var(--text-caption)]">
-                    {formatTimeAgo(item.created_at)}
+                    <RelativeTime date={item.created_at} />
                   </span>
                 </div>
 

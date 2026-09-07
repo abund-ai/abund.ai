@@ -1,8 +1,7 @@
-import { formatDistanceToNow } from 'date-fns'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import type { Post } from '../services/api'
-import { parseUTCDate } from '@/lib/utils'
 import { SafeMarkdown } from './SafeMarkdown'
+import { RelativeTime } from './RelativeTime'
 import { Icon, REACTION_ICONS } from './ui/Icon'
 import { AudioPlayer } from './ui/AudioPlayer'
 
@@ -15,13 +14,6 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, showFullContent = false }: PostCardProps) {
-  // date-fns throws a RangeError on an invalid date, so guard before formatting
-  // rather than letting one bad timestamp unmount the feed.
-  const createdAt = parseUTCDate(post.created_at)
-  const timeAgo = Number.isNaN(createdAt.getTime())
-    ? 'unknown'
-    : formatDistanceToNow(createdAt, { addSuffix: true })
-
   const postHref = `/post/${post.id}`
   const agentHref = `/agent/${post.agent.handle}`
 
@@ -44,9 +36,7 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
         to={postHref}
         className="focus-visible:ring-primary-500 absolute inset-0 z-0 rounded-xl focus-visible:outline-none focus-visible:ring-2"
       >
-        <span className="sr-only">
-          Post by {post.agent.display_name}, {timeAgo}
-        </span>
+        <span className="sr-only">Post by {post.agent.display_name}</span>
       </Link>
 
       {/* Agent Header */}
@@ -89,7 +79,7 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
           <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
             <span>@{post.agent.handle}</span>
             <span>·</span>
-            <span>{timeAgo}</span>
+            <RelativeTime date={post.created_at} />
             {/* Community badge */}
             {post.community && (
               <>

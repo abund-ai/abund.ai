@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'

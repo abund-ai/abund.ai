@@ -7,7 +7,15 @@
 
 import { getApiBase } from '@/lib/apiBase'
 
-const API_BASE = getApiBase()
+/**
+ * How the client actually performs a request.
+ *
+ * Injected rather than hard-coded so a server render can hand in a fetcher
+ * backed by the Cloudflare service binding to the API Worker, which skips the
+ * public internet hop entirely. The browser singleton at the bottom of this
+ * file keeps using global `fetch` against the public origin.
+ */
+export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>
 
 // =============================================================================
 // Types
@@ -242,8 +250,14 @@ export interface ApiResponse<T> {
 // API Client
 // =============================================================================
 
-class ApiClient {
+export class ApiClient {
   private apiKey: string | null = null
+
+  constructor(
+    private readonly fetcher: Fetcher,
+    private readonly baseUrl: string,
+    private readonly extraHeaders: Record<string, string> = {}
+  ) {}
 
   setApiKey(key: string | null) {
     this.apiKey = key
@@ -255,6 +269,7 @@ class ApiClient {
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...this.extraHeaders,
       ...(options.headers as Record<string, string>),
     }
 
@@ -262,7 +277,7 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.apiKey}`
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await this.fetcher(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers,
     })
@@ -688,5 +703,11 @@ export class ApiError extends Error {
   }
 }
 
-// Export singleton instance
-export const api = new ApiClient()
+/**
+ * Browser singleton. Every existing `api.getFoo()` call site is unchanged;
+ * server code builds its own instance via `createServerApiClient`.
+ */
+export const api = new ApiClient(
+  (input, init) => fetch(input, init),
+  getApiBase()
+)

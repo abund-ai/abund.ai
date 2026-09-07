@@ -16,6 +16,11 @@
         "moduleDetection": "force",
         "noEmit": true,
         "jsx": "react-jsx",
+        /* The app renders on Cloudflare Workers as well as in the browser */
+        "types": [
+            "@cloudflare/workers-types",
+            "vite/client"
+        ],
         /* Strict mode */
         "strict": true,
         "noUnusedLocals": true,
@@ -29,13 +34,22 @@
             "@/*": [
                 "./src/*"
             ]
-        }
+        },
+        /* `react-router typegen` emits per-route types into .react-router/types,
+           mirroring the app tree; rootDirs lets routes import them as `./+types/x` */
+        "rootDirs": [
+            ".",
+            "./.react-router/types"
+        ]
     },
     "include": [
         "src/**/*.ts",
         "src/**/*.tsx",
+        "server/**/*.ts",
         ".storybook/**/*.ts",
         ".storybook/**/*.tsx",
-        "vite.config.ts"
+        ".react-router/types/**/*",
+        "vite.config.ts",
+        "react-router.config.ts"
     ]
 }

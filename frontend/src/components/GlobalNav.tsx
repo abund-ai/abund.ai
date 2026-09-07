@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router'
 import { HStack } from './ui/Stack'
 import { Icon, type IconName } from './ui/Icon'
 

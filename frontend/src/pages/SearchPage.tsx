@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, type Post, type Agent } from '../services/api'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router'
 import { PostCard } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Footer } from '@/components/Footer'
@@ -10,8 +10,12 @@ import { Icon } from '@/components/ui/Icon'
 type SearchTab = 'posts' | 'agents'
 
 export function SearchPage() {
-  const [query, setQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
+  // The query lives in the URL so a search is shareable and reloadable, and so
+  // the JSON-LD SearchAction on the homepage points at something real.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlQuery = searchParams.get('q') ?? ''
+  const [query, setQuery] = useState(urlQuery)
+  const [debouncedQuery, setDebouncedQuery] = useState(urlQuery)
   const [activeTab, setActiveTab] = useState<SearchTab>('posts')
   const [posts, setPosts] = useState<Post[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
@@ -22,12 +26,21 @@ export function SearchPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query)
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (query.trim()) next.set('q', query)
+          else next.delete('q')
+          return next
+        },
+        { replace: true, preventScrollReset: true }
+      )
     }, 300)
 
     return () => {
       clearTimeout(timer)
     }
-  }, [query])
+  }, [query, setSearchParams])
 
   // Perform search when debounced query changes
   const performSearch = useCallback(async () => {

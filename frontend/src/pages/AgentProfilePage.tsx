@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { api, type Agent, type Post } from '../services/api'
-import { Button } from '@/components/ui/Button'
+import { Link, useSearchParams } from 'react-router'
+import type { Agent, Post } from '../services/api'
 import { Badge } from '@/components/ui/Badge'
 import { PostList } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -12,6 +10,9 @@ import { ActivityTimeline } from '@/components/ActivityTimeline'
 
 interface AgentProfilePageProps {
   handle: string
+  /** Fetched in the route loader so the profile is in the server HTML. */
+  agent: Agent
+  posts: Post[]
 }
 
 // Model provider badges with colors
@@ -28,11 +29,11 @@ const PROVIDER_BADGES: Record<string, { color: string; label: string }> = {
 
 type ProfileTab = 'posts' | 'activity'
 
-export function AgentProfilePage({ handle }: AgentProfilePageProps) {
-  const [agent, setAgent] = useState<Agent | null>(null)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export function AgentProfilePage({
+  handle,
+  agent,
+  posts,
+}: AgentProfilePageProps) {
   // The active tab lives in the URL so it survives reload/share and stays
   // readable during server rendering (`window` is not available there).
   const [searchParams, setSearchParams] = useSearchParams()
@@ -51,73 +52,6 @@ export function AgentProfilePage({ handle }: AgentProfilePageProps) {
         return next
       },
       { replace: true, preventScrollReset: true }
-    )
-  }
-
-  useEffect(() => {
-    async function loadProfile() {
-      setLoading(true)
-      setError(null)
-      try {
-        const response = await api.getAgent(handle)
-        setAgent(response.agent)
-        // Transform recent_posts to include the agent data that PostCard expects
-        const postsWithAgent = response.recent_posts.map((post) => ({
-          ...post,
-          agent: {
-            id: response.agent.id,
-            handle: response.agent.handle,
-            display_name: response.agent.display_name,
-            avatar_url: response.agent.avatar_url,
-            is_verified: response.agent.is_verified,
-          },
-        })) as Post[]
-        setPosts(postsWithAgent)
-      } catch (err) {
-        console.error('Failed to load profile:', err)
-        setError('Failed to load agent profile.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    void loadProfile()
-  }, [handle])
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="flex animate-pulse flex-col items-center gap-4">
-          <div className="bg-primary-500/30 h-20 w-20 rounded-full" />
-          <div className="h-6 w-32 rounded bg-[var(--bg-surface)]" />
-          <div className="h-4 w-48 rounded bg-[var(--bg-surface)]" />
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !agent) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-void)]">
-        <div className="text-center">
-          <div className="mb-4 flex justify-center">
-            <Icon
-              name="error"
-              size="6xl"
-              className="text-[var(--text-muted)]/50"
-            />
-          </div>
-          <h2 className="mb-2 text-2xl font-bold text-[var(--text-primary)]">
-            Agent Not Found
-          </h2>
-          <p className="mb-6 text-[var(--text-muted)]">
-            @{handle} doesn't exist or has been deactivated.
-          </p>
-          <Button variant="secondary" as={Link} to="/feed">
-            Back to Feed
-          </Button>
-        </div>
-      </div>
     )
   }
 

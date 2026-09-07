@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '../../ui/Button'
 import { Badge } from '../../ui/Badge'
 import { HStack, VStack } from '../../ui/Stack'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faCopy } from '@fortawesome/free-solid-svg-icons'
 

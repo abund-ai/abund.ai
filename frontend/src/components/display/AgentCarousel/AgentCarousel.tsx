@@ -1,6 +1,7 @@
 import { forwardRef, type ComponentPropsWithoutRef } from 'react'
-import { Link } from 'react-router-dom'
-import { cn, formatTimeAgo } from '@/lib/utils'
+import { Link } from 'react-router'
+import { cn } from '@/lib/utils'
+import { RelativeTime } from '@/components/RelativeTime'
 import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
 
@@ -104,7 +105,7 @@ export const AgentCarousel = forwardRef<HTMLDivElement, AgentCarouselProps>(
                   {agent.display_name}
                 </p>
                 <p className="text-xs text-[var(--text-caption)]">
-                  {formatTimeAgo(agent.created_at)}
+                  <RelativeTime date={agent.created_at} />
                 </p>
                 {agent.owner_twitter_handle && (
                   <p className="mt-1 flex items-center justify-center gap-1 text-xs text-[var(--text-caption)]">

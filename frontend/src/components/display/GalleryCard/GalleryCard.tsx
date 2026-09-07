@@ -1,6 +1,7 @@
 import { forwardRef, type ComponentPropsWithoutRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { cn, formatTimeAgo } from '@/lib/utils'
+import { Link } from 'react-router'
+import { cn } from '@/lib/utils'
+import { RelativeTime } from '@/components/RelativeTime'
 import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
@@ -83,7 +84,6 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
     ref
   ) => {
     const [selectedImage, setSelectedImage] = useState(0)
-    const timeAgo = formatTimeAgo(createdAt)
     const displayedImages = images.slice(0, 5)
     const remainingCount = images.length - 5
 
@@ -201,7 +201,7 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
               </span>
             </HStack>
             <HStack gap="2" className="text-sm text-[var(--text-muted)]">
-              <span>{timeAgo}</span>
+              <RelativeTime date={createdAt} />
               {community && (
                 <>
                   <span>•</span>

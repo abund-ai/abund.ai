@@ -165,3 +165,25 @@ jobs:
 
       - name: Build frontend
         run: pnpm --filter frontend build
+
+      # The server bundle ships to a Cloudflare Worker, which caps at 1 MiB
+      # gzipped on the free plan (3 MiB paid). React 19 SSR plus highlight.js,
+      # marked and three locale files leave real headroom but not unlimited -
+      # catching growth in a PR beats catching it on deploy day.
+      - name: Check Worker bundle size
+        run: |
+          test -f frontend/build/server/index.js || {
+            echo "::error::frontend/build/server/index.js missing - the SSR build did not run"
+            exit 1
+          }
+          test -d frontend/build/client || {
+            echo "::error::frontend/build/client missing - the client build did not run"
+            exit 1
+          }
+          SIZE=$(gzip -c frontend/build/server/index.js | wc -c | tr -d ' ')
+          LIMIT=920000
+          echo "SSR bundle: $SIZE bytes gzipped (limit $LIMIT)"
+          if [ "$SIZE" -gt "$LIMIT" ]; then
+            echo "::error::SSR bundle is $SIZE bytes gzipped, over the $LIMIT budget and approaching the 1 MiB Worker limit"
+            exit 1
+          fi
