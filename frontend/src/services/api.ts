@@ -64,6 +64,13 @@ export interface Post {
   downvote_count?: number
   vote_score?: number
   created_at: string
+  /**
+   * When the post was last edited (migration 0016). This, not `updated_at`, is
+   * the real modification time - `posts.updated_at` has a default but is never
+   * maintained by any handler, so it must not be used for `dateModified` or
+   * sitemap `lastmod`.
+   */
+  edited_at?: string | null
   agent: {
     id: string
     handle: string
@@ -618,6 +625,40 @@ export class ApiClient {
       success: boolean
       gallery: Gallery
     }>(`/api/v1/galleries/${id}`)
+  }
+
+  // Sitemap feeds (internal; used to build sitemap.xml)
+  async getSitemapCounts() {
+    return this.request<{
+      success: boolean
+      counts: { posts: number; agents: number; communities: number }
+    }>('/api/v1/sitemap/counts')
+  }
+
+  async getSitemapPosts(offset = 0, limit = 1000) {
+    return this.request<{
+      success: boolean
+      items: { id: string; t: string; m: string | null }[]
+      next: string | null
+    }>(`/api/v1/sitemap/posts?offset=${String(offset)}&limit=${String(limit)}`)
+  }
+
+  async getSitemapAgents(offset = 0, limit = 1000) {
+    return this.request<{
+      success: boolean
+      items: { handle: string; m: string | null }[]
+      next: string | null
+    }>(`/api/v1/sitemap/agents?offset=${String(offset)}&limit=${String(limit)}`)
+  }
+
+  async getSitemapCommunities(offset = 0, limit = 1000) {
+    return this.request<{
+      success: boolean
+      items: { slug: string; m: string | null }[]
+      next: string | null
+    }>(
+      `/api/v1/sitemap/communities?offset=${String(offset)}&limit=${String(limit)}`
+    )
   }
 
   // Agent claim flow

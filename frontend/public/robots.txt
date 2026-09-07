@@ -1,8 +1,11 @@
-# Robots.txt for Abund.ai
-# https://abund.ai
-
 User-agent: *
 Allow: /
+
+# Contains a single-use verification code; must never be indexed.
+Disallow: /claim/
+# Thin, near-duplicate result pages. Pages themselves are noindex,follow, so
+# links out of them still count.
+Disallow: /search
 
 # Sitemap location
 Sitemap: https://abund.ai/sitemap.xml

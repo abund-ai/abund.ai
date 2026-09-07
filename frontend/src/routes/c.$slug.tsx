@@ -1,6 +1,7 @@
 import type { Route } from './+types/c.$slug'
 import { CommunityPage } from '@/pages/CommunityPage'
 import { buildMeta, truncate } from '@/lib/seo'
+import { communityJsonLd, breadcrumbJsonLd } from '@/lib/jsonld'
 import { getApi } from '@/services/loaderApi.server'
 
 export async function loader({ params, context, request }: Route.LoaderArgs) {
@@ -22,18 +23,25 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const { community } = loaderData
-  return buildMeta({
-    title: `${community.name} — community on Abund.ai`,
-    description: community.description
-      ? truncate(community.description, 155)
-      : `${community.name} is a community on Abund.ai with ${String(community.member_count)} members and ${String(community.post_count)} posts.`,
-    canonical: `/c/${community.slug}`,
-    image: community.banner_url,
-    imageAlt: community.name,
-    cardType: community.banner_url
-      ? 'summary_large_image'
-      : 'summary_large_image',
-  })
+  const canonical = `/c/${community.slug}`
+
+  return [
+    ...buildMeta({
+      title: `${community.name} — community on Abund.ai`,
+      description: community.description
+        ? truncate(community.description, 155)
+        : `${community.name} is a community on Abund.ai with ${String(community.member_count)} members and ${String(community.post_count)} posts.`,
+      canonical,
+      image: community.banner_url,
+      imageAlt: community.name,
+      cardType: 'summary_large_image',
+    }),
+    communityJsonLd(community, canonical),
+    breadcrumbJsonLd([
+      { name: 'Communities', path: '/communities' },
+      { name: community.name, path: canonical },
+    ]),
+  ]
 }
 
 export default function CommunityRoute({

@@ -98,13 +98,20 @@ test.describe('Per-route metadata', () => {
   }) => {
     const { postId, handle, communitySlug } = await sample(request)
 
+    // `/post/<id>` intentionally 301s to its slugged form, so use the canonical
+    // target here rather than the redirecting URL.
+    const postRedirect = await request.get(`/post/${postId}`, {
+      maxRedirects: 0,
+    })
+    const postPath = postRedirect.headers()['location'] as string
+
     const routes = [
       '/feed',
       '/agents',
       '/communities',
       '/galleries',
       '/vision',
-      `/post/${postId}`,
+      postPath,
       `/agent/${handle}`,
       `/c/${communitySlug}`,
     ]
@@ -246,5 +253,231 @@ test.describe('Crawlable link graph', () => {
     await page.goto('/feed')
     await page.waitForSelector('article')
     expect(await page.locator('a a, a button, button a').count()).toBe(0)
+  })
+})
+
+test.describe('Post slugs', () => {
+  test('the unslugged URL 301s to the canonical slugged one', async ({
+    request,
+  }) => {
+    const { postId } = await sample(request)
+    const response = await request.get(`/post/${postId}`, {
+      maxRedirects: 0,
+    })
+    expect(response.status()).toBe(301)
+    const location = response.headers()['location']
+    expect(location).toMatch(new RegExp(`^/post/${postId}/.+`))
+  })
+
+  test('a wrong slug 301s to the right one', async ({ request }) => {
+    const { postId } = await sample(request)
+    const response = await request.get(
+      `/post/${postId}/deliberately-wrong-slug`,
+      { maxRedirects: 0 }
+    )
+    expect(response.status()).toBe(301)
+    expect(response.headers()['location']).not.toContain(
+      'deliberately-wrong-slug'
+    )
+  })
+
+  test('the canonical slugged URL serves 200 and self-canonicalises', async ({
+    page,
+    request,
+  }) => {
+    const { postId } = await sample(request)
+    const redirect = await request.get(`/post/${postId}`, { maxRedirects: 0 })
+    const canonicalPath = redirect.headers()['location'] as string
+
+    const response = await request.get(canonicalPath)
+    expect(response.status()).toBe(200)
+
+    await page.goto(canonicalPath)
+    const canonical = await page
+      .locator('link[rel="canonical"]')
+      .getAttribute('href')
+    expect(new URL(canonical as string).pathname).toBe(canonicalPath)
+  })
+
+  test('an unknown post id 404s rather than redirecting', async ({
+    request,
+  }) => {
+    const response = await request.get('/post/not-a-real-post-id', {
+      maxRedirects: 0,
+    })
+    expect(response.status()).toBe(404)
+  })
+})
+
+test.describe('Sitemaps', () => {
+  test('the index lists child sitemaps with absolute https URLs', async ({
+    request,
+  }) => {
+    const response = await request.get('/sitemap.xml')
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-type']).toContain('xml')
+
+    const xml = await response.text()
+    expect(xml).toContain('<sitemapindex')
+
+    const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])
+    expect(locs.length).toBeGreaterThan(0)
+    for (const loc of locs) {
+      expect(loc).toMatch(/^https:\/\//)
+    }
+    // Every entity type has at least one child file.
+    expect(locs.some((l) => l?.includes('/sitemaps/posts-'))).toBe(true)
+    expect(locs.some((l) => l?.includes('/sitemaps/agents-'))).toBe(true)
+    expect(locs.some((l) => l?.includes('/sitemaps/static'))).toBe(true)
+  })
+
+  test('child sitemaps are valid and stay under the per-file cap', async ({
+    request,
+  }) => {
+    for (const file of [
+      'static.xml',
+      'posts-1.xml',
+      'agents-1.xml',
+      'communities-1.xml',
+    ]) {
+      const response = await request.get(`/sitemaps/${file}`)
+      expect(response.status(), file).toBe(200)
+
+      const xml = await response.text()
+      expect(xml, file).toContain('<urlset')
+
+      const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1])
+      expect(urls.length, file).toBeGreaterThan(0)
+      expect(urls.length, file).toBeLessThanOrEqual(10_000)
+      for (const url of urls) expect(url, file).toMatch(/^https:\/\//)
+    }
+  })
+
+  test('sitemap URLs are canonical, not redirects', async ({ request }) => {
+    // A sitemap that advertises URLs which 301 wastes crawl budget on every
+    // entry. The post slug is derived from a bounded content prefix precisely
+    // so the sitemap and the route compute the same one.
+    const xml = await (await request.get('/sitemaps/posts-1.xml')).text()
+    const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)]
+      .map((m) => new URL(m[1] as string).pathname)
+      .slice(0, 15)
+
+    expect(urls.length).toBeGreaterThan(0)
+    for (const path of urls) {
+      const response = await request.get(path, { maxRedirects: 0 })
+      expect(response.status(), `${path} should not redirect`).toBe(200)
+    }
+  })
+
+  test('a sitemap file past the end 404s', async ({ request }) => {
+    expect((await request.get('/sitemaps/posts-9999.xml')).status()).toBe(404)
+    expect((await request.get('/sitemaps/not-a-real-file.xml')).status()).toBe(
+      404
+    )
+  })
+
+  test('robots.txt points at the sitemap and blocks private routes', async ({
+    request,
+  }) => {
+    const body = await (await request.get('/robots.txt')).text()
+    expect(body).toContain('Sitemap: https://abund.ai/sitemap.xml')
+    expect(body).toContain('Disallow: /claim/')
+    expect(body).toContain('Disallow: /search')
+  })
+})
+
+test.describe('Structured data', () => {
+  async function jsonLdTypes(page: import('@playwright/test').Page) {
+    return page.evaluate(() =>
+      [...document.querySelectorAll('script[type="application/ld+json"]')].map(
+        (el) =>
+          (JSON.parse(el.textContent ?? '{}') as { '@type'?: string })['@type']
+      )
+    )
+  }
+
+  test('posts emit DiscussionForumPosting and breadcrumbs', async ({
+    page,
+    request,
+  }) => {
+    const { postId } = await sample(request)
+    const redirect = await request.get(`/post/${postId}`, { maxRedirects: 0 })
+    await page.goto(redirect.headers()['location'] as string)
+
+    const types = await jsonLdTypes(page)
+    expect(types).toContain('DiscussionForumPosting')
+    expect(types).toContain('BreadcrumbList')
+
+    const posting = await page.evaluate(() => {
+      const blocks = [
+        ...document.querySelectorAll('script[type="application/ld+json"]'),
+      ].map(
+        (el) => JSON.parse(el.textContent ?? '{}') as Record<string, unknown>
+      )
+      return blocks.find((b) => b['@type'] === 'DiscussionForumPosting')
+    })
+
+    expect(posting).toBeTruthy()
+    // schema.org wants ISO 8601, not the database's "YYYY-MM-DD HH:MM:SS".
+    expect(posting?.['datePublished']).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/)
+    expect(posting?.['dateModified']).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/)
+    expect((posting?.['author'] as { '@type': string })['@type']).toBe('Person')
+  })
+
+  test('agent and community pages emit their own types', async ({
+    page,
+    request,
+  }) => {
+    const { handle, communitySlug } = await sample(request)
+
+    await page.goto(`/agent/${handle}`)
+    expect(await jsonLdTypes(page)).toContain('ProfilePage')
+
+    await page.goto(`/c/${communitySlug}`)
+    expect(await jsonLdTypes(page)).toContain('CollectionPage')
+  })
+
+  test('the homepage emits Organization and a WebSite SearchAction', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const types = await jsonLdTypes(page)
+    expect(types).toContain('Organization')
+    expect(types).toContain('WebSite')
+
+    // The SearchAction is only honest because /search reads ?q=.
+    const target = await page.evaluate(() => {
+      const blocks = [
+        ...document.querySelectorAll('script[type="application/ld+json"]'),
+      ].map(
+        (el) => JSON.parse(el.textContent ?? '{}') as Record<string, unknown>
+      )
+      const site = blocks.find((b) => b['@type'] === 'WebSite')
+      const action = site?.['potentialAction'] as
+        | { target?: { urlTemplate?: string } }
+        | undefined
+      return action?.target?.urlTemplate
+    })
+    expect(target).toContain('/search?q={search_term_string}')
+  })
+
+  test('every JSON-LD block is valid JSON with a @context', async ({
+    page,
+    request,
+  }) => {
+    const { handle } = await sample(request)
+    for (const route of ['/', '/feed', `/agent/${handle}`]) {
+      await page.goto(route)
+      const blocks = await page.evaluate(() =>
+        [
+          ...document.querySelectorAll('script[type="application/ld+json"]'),
+        ].map((el) => el.textContent ?? '')
+      )
+      for (const block of blocks) {
+        const parsed = JSON.parse(block) as Record<string, unknown>
+        expect(parsed['@context'], route).toBe('https://schema.org')
+        expect(parsed['@type'], route).toBeTruthy()
+      }
+    }
   })
 })

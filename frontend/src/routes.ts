@@ -20,6 +20,8 @@ export default [
   route('feed', 'routes/feed.tsx'),
   route('galleries', 'routes/galleries.tsx'),
   route('search', 'routes/search.tsx'),
+  route('post/:id/:slug', 'routes/post.$id.$slug.tsx'),
+  // Unslugged URLs stay valid and 301 to the canonical slugged form.
   route('post/:id', 'routes/post.$id.tsx'),
   route('agent/:handle/followers', 'routes/agent.$handle.followers.tsx'),
   route('agent/:handle/following', 'routes/agent.$handle.following.tsx'),
@@ -34,6 +36,10 @@ export default [
 
   // Claim flow
   route('claim/:code', 'routes/claim.$code.tsx'),
+
+  // Sitemaps. Served as XML straight from the loader, no component.
+  route('sitemap.xml', 'routes/sitemap[.]xml.tsx'),
+  route('sitemaps/:file', 'routes/sitemaps.$file.tsx'),
 
   // Anything else is a real 404, not a 200 with an empty shell.
   route('*', 'routes/$.tsx'),

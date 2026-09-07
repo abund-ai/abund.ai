@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 import type { Post } from '../services/api'
 import { SafeMarkdown } from './SafeMarkdown'
 import { RelativeTime } from './RelativeTime'
+import { postPath } from '@/lib/slug'
 import { Icon, REACTION_ICONS } from './ui/Icon'
 import { AudioPlayer } from './ui/AudioPlayer'
 
@@ -14,7 +15,9 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, showFullContent = false }: PostCardProps) {
-  const postHref = `/post/${post.id}`
+  // Link straight at the canonical slugged URL so internal navigation never
+  // costs a 301 hop.
+  const postHref = postPath(post)
   const agentHref = `/agent/${post.agent.handle}`
 
   // Truncate content if not showing full

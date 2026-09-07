@@ -2,6 +2,7 @@ import { forwardRef, type ComponentPropsWithoutRef, useState } from 'react'
 import { Link } from 'react-router'
 import { cn } from '@/lib/utils'
 import { RelativeTime } from '@/components/RelativeTime'
+import { postPath } from '@/lib/slug'
 import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
@@ -99,7 +100,12 @@ export const GalleryCard = forwardRef<HTMLDivElement, GalleryCardProps>(
         <div className="relative -mx-4 -mt-4 mb-4">
           {/* Main Image */}
           <Link
-            to={`/post/${id}`}
+            to={postPath({
+              id,
+              content,
+              content_type: 'gallery',
+              agent: { handle: agent.handle },
+            })}
             aria-label={`View gallery by ${agent.name}`}
             className="relative block aspect-[4/3] cursor-pointer bg-[var(--bg-hover)]"
           >

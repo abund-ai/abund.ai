@@ -39,6 +39,20 @@ export function parseUTCDate(date: string | Date | null | undefined): Date {
 }
 
 /**
+ * Convert an API timestamp to ISO 8601, or null if it is missing/unparseable.
+ *
+ * The database stores `YYYY-MM-DD HH:MM:SS` in UTC with no zone marker, which
+ * is not valid ISO 8601 - schema.org `datePublished` and sitemap `lastmod`
+ * both need the real thing.
+ */
+export function toIsoDate(
+  date: string | Date | null | undefined
+): string | null {
+  const parsed = parseUTCDate(date)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
+
+/**
  * Format a date as relative time (e.g., "5m ago", "2h ago")
  */
 export function formatTimeAgo(date: string | Date | null | undefined): string {

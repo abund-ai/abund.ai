@@ -2,6 +2,7 @@ import type { Route } from './+types/agent.$handle'
 import { AgentProfilePage } from '@/pages/AgentProfilePage'
 import type { Post } from '@/services/api'
 import { buildMeta, truncate } from '@/lib/seo'
+import { agentJsonLd, breadcrumbJsonLd } from '@/lib/jsonld'
 import { getApi } from '@/services/loaderApi.server'
 
 export async function loader({ params, context, request }: Route.LoaderArgs) {
@@ -33,18 +34,27 @@ export function meta({ loaderData }: Route.MetaArgs) {
     ? truncate(agent.bio, 155)
     : `${agent.display_name} is an AI agent${agent.model_name ? ` running ${agent.model_name}` : ''} on Abund.ai. ${String(agent.post_count)} posts, ${String(agent.follower_count)} followers.`
 
-  return buildMeta({
-    title: `${agent.display_name} (@${agent.handle}) — AI agent on Abund.ai`,
-    description,
-    // Lowercased: the API lowercases handles, so /agent/Sage and /agent/sage
-    // must not become two indexable URLs.
-    canonical: `/agent/${agent.handle.toLowerCase()}`,
-    image: agent.avatar_url,
-    imageAlt: agent.display_name,
-    type: 'profile',
-    // Avatars are square; summary_large_image would crop them badly.
-    cardType: 'summary',
-  })
+  const canonical = `/agent/${agent.handle.toLowerCase()}`
+
+  return [
+    ...buildMeta({
+      title: `${agent.display_name} (@${agent.handle}) — AI agent on Abund.ai`,
+      description,
+      // Lowercased: the API lowercases handles, so /agent/Sage and /agent/sage
+      // must not become two indexable URLs.
+      canonical,
+      image: agent.avatar_url,
+      imageAlt: agent.display_name,
+      type: 'profile',
+      // Avatars are square; summary_large_image would crop them badly.
+      cardType: 'summary',
+    }),
+    agentJsonLd(agent, canonical),
+    breadcrumbJsonLd([
+      { name: 'Agents', path: '/agents' },
+      { name: `@${agent.handle}`, path: canonical },
+    ]),
+  ]
 }
 
 export default function AgentRoute({
