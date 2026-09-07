@@ -11,47 +11,51 @@
   /* ═══════════════════════════════════════════════════════════════════════════
      PRIMARY PALETTE - Electric Cyan (The signature color)
      ═══════════════════════════════════════════════════════════════════════════ */
-  --color-primary-50: oklch(0.97 0.04 195);
-  --color-primary-100: oklch(0.92 0.08 195);
-  --color-primary-200: oklch(0.85 0.14 195);
-  --color-primary-300: oklch(0.78 0.18 195);
-  --color-primary-400: oklch(0.7 0.2 195);
-  --color-primary-500: oklch(0.65 0.22 195); /* Main electric cyan */
-  --color-primary-600: oklch(0.55 0.2 195);
-  --color-primary-700: oklch(0.45 0.16 195);
-  --color-primary-800: oklch(0.35 0.12 195);
-  --color-primary-900: oklch(0.25 0.08 195);
-  --color-primary-950: oklch(0.15 0.05 195);
+  /* Calibrated to the sRGB gamut boundary at hue 195 — chroma rises with
+     lightness here, so the brightest steps are also the most saturated.
+     400/500 are the text-and-ground pair: both clear WCAG AA and APCA Lc 75
+     on the dark substrate. Light mode remaps 300–600 in index.css. */
+  --color-primary-50: oklch(0.97 0.022 195);
+  --color-primary-100: oklch(0.94 0.048 195);
+  --color-primary-200: oklch(0.9 0.105 195);
+  --color-primary-300: oklch(0.88 0.15 195);
+  --color-primary-400: oklch(0.85 0.145 195); /* link/accent text on dark */
+  --color-primary-500: oklch(0.82 0.14 195); /* Main electric cyan */
+  --color-primary-600: oklch(0.72 0.122 195);
+  --color-primary-700: oklch(0.62 0.105 195);
+  --color-primary-800: oklch(0.48 0.08 195);
+  --color-primary-900: oklch(0.34 0.057 195);
+  --color-primary-950: oklch(0.2 0.035 195);
 
   /* ═══════════════════════════════════════════════════════════════════════════
      ACCENT - Electric Violet (Secondary accent)
      ═══════════════════════════════════════════════════════════════════════════ */
-  --color-violet-50: oklch(0.97 0.04 290);
-  --color-violet-100: oklch(0.92 0.08 290);
-  --color-violet-200: oklch(0.85 0.14 290);
-  --color-violet-300: oklch(0.75 0.2 290);
-  --color-violet-400: oklch(0.65 0.26 290);
-  --color-violet-500: oklch(0.55 0.28 290); /* Main violet */
-  --color-violet-600: oklch(0.48 0.24 290);
-  --color-violet-700: oklch(0.4 0.2 290);
-  --color-violet-800: oklch(0.32 0.14 290);
-  --color-violet-900: oklch(0.24 0.1 290);
-  --color-violet-950: oklch(0.15 0.06 290);
+  --color-violet-50: oklch(0.97 0.015 290);
+  --color-violet-100: oklch(0.94 0.03 290);
+  --color-violet-200: oklch(0.88 0.061 290);
+  --color-violet-300: oklch(0.82 0.094 290);
+  --color-violet-400: oklch(0.75 0.134 290);
+  --color-violet-500: oklch(0.68 0.177 290); /* Main violet */
+  --color-violet-600: oklch(0.58 0.23 290);
+  --color-violet-700: oklch(0.48 0.21 290);
+  --color-violet-800: oklch(0.38 0.17 290);
+  --color-violet-900: oklch(0.28 0.12 290);
+  --color-violet-950: oklch(0.18 0.075 290);
 
   /* ═══════════════════════════════════════════════════════════════════════════
      ACCENT - Plasma Pink (Highlight accent)
      ═══════════════════════════════════════════════════════════════════════════ */
-  --color-pink-50: oklch(0.97 0.04 350);
-  --color-pink-100: oklch(0.92 0.08 350);
-  --color-pink-200: oklch(0.85 0.14 350);
-  --color-pink-300: oklch(0.75 0.22 350);
-  --color-pink-400: oklch(0.65 0.28 350);
-  --color-pink-500: oklch(0.6 0.3 350); /* Plasma pink */
-  --color-pink-600: oklch(0.52 0.26 350);
-  --color-pink-700: oklch(0.44 0.2 350);
-  --color-pink-800: oklch(0.35 0.14 350);
-  --color-pink-900: oklch(0.26 0.1 350);
-  --color-pink-950: oklch(0.16 0.06 350);
+  --color-pink-50: oklch(0.97 0.017 350);
+  --color-pink-100: oklch(0.94 0.035 350);
+  --color-pink-200: oklch(0.88 0.073 350);
+  --color-pink-300: oklch(0.82 0.117 350);
+  --color-pink-400: oklch(0.76 0.166 350);
+  --color-pink-500: oklch(0.7 0.23 350); /* Plasma pink */
+  --color-pink-600: oklch(0.6 0.23 350);
+  --color-pink-700: oklch(0.5 0.205 350);
+  --color-pink-800: oklch(0.4 0.165 350);
+  --color-pink-900: oklch(0.3 0.12 350);
+  --color-pink-950: oklch(0.19 0.075 350);
 
   /* ═══════════════════════════════════════════════════════════════════════════
      GRAY PALETTE - Deep Space (Cool-tinted neutrals)
@@ -71,21 +75,23 @@
   /* ═══════════════════════════════════════════════════════════════════════════
      SEMANTIC STATUS COLORS
      ═══════════════════════════════════════════════════════════════════════════ */
-  --color-success-400: oklch(0.75 0.2 155);
-  --color-success-500: oklch(0.65 0.22 155);
-  --color-success-600: oklch(0.55 0.18 155);
+  /* Dark-substrate defaults; index.css remaps 400–600 for light mode.
+     500 is the text-carrying step in each ramp, 600 the solid ground. */
+  --color-success-400: oklch(0.87 0.19 155);
+  --color-success-500: oklch(0.83 0.19 155);
+  --color-success-600: oklch(0.7 0.17 155);
 
-  --color-warning-400: oklch(0.8 0.18 80);
-  --color-warning-500: oklch(0.72 0.2 80);
-  --color-warning-600: oklch(0.62 0.18 80);
+  --color-warning-400: oklch(0.87 0.12 80);
+  --color-warning-500: oklch(0.83 0.165 80);
+  --color-warning-600: oklch(0.72 0.145 80);
 
-  --color-error-400: oklch(0.7 0.22 25);
-  --color-error-500: oklch(0.62 0.24 25);
-  --color-error-600: oklch(0.52 0.2 25);
+  --color-error-400: oklch(0.8 0.111 25);
+  --color-error-500: oklch(0.74 0.154 25);
+  --color-error-600: oklch(0.65 0.195 25);
 
-  --color-info-400: oklch(0.72 0.16 230);
-  --color-info-500: oklch(0.62 0.18 230);
-  --color-info-600: oklch(0.52 0.16 230);
+  --color-info-400: oklch(0.84 0.096 230);
+  --color-info-500: oklch(0.78 0.12 230);
+  --color-info-600: oklch(0.68 0.132 230);
 
   /* ═══════════════════════════════════════════════════════════════════════════
      TYPOGRAPHY
@@ -141,24 +147,24 @@
   /* ═══════════════════════════════════════════════════════════════════════════
      SHADOWS - Glows instead of traditional shadows
      ═══════════════════════════════════════════════════════════════════════════ */
-  --shadow-xs: 0 0 0 1px oklch(0.65 0.22 195 / 0.1);
-  --shadow-sm: 0 0 8px oklch(0.65 0.22 195 / 0.15);
-  --shadow-md: 0 0 16px oklch(0.65 0.22 195 / 0.2);
-  --shadow-lg: 0 0 32px oklch(0.65 0.22 195 / 0.25);
-  --shadow-xl: 0 0 48px oklch(0.65 0.22 195 / 0.3);
-  --shadow-2xl: 0 0 64px oklch(0.65 0.22 195 / 0.35);
+  --shadow-xs: 0 0 0 1px oklch(0.82 0.14 195 / 0.1);
+  --shadow-sm: 0 0 8px oklch(0.82 0.14 195 / 0.15);
+  --shadow-md: 0 0 16px oklch(0.82 0.14 195 / 0.2);
+  --shadow-lg: 0 0 32px oklch(0.82 0.14 195 / 0.25);
+  --shadow-xl: 0 0 48px oklch(0.82 0.14 195 / 0.3);
+  --shadow-2xl: 0 0 64px oklch(0.82 0.14 195 / 0.35);
 
   /* Colored glows */
-  --glow-cyan: 0 0 30px oklch(0.65 0.22 195 / 0.5);
-  --glow-violet: 0 0 30px oklch(0.55 0.28 290 / 0.5);
-  --glow-pink: 0 0 30px oklch(0.6 0.3 350 / 0.5);
+  --glow-cyan: 0 0 30px oklch(0.82 0.14 195 / 0.5);
+  --glow-violet: 0 0 30px oklch(0.68 0.177 290 / 0.5);
+  --glow-pink: 0 0 30px oklch(0.7 0.23 350 / 0.5);
   --glow-white: 0 0 30px oklch(1 0 0 / 0.3);
 
   /* Border glows */
   --border-glow-cyan:
-    0 0 0 1px oklch(0.65 0.22 195 / 0.5), 0 0 20px oklch(0.65 0.22 195 / 0.3);
+    0 0 0 1px oklch(0.82 0.14 195 / 0.5), 0 0 20px oklch(0.82 0.14 195 / 0.3);
   --border-glow-violet:
-    0 0 0 1px oklch(0.55 0.28 290 / 0.5), 0 0 20px oklch(0.55 0.28 290 / 0.3);
+    0 0 0 1px oklch(0.68 0.177 290 / 0.5), 0 0 20px oklch(0.68 0.177 290 / 0.3);
 
   /* ═══════════════════════════════════════════════════════════════════════════
      ANIMATION EASINGS

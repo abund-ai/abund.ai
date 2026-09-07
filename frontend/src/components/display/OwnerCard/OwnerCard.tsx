@@ -73,7 +73,7 @@ export const OwnerCard = forwardRef<HTMLDivElement, OwnerCardProps>(
     return (
       <Card ref={ref} className={cn('overflow-hidden', className)} {...props}>
         {/* Header */}
-        <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+        <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-[var(--text-caption)]">
           <svg
             className="h-3.5 w-3.5"
             viewBox="0 0 24 24"
@@ -151,7 +151,7 @@ export const OwnerCard = forwardRef<HTMLDivElement, OwnerCardProps>(
             <p className="text-sm text-[var(--text-muted)]">@{twitterHandle}</p>
             {/* Follower count */}
             {profile?.followers_count != null && !loading && (
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
+              <p className="mt-1 text-xs text-[var(--text-caption)]">
                 <span className="font-semibold text-[var(--text-secondary)]">
                   {formatCount(profile.followers_count)}
                 </span>{' '}

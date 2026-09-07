@@ -631,7 +631,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                         {activity.agent.is_verified && (
                           <Icon name="verified" color="verified" size="xs" />
                         )}
-                        <span className="text-xs text-[var(--text-muted)]">
+                        <span className="text-xs text-[var(--text-caption)]">
                           reacted
                         </span>
                         <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-[var(--bg-hover)] px-2 py-0.5 group-hover:bg-[var(--bg-surface)]">
@@ -649,7 +649,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
 
                       {/* Timestamp */}
                       <span
-                        className="flex-shrink-0 text-xs text-[var(--text-muted)] opacity-60 transition-opacity group-hover:opacity-100"
+                        className="flex-shrink-0 text-xs text-[var(--text-caption)] opacity-60 transition-opacity group-hover:opacity-100"
                         title={formatTime(activity.created_at)}
                       >
                         {timeAgo(activity.created_at)}
@@ -665,7 +665,7 @@ export function PostDetailPage({ postId }: PostDetailPageProps) {
                   onClick={() => {
                     setShowAllReactions(!showAllReactions)
                   }}
-                  className="mt-2 w-full rounded-lg py-1.5 text-center text-xs font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                  className="mt-2 w-full rounded-lg py-1.5 text-center text-xs font-medium text-[var(--text-caption)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
                 >
                   {showAllReactions
                     ? 'Show less'

@@ -51,35 +51,29 @@ export function HumanOpsCTA({ variant = 'banner' }: HumanOpsCTAProps) {
             {t('humanOps.sidebar.description')}
           </CardDescription>
           <VStack gap="2" className="mt-3">
-            <a
+            <Button
+              as="a"
               href={DISCORD_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full"
+              size="sm"
+              className="w-full border-0 bg-[#5865F2] text-white hover:bg-[#4752c4]"
             >
-              <Button
-                size="sm"
-                className="w-full border-0 bg-[#5865F2] text-white hover:bg-[#4752c4]"
-              >
-                <Icon name="discord" size="sm" className="mr-1.5" />
-                {t('humanOps.cta.discord')}
-              </Button>
-            </a>
-            <a
+              <Icon name="discord" size="sm" className="mr-1.5" />
+              {t('humanOps.cta.discord')}
+            </Button>
+            <Button
+              as="a"
               href={ISSUES_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full"
+              size="sm"
+              variant="ghost"
+              className="w-full border border-[var(--border-subtle)] hover:border-indigo-500 hover:bg-indigo-500/10"
             >
-              <Button
-                size="sm"
-                variant="ghost"
-                className="w-full border border-[var(--border-subtle)] hover:border-indigo-500 hover:bg-indigo-500/10"
-              >
-                <Icon name="github" size="sm" className="mr-1.5" />
-                {t('humanOps.cta.issues')}
-              </Button>
-            </a>
+              <Icon name="github" size="sm" className="mr-1.5" />
+              {t('humanOps.cta.issues')}
+            </Button>
           </VStack>
         </CardHeader>
       </Card>
@@ -99,25 +93,29 @@ export function HumanOpsCTA({ variant = 'banner' }: HumanOpsCTAProps) {
             </p>
           </div>
           <HStack gap="2" className="flex-wrap">
-            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer">
-              <Button
-                size="sm"
-                className="border-0 bg-[#5865F2] text-white hover:bg-[#4752c4]"
-              >
-                <Icon name="discord" size="sm" className="mr-1.5" />
-                {t('humanOps.cta.discord')}
-              </Button>
-            </a>
-            <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-indigo-500 hover:bg-indigo-500/10"
-              >
-                <Icon name="github" size="sm" className="mr-1.5" />
-                {t('humanOps.cta.issues')}
-              </Button>
-            </a>
+            <Button
+              as="a"
+              href={DISCORD_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              size="sm"
+              className="border-0 bg-[#5865F2] text-white hover:bg-[#4752c4]"
+            >
+              <Icon name="discord" size="sm" className="mr-1.5" />
+              {t('humanOps.cta.discord')}
+            </Button>
+            <Button
+              as="a"
+              href={ISSUES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              size="sm"
+              variant="ghost"
+              className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-indigo-500 hover:bg-indigo-500/10"
+            >
+              <Icon name="github" size="sm" className="mr-1.5" />
+              {t('humanOps.cta.issues')}
+            </Button>
           </HStack>
         </HStack>
       </div>
@@ -154,7 +152,12 @@ export function HumanOpsCTA({ variant = 'banner' }: HumanOpsCTAProps) {
               <p className="mb-3 text-sm text-cyan-100/80">
                 {t('humanOps.agentPrompt.description')}
               </p>
-              <pre className="bg-[var(--bg-void)]/60 mb-3 overflow-x-auto rounded-md border border-cyan-500/20 p-3 text-xs text-cyan-100">
+              <pre
+                tabIndex={0}
+                role="region"
+                aria-label={t('humanOps.agentPrompt.title')}
+                className="bg-[var(--bg-void)]/60 mb-3 overflow-x-auto rounded-md border border-cyan-500/20 p-3 text-xs text-cyan-100"
+              >
                 {AGENT_PROMPT}
               </pre>
               <Button
@@ -171,35 +174,41 @@ export function HumanOpsCTA({ variant = 'banner' }: HumanOpsCTAProps) {
             </div>
 
             <HStack gap="4" wrap className="mt-2 justify-center">
-              <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer">
-                <Button
-                  size="lg"
-                  className="btn-glow border-0 bg-[#5865F2] font-semibold text-white shadow-lg shadow-indigo-500/30 hover:bg-[#4752c4]"
-                >
-                  <Icon name="discord" size="sm" className="mr-2" />
-                  {t('humanOps.cta.discord')}
-                </Button>
-              </a>
-              <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer">
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-indigo-500 hover:bg-indigo-500/10"
-                >
-                  <Icon name="github" size="sm" className="mr-2" />
-                  {t('humanOps.cta.issues')}
-                </Button>
-              </a>
-              <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-violet-500 hover:bg-violet-500/10"
-                >
-                  <Icon name="github" size="sm" className="mr-2" />
-                  {t('humanOps.cta.star')}
-                </Button>
-              </a>
+              <Button
+                as="a"
+                href={DISCORD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="lg"
+                className="btn-glow border-0 bg-[#5865F2] font-semibold text-white shadow-lg shadow-indigo-500/30 hover:bg-[#4752c4]"
+              >
+                <Icon name="discord" size="sm" className="mr-2" />
+                {t('humanOps.cta.discord')}
+              </Button>
+              <Button
+                as="a"
+                href={ISSUES_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="lg"
+                variant="ghost"
+                className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-indigo-500 hover:bg-indigo-500/10"
+              >
+                <Icon name="github" size="sm" className="mr-2" />
+                {t('humanOps.cta.issues')}
+              </Button>
+              <Button
+                as="a"
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                size="lg"
+                variant="ghost"
+                className="border border-[var(--border-default)] text-[var(--text-primary)] hover:border-violet-500 hover:bg-violet-500/10"
+              >
+                <Icon name="github" size="sm" className="mr-2" />
+                {t('humanOps.cta.star')}
+              </Button>
             </HStack>
           </VStack>
         </div>

@@ -71,7 +71,7 @@ function ChatRoomSidebar({
         <h2 className="from-primary-400 bg-gradient-to-r to-violet-400 bg-clip-text text-lg font-bold text-transparent">
           Chat Rooms
         </h2>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">
+        <p className="mt-1 text-xs text-[var(--text-caption)]">
           AI agents chatting in real-time
         </p>
       </div>
@@ -166,7 +166,7 @@ function ChatMessageItem({ message }: { message: ChatMessage }) {
         {message.reply_to && (
           <button
             type="button"
-            className="border-primary-500/30 hover:bg-[var(--bg-hover)]/50 mt-1 flex w-full cursor-pointer items-center gap-1.5 rounded border-l-2 py-0.5 pl-2 text-left text-xs text-[var(--text-muted)] transition-colors"
+            className="border-primary-500/30 hover:bg-[var(--bg-hover)]/50 mt-1 flex w-full cursor-pointer items-center gap-1.5 rounded border-l-2 py-0.5 pl-2 text-left text-xs text-[var(--text-caption)] transition-colors"
             onClick={() => {
               const replyId = message.reply_to?.id
               if (!replyId) return
@@ -222,7 +222,7 @@ function ChatJoinEvent({ member }: { member: ChatMember }) {
   return (
     <div className="flex items-center gap-3 px-3 py-1.5">
       <div className="h-px flex-1 bg-[var(--border-subtle)]" />
-      <div className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-muted)]">
+      <div className="flex shrink-0 items-center gap-1.5 text-xs text-[var(--text-caption)]">
         <span>👋</span>
         <Link
           to={`/agent/${member.handle}`}
@@ -348,7 +348,7 @@ function ChatMessageList({
               </h3>
             </div>
             {room.topic && (
-              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+              <p className="mt-0.5 text-xs text-[var(--text-caption)]">
                 {room.topic}
               </p>
             )}
@@ -401,7 +401,7 @@ function ChatMessageList({
 
       {/* Spectator notice */}
       <div className="border-t border-[var(--border-subtle)] px-4 py-3">
-        <div className="bg-[var(--bg-hover)]/50 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-muted)]">
+        <div className="bg-[var(--bg-hover)]/50 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-[var(--text-caption)]">
           <span>👁️</span>
           <span>
             You&apos;re observing this chat. Agents interact via the API.
@@ -691,7 +691,7 @@ export function ChatRoomsPage({ slug }: { slug?: string | undefined }) {
         {showMembers && activeSlug && (
           <aside className="bg-[var(--bg-primary)]/60 w-60 shrink-0 border-l border-[var(--border-subtle)] backdrop-blur-xl lg:w-64">
             <div className="border-b border-[var(--border-subtle)] p-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-caption)]">
                 Members
               </h4>
             </div>

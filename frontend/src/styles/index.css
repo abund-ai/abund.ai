@@ -25,8 +25,13 @@
   --bg-hover: oklch(0.2 0.02 260);
 
   --text-primary: oklch(0.98 0.005 260);
-  --text-secondary: oklch(0.75 0.01 260);
-  --text-muted: oklch(0.55 0.01 260);
+  /* Both clear APCA Lc 75 on --bg-surface; the old 0.75/0.55 pair measured
+     Lc -58 and -28. They sit close together by necessity — separate these
+     roles by weight or size, not lightness. */
+  --text-secondary: oklch(0.88 0.01 258);
+  --text-muted: oklch(0.845 0.01 258);
+  /* 12px metadata needs Lc 90; --text-muted only reaches 75 */
+  --text-caption: oklch(0.925 0.008 258);
 
   --border-subtle: oklch(0.25 0.02 260);
   --border-default: oklch(0.35 0.02 260);
@@ -36,6 +41,15 @@
   --accent-cyan: var(--color-primary-500);
   --accent-violet: var(--color-violet-500);
   --accent-pink: var(--color-pink-500);
+
+  /* Button grounds. The cyan is a light substrate, so it takes dark ink;
+     white on it measured 2.58:1. Light mode inverts both pairs. */
+  --btn-primary-bg: var(--color-primary-500);
+  --btn-primary-bg-hover: var(--color-primary-400);
+  --btn-primary-fg: oklch(0.05 0.03 260);
+  --btn-danger-bg: oklch(0.55 0.19 25);
+  --btn-danger-bg-hover: oklch(0.5 0.19 25);
+  --btn-danger-fg: oklch(1 0 0);
 
   /* Gradients */
   --gradient-hero: linear-gradient(
@@ -70,7 +84,47 @@
 
   --text-primary: oklch(0.15 0.02 260);
   --text-secondary: oklch(0.4 0.015 260);
-  --text-muted: oklch(0.55 0.01 260);
+  --text-muted: oklch(0.542 0.01 258); /* was 0.55 — measured Lc 74, one under the floor */
+  --text-caption: oklch(0.4 0.012 258);
+
+  /* The accent ramps are calibrated for the dark substrate, where the
+     text-carrying steps must be bright. On a light ground they must be
+     dark instead, so 300-600 are remapped here. Every value clears
+     WCAG AA against both --bg-void and --bg-surface. */
+  --color-primary-300: oklch(0.6 0.1 195);
+  --color-primary-400: oklch(0.49 0.085 195);
+  --color-primary-500: oklch(0.45 0.075 195);
+  --color-primary-600: oklch(0.4 0.068 195);
+
+  --color-violet-400: oklch(0.52 0.22 290);
+  --color-violet-500: oklch(0.45 0.2 290);
+
+  --color-pink-400: oklch(0.55 0.2 350);
+  --color-pink-500: oklch(0.48 0.18 350);
+
+  --color-success-400: oklch(0.52 0.12 155);
+  --color-success-500: oklch(0.46 0.105 155);
+  --color-success-600: oklch(0.4 0.09 155);
+
+  --color-warning-400: oklch(0.56 0.113 80);
+  --color-warning-500: oklch(0.5 0.101 80);
+  --color-warning-600: oklch(0.44 0.089 80);
+
+  --color-error-400: oklch(0.5 0.19 25);
+  --color-error-500: oklch(0.45 0.18 25);
+  --color-error-600: oklch(0.4 0.16 25);
+
+  --color-info-400: oklch(0.5 0.097 230);
+  --color-info-500: oklch(0.45 0.088 230);
+  --color-info-600: oklch(0.4 0.078 230);
+
+  /* Deep teal ground, white text — the inverse of dark mode */
+  --btn-primary-bg: var(--color-primary-500);
+  --btn-primary-bg-hover: var(--color-primary-600);
+  --btn-primary-fg: oklch(1 0 0);
+  --btn-danger-bg: oklch(0.45 0.18 25);
+  --btn-danger-bg-hover: oklch(0.4 0.16 25);
+  --btn-danger-fg: oklch(1 0 0);
 
   --border-subtle: oklch(0.9 0.008 260);
   --border-default: oklch(0.8 0.01 260);
@@ -99,8 +153,13 @@
   --bg-hover: oklch(0.2 0.02 260);
 
   --text-primary: oklch(0.98 0.005 260);
-  --text-secondary: oklch(0.75 0.01 260);
-  --text-muted: oklch(0.55 0.01 260);
+  /* Both clear APCA Lc 75 on --bg-surface; the old 0.75/0.55 pair measured
+     Lc -58 and -28. They sit close together by necessity — separate these
+     roles by weight or size, not lightness. */
+  --text-secondary: oklch(0.88 0.01 258);
+  --text-muted: oklch(0.845 0.01 258);
+  /* 12px metadata needs Lc 90; --text-muted only reaches 75 */
+  --text-caption: oklch(0.925 0.008 258);
 
   --border-subtle: oklch(0.25 0.02 260);
   --border-default: oklch(0.35 0.02 260);
@@ -125,8 +184,8 @@ body {
 
 /* Selection */
 ::selection {
-  background: oklch(0.65 0.22 195 / 0.4);
-  color: white;
+  background: oklch(0.65 0.111 195 / 0.4);
+  color: var(--text-primary);
 }
 
 /* Scrollbar */

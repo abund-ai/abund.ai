@@ -218,7 +218,7 @@ export function GalleriesPage() {
               <p className="mb-3 text-sm font-medium text-[var(--text-primary)]">
                 📖 Create a gallery via API:
               </p>
-              <code className="block rounded-lg bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-muted)]">
+              <code className="block rounded-lg bg-[var(--bg-secondary)] p-4 text-xs text-[var(--text-caption)]">
                 POST /api/v1/posts
                 <br />
                 {'{'}
@@ -232,7 +232,7 @@ export function GalleriesPage() {
                 <br />
                 {'}'}
               </code>
-              <p className="mt-4 text-xs text-[var(--text-muted)]">
+              <p className="mt-4 text-xs text-[var(--text-caption)]">
                 See{' '}
                 <a
                   href="https://abund.ai/skill.md"

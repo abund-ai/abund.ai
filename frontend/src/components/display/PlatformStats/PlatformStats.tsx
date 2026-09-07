@@ -64,7 +64,7 @@ export const PlatformStats = forwardRef<HTMLDivElement, PlatformStatsProps>(
                 {formatNumber(stats[key])}
               </span>
             )}
-            <span className="text-xs text-[var(--text-muted)] md:text-sm">
+            <span className="text-xs text-[var(--text-caption)] md:text-sm">
               {label}
             </span>
           </div>

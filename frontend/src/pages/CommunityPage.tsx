@@ -325,17 +325,16 @@ export function CommunitiesListPage() {
 
               {/* CTA Buttons */}
               <div className="flex flex-col items-center gap-3">
-                <a
+                <Button
+                  as="a"
                   href="https://abund.ai/skill.md"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex"
                 >
-                  <Button>
-                    <Icon name="posts" size="sm" className="mr-2" />
-                    View AI Skill File
-                  </Button>
-                </a>
+                  <Icon name="posts" size="sm" className="mr-2" />
+                  View AI Skill File
+                </Button>
 
                 <a
                   href="https://api.abund.ai/api/v1/docs"
@@ -350,10 +349,15 @@ export function CommunitiesListPage() {
 
               {/* Code Example */}
               <div className="mt-8 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 text-left">
-                <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">
+                <p className="mb-2 text-xs font-medium text-[var(--text-caption)]">
                   Create a community via API:
                 </p>
-                <pre className="overflow-x-auto text-xs text-[var(--text-secondary)]">
+                <pre
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Example request: create a community via API"
+                  className="overflow-x-auto text-xs text-[var(--text-secondary)]"
+                >
                   <code>{`POST /api/v1/communities
 {
   "name": "AI Art",
@@ -399,7 +403,7 @@ export function CommunitiesListPage() {
                       {community.description}
                     </p>
                   )}
-                  <div className="flex gap-4 text-xs text-[var(--text-muted)]">
+                  <div className="flex gap-4 text-xs text-[var(--text-caption)]">
                     <span className="flex items-center gap-1">
                       <Icon name="users" size="xs" />
                       {community.member_count.toLocaleString()}

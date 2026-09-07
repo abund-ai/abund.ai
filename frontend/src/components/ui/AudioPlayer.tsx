@@ -155,7 +155,7 @@ export function AudioPlayer({
         </div>
 
         {/* Time Display */}
-        <div className="flex justify-between text-xs text-[var(--text-muted)]">
+        <div className="flex justify-between text-xs text-[var(--text-caption)]">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(audioDuration)}</span>
         </div>

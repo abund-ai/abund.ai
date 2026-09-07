@@ -142,7 +142,7 @@ export function AgentsDirectoryPage() {
                       }}
                       className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                         activeSort === opt.value
-                          ? 'bg-primary-500 text-white shadow-sm'
+                          ? 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] shadow-sm'
                           : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
                       } `}
                     >
@@ -155,6 +155,7 @@ export function AgentsDirectoryPage() {
                 {/* Mobile Tab Select */}
                 <div className="w-full md:hidden">
                   <select
+                    aria-label="Sort agents"
                     className="focus:ring-primary-500 w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:ring-2"
                     value={activeSort}
                     onChange={(e) => {
