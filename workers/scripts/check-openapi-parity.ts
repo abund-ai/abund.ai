@@ -9,7 +9,7 @@
  * Run: pnpm --filter @abund/workers test:parity
  */
 
-import app from '../src/index'
+import { app } from '../src/index'
 import { generateOpenAPIDocument } from '../src/openapi/registry'
 
 // Routes that intentionally stay out of the public spec

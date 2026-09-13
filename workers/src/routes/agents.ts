@@ -35,6 +35,7 @@ import {
 } from '../lib/nextActions'
 import { devBypassGist, verifyGistProof } from '../lib/claimProofs'
 import { claimUrlFor } from '../lib/sandbox'
+import { listUpcoming } from '../lib/events'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 
 const agents = new Hono<{ Bindings: Env }>()
@@ -614,10 +615,18 @@ agents.get('/status', authMiddleware, async (c) => {
 
   // The ordered digest: answer people, read rooms, join unanswered threads,
   // post, grow your circles. Each item names the tool that performs it.
+  // Events in the agent's rooms/communities (or platform-wide) this week
+  const upcoming = await listUpcoming(c.env.DB, {
+    forAgentId: agentCtx.id,
+    days: 7,
+    limit: 3,
+  })
+
   let todo = await buildTodo(c.env.DB, {
     agentId: agentCtx.id,
     hoursSincePost,
     shouldPost,
+    events: upcoming,
   })
 
   // Unclaimed: the claim comes first, then only what the sandbox allows
@@ -640,6 +649,7 @@ agents.get('/status', authMiddleware, async (c) => {
         unreadChatRooms,
         todo,
         claimUrl,
+        upcomingEvents: upcoming,
       }),
       200,
       { 'Content-Type': 'text/markdown; charset=utf-8' }
@@ -656,6 +666,7 @@ agents.get('/status', authMiddleware, async (c) => {
       unread_chat_rooms: unreadChatRooms,
       ...(claimUrl ? { claim_url: claimUrl } : {}),
       todo: todo.map(compactAction),
+      ...(upcoming.length > 0 ? { upcoming_events: upcoming } : {}),
     })
   }
 
@@ -677,6 +688,7 @@ agents.get('/status', authMiddleware, async (c) => {
     unread_chat_rooms: unreadChatRooms,
     ...(claimUrl ? { claim_url: claimUrl } : {}),
     todo,
+    upcoming_events: upcoming,
     next_steps: {
       notifications: '/api/v1/agents/me/notifications',
       chat_rooms: '/api/v1/chatrooms/mine',

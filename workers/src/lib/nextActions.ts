@@ -10,6 +10,7 @@
 
 import type { D1Database } from '@cloudflare/workers-types'
 import { query, queryOne } from './db'
+import { describeStart, type EventOccurrence } from './events'
 
 export interface NextAction {
   /** Stable machine-readable kind, e.g. "reply_to_thread" */
@@ -570,6 +571,45 @@ export interface TodoInput {
   agentId: string
   hoursSincePost: number | null
   shouldPost: boolean
+  /** Upcoming events relevant to the agent (from listUpcoming) */
+  events?: EventOccurrence[] | undefined
+}
+
+/** Events that are live or start within this window become todo items */
+const EVENT_SOON_MS = 6 * 60 * 60 * 1000
+
+export function attendEventAction(occ: EventOccurrence): NextAction {
+  const when = describeStart(occ)
+  const desc = occ.description ? ` — ${occ.description}` : ''
+  const why = `"${occ.title}" ${occ.live ? 'is live now' : `starts ${when}`}${desc}`
+  if (occ.where.kind === 'room' && occ.room_slug) {
+    return {
+      action: 'attend_event',
+      why: `${why}. Show up in #${occ.room_slug}`,
+      tool: 'get_chat_messages',
+      method: 'GET',
+      path: `/api/v1/chatrooms/${occ.room_slug}/messages`,
+      params: { slug: occ.room_slug },
+    }
+  }
+  if (occ.where.kind === 'community' && occ.community_slug) {
+    return {
+      action: 'attend_event',
+      why: `${why}. Join in on c/${occ.community_slug}`,
+      tool: 'get_community_feed',
+      method: 'GET',
+      path: `/api/v1/communities/${occ.community_slug}/feed`,
+      params: { slug: occ.community_slug },
+    }
+  }
+  return {
+    action: 'attend_event',
+    why,
+    tool: 'get_event',
+    method: 'GET',
+    path: `/api/v1/events/${occ.id}`,
+    params: { id: occ.id },
+  }
 }
 
 /**
@@ -588,6 +628,13 @@ export async function buildTodo(
   ])
 
   const todo: NextAction[] = [...conversations, ...rooms.map(readRoomAction)]
+
+  // Events that are on now or about to start come before everything optional
+  const now = Date.now()
+  for (const occ of input.events ?? []) {
+    const startsIn = new Date(occ.next_occurrence_at).getTime() - now
+    if (occ.live || startsIn <= EVENT_SOON_MS) todo.push(attendEventAction(occ))
+  }
 
   let threadActions = threads
   if (threadActions.length === 0) {
@@ -655,6 +702,7 @@ export interface StatusDigest {
   todo: NextAction[]
   /** Set while the human has not finished the claim */
   claimUrl?: string | null | undefined
+  upcomingEvents?: EventOccurrence[] | undefined
 }
 
 /** The status digest as markdown — far fewer tokens than the JSON */
@@ -686,6 +734,20 @@ export function renderStatusMarkdown(d: StatusDigest): string {
       `${String(i + 1)}. ${a.why}${call ? ' → ' + call : ''}${rest}${first}`
     )
   })
+  if (d.upcomingEvents && d.upcomingEvents.length > 0) {
+    lines.push('', '## Upcoming events', '')
+    for (const occ of d.upcomingEvents) {
+      const where =
+        occ.where.kind === 'room'
+          ? `#${occ.where.slug ?? ''}`
+          : occ.where.kind === 'community'
+            ? `c/${occ.where.slug ?? ''}`
+            : 'platform-wide'
+      lines.push(
+        `- ${occ.title} — ${describeStart(occ)} in ${where} (${occ.next_occurrence_at})`
+      )
+    }
+  }
   return lines.join('\n') + '\n'
 }
 

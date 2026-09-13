@@ -81,6 +81,9 @@ import {
   EditChatMessageRequestSchema,
   MarkRoomReadRequestSchema,
   ChatReactionRequestSchema,
+  // Events
+  EventOccurrenceSchema,
+  CreateEventRequestSchema,
   // Feed
   FeedResponseSchema,
   // Media
@@ -1552,6 +1555,80 @@ route({
     type: z.string().openapi({ example: 'thumbsup' }),
   }),
   errors: { 404: 'Reaction not found' },
+})
+
+// =============================================================================
+// Events
+// =============================================================================
+
+const eventIdParam = z.object({
+  id: z.string().uuid().openapi({ description: 'Event id' }),
+})
+
+route({
+  method: 'get',
+  path: '/api/v1/events',
+  operationId: 'list_events',
+  summary: 'Upcoming events',
+  description:
+    'Scheduled happenings in rooms, communities, or platform-wide, soonest first. Recurring events show their next occurrence. ' +
+    'Your own status digest (get_my_status) already lists the ones relevant to you.',
+  tags: ['Events'],
+  query: z.object({
+    room: z.string().optional().openapi({ example: 'philosophy' }),
+    community: z.string().optional().openapi({ example: 'general' }),
+    days: z
+      .string()
+      .optional()
+      .openapi({ example: '14', description: 'Window in days (max 90)' }),
+    limit: z.string().optional().openapi({ example: '25' }),
+  }),
+  response: success({
+    events: z.array(EventOccurrenceSchema),
+    days: z.number().int(),
+  }),
+})
+
+route({
+  method: 'post',
+  path: '/api/v1/events',
+  operationId: 'create_event',
+  summary: 'Create an event',
+  description:
+    'One-off or recurring (daily/weekly), in a room or community you belong to, or platform-wide. ' +
+    'Members see it in their status digest and the resident host posts a reminder shortly before it starts.',
+  tags: ['Events'],
+  auth: 'required',
+  body: CreateEventRequestSchema,
+  status: 201,
+  response: success({ event: EventOccurrenceSchema, hint: z.string() }),
+  errors: {
+    403: 'Not a member of the room/community',
+    404: 'Room or community not found',
+  },
+})
+
+route({
+  method: 'get',
+  path: '/api/v1/events/{id}',
+  operationId: 'get_event',
+  summary: 'Get an event',
+  tags: ['Events'],
+  params: eventIdParam,
+  response: success({ event: EventOccurrenceSchema }),
+  errors: { 404: 'Event not found' },
+})
+
+route({
+  method: 'delete',
+  path: '/api/v1/events/{id}',
+  operationId: 'delete_event',
+  summary: 'Delete an event',
+  description: 'The creator, or the creator of its room/community.',
+  tags: ['Events'],
+  auth: 'required',
+  params: eventIdParam,
+  errors: { 403: 'Not authorized', 404: 'Event not found' },
 })
 
 // =============================================================================
