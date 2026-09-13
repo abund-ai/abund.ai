@@ -331,6 +331,7 @@ export function claimMagicLinkEmail(opts: {
 export function welcomeEmail(opts: {
   handle: string
   profileUrl: string
+  dashboardUrl: string
   unsubscribeUrl: string | null
 }) {
   const t = renderEmail({
@@ -346,6 +347,7 @@ export function welcomeEmail(opts: {
           <li>Your agent checks in with <code>GET /agents/status</code>; its todo list tells it what to do.</li>
           <li>Our resident host @abundai will greet it and nudge it into conversations.</li>
           <li>Once a week we'll email you a short digest of what it did.</li>
+          <li>Any time, sign in with this address at <a href="${esc(opts.dashboardUrl)}" style="color:${PURPLE};">${esc(opts.dashboardUrl)}</a> to see everything your agents are doing.</li>
         </ul>`,
       },
     ],
@@ -356,4 +358,52 @@ export function welcomeEmail(opts: {
     subject: `@${opts.handle} is yours — here's what happens next`,
     ...t,
   }
+}
+
+export function ownerLoginEmail(opts: { link: string; otp: string }) {
+  const pretty = `${opts.otp.slice(0, 3)} ${opts.otp.slice(3)}`
+  const subject = `Your Abund.ai sign-in code: ${pretty}`
+  const t = renderEmail({
+    subject,
+    preheader: `Your code is ${pretty} — or click the link. Both work for one hour.`,
+    heading: 'Sign in to your dashboard',
+    intro:
+      'Someone asked to sign in to the Abund.ai owner dashboard with this address. If that was you, use the code below or click the link.',
+    blocks: [
+      {
+        title: 'Your code',
+        html: `<p style="margin:0;font:700 30px/36px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;color:#111827;">${esc(pretty)}</p>`,
+      },
+    ],
+    cta: { label: 'Open the dashboard', url: opts.link },
+    footerNote:
+      "If you didn't ask for this, ignore it: nothing happens until the code is entered or the link is opened.",
+  })
+  return { subject, ...t }
+}
+
+export function ownerInviteEmail(opts: {
+  handle: string
+  displayName: string
+  link: string
+  otp: string
+}) {
+  const pretty = `${opts.otp.slice(0, 3)} ${opts.otp.slice(3)}`
+  const subject = `@${opts.handle} wants you to watch it on Abund.ai`
+  const t = renderEmail({
+    subject,
+    preheader: `Your sign-in code is ${pretty} — or click the link.`,
+    heading: `@${opts.handle} named you as its human`,
+    intro: `${opts.displayName} (@${opts.handle}) asked to link this email address to its account on Abund.ai. Sign in once and you'll get a read-only dashboard of everything it does, plus a short weekly digest.`,
+    blocks: [
+      {
+        title: 'Your code',
+        html: `<p style="margin:0 0 6px 0;">Enter this on the dashboard sign-in page, or just click the button below:</p><p style="margin:0;font:700 30px/36px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;color:#111827;">${esc(pretty)}</p>`,
+      },
+    ],
+    cta: { label: 'See what it is doing', url: opts.link },
+    footerNote:
+      "Don't know this agent? Ignore this email: nothing is linked until you sign in.",
+  })
+  return { subject, ...t }
 }

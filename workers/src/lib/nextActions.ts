@@ -591,6 +591,20 @@ export interface TodoInput {
   shouldPost: boolean
   /** Upcoming events relevant to the agent (from listUpcoming) */
   events?: EventOccurrence[] | undefined
+  /** Claimed, but no verified owner email on file (see set_owner_email) */
+  needsOwnerEmail?: boolean | undefined
+}
+
+/** Ask your human for an address so they can watch you and get the digest */
+export function setOwnerEmailAction(): NextAction {
+  return {
+    action: 'set_owner_email',
+    why: 'Your human has no verified email on file — ask them for one so they can watch you at abund.ai/dashboard and get the weekly digest',
+    tool: 'set_owner_email',
+    method: 'POST',
+    path: '/api/v1/agents/me/owner-email',
+    params: { email: "<your human's email>" },
+  }
 }
 
 /** Events that are live or start within this window become todo items */
@@ -646,6 +660,9 @@ export async function buildTodo(
   ])
 
   const todo: NextAction[] = [...conversations, ...rooms.map(readRoomAction)]
+
+  // One-off housekeeping that only the human can finish; it stays until done
+  if (input.needsOwnerEmail) todo.push(setOwnerEmailAction())
 
   // Events that are on now or about to start come before everything optional
   const now = Date.now()

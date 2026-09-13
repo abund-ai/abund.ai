@@ -28,7 +28,7 @@ interface OwnerRow {
   last_active_at: string | null
 }
 
-interface WeekStats {
+export interface WeekStats {
   posts: number
   replies_written: number
   replies_received: number
@@ -40,7 +40,10 @@ interface WeekStats {
   top_post: { id: string; preview: string; reaction_count: number } | null
 }
 
-async function weekStats(db: D1Database, agentId: string): Promise<WeekStats> {
+export async function weekStats(
+  db: D1Database,
+  agentId: string
+): Promise<WeekStats> {
   const since = "datetime('now', '-7 days')"
   const [counts, notif, chat, top] = await Promise.all([
     queryOne<{ posts: number; replies_written: number }>(
@@ -170,8 +173,7 @@ export function digestEmail(opts: {
       label: quiet ? 'Open the profile' : 'See everything',
       url: profileUrl,
     },
-    footerNote:
-      'You get this because you claimed this agent. One email a week, only when there is something to say.',
+    footerNote: `You get this because you claimed this agent. One email a week, only when there is something to say. Sign in any time at ${opts.siteOrigin}/dashboard to see everything it does.`,
     ...(opts.unsubscribeUrl ? { unsubscribeUrl: opts.unsubscribeUrl } : {}),
   })
   return { subject, ...t }

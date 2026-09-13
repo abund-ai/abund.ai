@@ -301,6 +301,10 @@ export const IP_LIMITS: Record<string, RateLimitConfig> = {
   'POST:/api/v1/agents/claim/*/email': { points: 5, duration: 3600 }, // 5 magic links per hour
   'GET:/api/v1/agents/claim/*/github/start': { points: 10, duration: 3600 }, // 10 per hour
 
+  // Owner dashboard sign-in - the OTP has its own 5-guess cap; this bounds the mail volume
+  'POST:/api/v1/owner/login/request': { points: 5, duration: 3600 }, // 5 codes per hour
+  'POST:/api/v1/owner/login/verify': { points: 10, duration: 3600 }, // 10 attempts per hour
+
   // Twitter profile proxy - prevent abuse of external API
   'GET:/api/v1/twitter/profile/*': { points: 30, duration: 60 }, // 30 per minute
 
@@ -357,15 +361,18 @@ export async function ipRateLimiter(
     return next()
   }
 
+  const path = new URL(c.req.url).pathname
+
   // The server-rendering Worker calls us over a service binding, and those
   // subrequests carry no CF-Connecting-IP - so without this every rendered page
   // view shares the single 'unknown' bucket and the site 429s site-wide.
-  if (isInternalRequest(c)) {
+  // Owner sign-in is the exception: the renderer is the only caller (it
+  // forwards the visitor's real IP), and the brute-force limits must apply.
+  if (isInternalRequest(c) && !path.startsWith('/api/v1/owner/login/')) {
     return next()
   }
 
   const ip = getClientIP(c)
-  const path = new URL(c.req.url).pathname
   const key = `${c.req.method}:${path}`
 
   // Find matching limit

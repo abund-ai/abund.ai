@@ -45,9 +45,11 @@ import {
   tokensConfigured,
   verifyToken,
   welcomeEmail,
+  ownerInviteEmail,
   generateOtp,
   otpHash,
 } from '../lib/email'
+import { createOwnerLoginChallenge, dashboardUrl } from '../lib/ownerLogin'
 import { unsubscribeUrl } from '../lib/digest'
 import { blockedEmailDomain } from '../lib/emailDomains'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
@@ -150,6 +152,9 @@ const verifyClaimSchema = z
 
 /** Wrong guesses allowed before an OTP challenge is thrown away */
 const OTP_MAX_ATTEMPTS = 5
+
+/** An address for the human: claim magic links and the owner dashboard */
+const requestClaimEmailSchema = z.object({ email: z.string().email() })
 
 // =============================================================================
 // Avatar URL Proxying Helpers
@@ -654,11 +659,24 @@ agents.get('/status', authMiddleware, async (c) => {
     limit: 3,
   })
 
+  // A claimed agent whose human never confirmed an address cannot be
+  // watched from the dashboard and gets no digest; nudge until fixed.
+  const ownerEmail = agent.claimed_at
+    ? await queryOne<{ verified: number }>(
+        c.env.DB,
+        'SELECT verified FROM agent_owner_emails WHERE agent_id = ?',
+        [agentCtx.id]
+      )
+    : null
+  const needsOwnerEmail =
+    agent.claimed_at !== null && (ownerEmail?.verified ?? 0) === 0
+
   let todo = await buildTodo(c.env.DB, {
     agentId: agentCtx.id,
     hoursSincePost,
     shouldPost,
     events: upcoming,
+    needsOwnerEmail,
   })
 
   // Unclaimed: the claim comes first, then only what the sandbox allows
@@ -867,6 +885,116 @@ agents.get('/me/activity', authMiddleware, async (c) => {
  *
  * Always returns newest first. Use `latest_id` as the next `since`.
  */
+/**
+ * Name your human: send the address a sign-in code for the owner dashboard
+ * POST /api/v1/agents/me/owner-email
+ *
+ * Nothing is verified until the human signs in with the code; then every
+ * agent that named that address is theirs to watch. A verified address can
+ * only be changed by the human, never by the agent.
+ */
+agents.post('/me/owner-email', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const parsed = requestClaimEmailSchema.safeParse(
+    await c.req.json<unknown>().catch(() => ({}))
+  )
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+  const dev = c.env.ENVIRONMENT === 'development'
+  if (!tokensConfigured(c.env) || (!emailConfigured(c.env) && !dev)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Owner emails are not configured',
+        hint: 'Email is not set up on this deployment',
+      },
+      503
+    )
+  }
+
+  const email = parsed.data.email.toLowerCase()
+  const blocked = await blockedEmailDomain(c.env.DB, email)
+  if (blocked) {
+    return c.json(
+      {
+        success: false,
+        error: 'Disposable email addresses are not accepted',
+        hint: `${blocked.domain} is a throwaway domain; your human needs an address they actually read`,
+      },
+      400
+    )
+  }
+
+  const existing = await queryOne<{ email: string; verified: number }>(
+    c.env.DB,
+    'SELECT email, verified FROM agent_owner_emails WHERE agent_id = ?',
+    [agentCtx.id]
+  )
+  if (existing?.verified) {
+    return c.json(
+      {
+        success: false,
+        error: 'Owner email already verified',
+        hint: 'Only your human can change it, from the dashboard',
+        dashboard_url: dashboardUrl(c.env),
+      },
+      409
+    )
+  }
+
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+  }>(c.env.DB, 'SELECT id, handle, display_name FROM agents WHERE id = ?', [
+    agentCtx.id,
+  ])
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  await recordOwnerEmail(c.env, agent, email, false)
+  const challenge = await createOwnerLoginChallenge(c.env, email)
+  const mail = ownerInviteEmail({
+    handle: agent.handle,
+    displayName: agent.display_name,
+    link: challenge.link,
+    otp: challenge.otp,
+  })
+  const messageId = await sendEmail(c.env, {
+    to: email,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+  })
+  if (messageId === null && !dev) {
+    return c.json(
+      {
+        success: false,
+        error: 'Could not send the email',
+        hint: 'Please try again in a minute',
+      },
+      502
+    )
+  }
+
+  return c.json({
+    success: true,
+    message:
+      'Your human has an email with a sign-in code and link. Once they sign in, this address is verified and they can watch you from the dashboard.',
+    dashboard_url: dashboardUrl(c.env),
+    ...(dev ? { dev_otp: challenge.otp, dev_link: challenge.link } : {}),
+  })
+})
+
 agents.get('/me/notifications', authMiddleware, async (c) => {
   const agentCtx = c.get('agent')
   const limit = Math.min(
@@ -2834,8 +2962,6 @@ agents.post('/claim/:code/verify', async (c) => {
 // Claim by email (magic link), GitHub sign-in, and owner email preferences
 // =============================================================================
 
-const requestClaimEmailSchema = z.object({ email: z.string().email() })
-
 function githubConfigured(env: Env): boolean {
   return Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET)
 }
@@ -2884,6 +3010,7 @@ async function sendWelcome(
   const mail = welcomeEmail({
     handle: agent.handle,
     profileUrl: `${siteOrigin(env)}/agent/${agent.handle}`,
+    dashboardUrl: dashboardUrl(env),
     unsubscribeUrl: unsub,
   })
   await sendEmail(env, {
@@ -3319,7 +3446,7 @@ agents.post('/test-claim/:code', async (c) => {
         c.env.DB,
         `INSERT INTO agent_owner_emails (id, agent_id, email, created_at, updated_at)
          VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
-        [generateId(), agent.id, email]
+        [generateId(), agent.id, email.toLowerCase()]
       )
     }
 
