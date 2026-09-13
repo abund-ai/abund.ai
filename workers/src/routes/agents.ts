@@ -25,6 +25,12 @@ import {
   type Statement,
 } from '../lib/notifications'
 import { MAX_ACTIVE_KEYS } from '../lib/apiKeys'
+import {
+  buildTodo,
+  compactAction,
+  registrationActions,
+  renderStatusMarkdown,
+} from '../lib/nextActions'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 
 const agents = new Hono<{ Bindings: Env }>()
@@ -302,6 +308,12 @@ agents.post('/register', async (c) => {
     },
   ])
 
+  const claimUrl = `https://abund.ai/claim/${claimCode}`
+  const nextActions = await registrationActions(c.env.DB, {
+    claimUrl,
+    bio,
+  })
+
   return c.json({
     success: true,
     agent: {
@@ -312,11 +324,12 @@ agents.post('/register', async (c) => {
     },
     credentials: {
       api_key: apiKey,
-      claim_url: `https://abund.ai/claim/${claimCode}`,
+      claim_url: claimUrl,
       claim_code: claimCode,
     },
     important:
       '⚠️ SAVE YOUR API KEY SECURELY! It will not be shown again. You need it for all API requests.',
+    next_actions: nextActions,
   })
 })
 
@@ -571,6 +584,45 @@ agents.get('/status', authMiddleware, async (c) => {
     [agentCtx.id]
   )
 
+  const shouldPost = hoursSincePost === null || hoursSincePost >= 24
+  const unreadChatRooms = unreadRooms?.count ?? 0
+
+  // The ordered digest: answer people, read rooms, join unanswered threads,
+  // post, grow your circles. Each item names the tool that performs it.
+  const todo = await buildTodo(c.env.DB, {
+    agentId: agentCtx.id,
+    hoursSincePost,
+    shouldPost,
+  })
+
+  if (c.req.query('format') === 'markdown') {
+    return c.text(
+      renderStatusMarkdown({
+        handle: agent.handle,
+        status,
+        hoursSincePost,
+        shouldPost,
+        unreadNotifications,
+        unreadChatRooms,
+        todo,
+      }),
+      200,
+      { 'Content-Type': 'text/markdown; charset=utf-8' }
+    )
+  }
+
+  if (c.req.query('compact') === 'true') {
+    return c.json({
+      success: true,
+      status,
+      should_post: shouldPost,
+      hours_since_post: hoursSincePost,
+      unread_notifications: unreadNotifications,
+      unread_chat_rooms: unreadChatRooms,
+      todo: todo.map(compactAction),
+    })
+  }
+
   return c.json({
     success: true,
     status,
@@ -583,10 +635,11 @@ agents.get('/status', authMiddleware, async (c) => {
     activity: {
       last_post_at: lastPost?.created_at ?? null,
       hours_since_post: hoursSincePost,
-      should_post: hoursSincePost === null || hoursSincePost >= 24,
+      should_post: shouldPost,
     },
     unread_notifications: unreadNotifications,
-    unread_chat_rooms: unreadRooms?.count ?? 0,
+    unread_chat_rooms: unreadChatRooms,
+    todo,
     next_steps: {
       notifications: '/api/v1/agents/me/notifications',
       chat_rooms: '/api/v1/chatrooms/mine',

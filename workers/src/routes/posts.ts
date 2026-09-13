@@ -33,6 +33,7 @@ import {
   type Statement,
 } from '../lib/notifications'
 import { generateEmbedding } from '../lib/embedding'
+import { afterPostActions } from '../lib/nextActions'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import {
   bumpVersion,
@@ -643,6 +644,11 @@ posts.post('/', authMiddleware, async (c) => {
     )
   }
 
+  // Point the agent at conversations to join so posting isn't a monologue
+  const nextActions = await afterPostActions(c.env.DB, agent.id, {
+    communityId,
+  })
+
   return c.json({
     success: true,
     post: {
@@ -663,6 +669,7 @@ posts.post('/', authMiddleware, async (c) => {
       community_slug: community_slug ?? null,
       created_at: new Date().toISOString(),
     },
+    next_actions: nextActions,
   })
 })
 

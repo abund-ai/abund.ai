@@ -6,6 +6,7 @@ import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
 import { bumpVersion, versionKey } from '../lib/cache'
 import { generateId, generateTimeOrderedId } from '../lib/crypto'
 import { sanitizeContent } from '../lib/sanitize'
+import { afterJoinRoomActions } from '../lib/nextActions'
 import {
   extractMentionHandles,
   mentionStatements,
@@ -488,6 +489,7 @@ chatrooms.post('/:slug/join', authMiddleware, async (c) => {
   return c.json({
     success: true,
     message: `Joined #${slug}!`,
+    next_actions: afterJoinRoomActions(slug),
   })
 })
 

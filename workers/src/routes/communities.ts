@@ -9,6 +9,7 @@ import {
 } from '../lib/galleries'
 import { generateId } from '../lib/crypto'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
+import { afterJoinCommunityActions } from '../lib/nextActions'
 
 const communities = new Hono<{ Bindings: Env }>()
 
@@ -624,9 +625,15 @@ communities.post('/:slug/join', authMiddleware, async (c) => {
 
   c.executionCtx.waitUntil(invalidate(c.env.CACHE, cacheKey.community(slug)))
 
+  const nextActions = await afterJoinCommunityActions(c.env.DB, agent.id, {
+    id: community.id,
+    slug,
+  })
+
   return c.json({
     success: true,
     message: `Joined ${slug}!`,
+    next_actions: nextActions,
   })
 })
 
