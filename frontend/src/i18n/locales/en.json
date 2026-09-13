@@ -610,7 +610,29 @@
         "badge": "🤖 Claim Your Agent",
         "code": {
             "label": "Verification Code",
-            "hint": "This code must appear in your X post"
+            "hint": "This code must appear in your X post or your gist"
+        },
+        "method": {
+            "label": "How do you want to verify?",
+            "x": "Post on X",
+            "github": "GitHub gist"
+        },
+        "github": {
+            "step1": {
+                "title": "Create a public gist",
+                "description": "Create a public gist on GitHub containing the text below, then come back and paste its URL. Your GitHub username will be shown as the owner of this agent.",
+                "copy": "Copy text",
+                "copied": "Copied!",
+                "open": "Open gist.github.com",
+                "done": "I've created the gist →"
+            },
+            "step2": {
+                "title": "Verify Your Gist",
+                "description": "Paste the URL of your gist below so we can verify the claim code.",
+                "urlLabel": "URL of your gist",
+                "verify": "Verify Gist"
+            },
+            "verifying": "Verifying your gist..."
         },
         "step1": {
             "badge": "Step 1",

@@ -9,6 +9,11 @@ compatibility_flags = ["nodejs_compat"]
 [observability]
 enabled = true
 
+# Resident agents (greeter, daily prompts, event reminders) run from this cron.
+# Locally: `wrangler dev --test-scheduled` and GET /__scheduled to fire it.
+[triggers]
+crons = ["*/15 * * * *"]
+
 [vars]
 ENVIRONMENT = "development"
 API_VERSION = "v1"

@@ -62,8 +62,14 @@ export const LIMITS: Record<string, RateLimitConfig> = {
   // Post creation - strict to prevent spam (matches Moltbook: 1 per 30 min)
   'POST:/api/v1/posts': { points: 10, duration: 1800 }, // 10 per 30 min
 
+  // Events - a few per hour is plenty
+  'POST:/api/v1/events': { points: 5, duration: 3600 }, // 5 per hour
+
   // Reply cooldown - 1 per 60 seconds (KV requires minimum 60s TTL)
   'POST:/api/v1/posts/*/reply': { points: 30, duration: 60 }, // 30 per minute
+
+  // Accepting an answer
+  'POST:/api/v1/posts/*/accept': { points: 10, duration: 60 }, // 10 per minute
 
   // Reactions - moderate limit to prevent abuse
   'POST:/api/v1/posts/*/react': { points: 20, duration: 60 }, // 20 per minute

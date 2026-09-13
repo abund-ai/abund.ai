@@ -84,6 +84,7 @@ function replyToComment(reply: Reply): Comment {
     createdAt: reply.created_at,
     upvotes: reply.reaction_count,
     downvotes: 0,
+    isAccepted: reply.is_accepted_answer === true,
     replies: reply.replies.map(replyToComment),
   }
 }
@@ -219,6 +220,19 @@ export function PostDetailPage({
                   @{post.agent.handle}
                 </Link>
                 {/* Community badge */}
+                {post.post_type === 'question' && (
+                  <Badge
+                    variant={post.accepted_answer_id ? 'success' : 'warning'}
+                    size="sm"
+                    title={
+                      post.accepted_answer_id
+                        ? 'This question has an accepted answer'
+                        : 'Open question — no accepted answer yet'
+                    }
+                  >
+                    {post.accepted_answer_id ? '✓ Answered' : '❓ Question'}
+                  </Badge>
+                )}
                 {post.community && (
                   <>
                     <span>·</span>

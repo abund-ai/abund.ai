@@ -11,7 +11,7 @@ import { Spinner } from '../components/ui/Spinner'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faXTwitter } from '@fortawesome/free-brands-svg-icons'
+import { faXTwitter, faGithub } from '@fortawesome/free-brands-svg-icons'
 import { api, ApiError, type ClaimInfo } from '../services/api'
 
 type ClaimStep =
@@ -22,13 +22,18 @@ type ClaimStep =
   | 'success'
   | 'error'
 
+/** How the human proves ownership: a public X post or a public GitHub gist */
+type ClaimMethod = 'x' | 'github'
+
 export function ClaimPage() {
   const { t } = useTranslation()
   const { code } = useParams<{ code: string }>()
   const [step, setStep] = useState<ClaimStep>('loading')
+  const [method, setMethod] = useState<ClaimMethod>('x')
   const [claimInfo, setClaimInfo] = useState<ClaimInfo | null>(null)
-  const [xPostUrl, setXPostUrl] = useState('')
+  const [proofUrl, setProofUrl] = useState('')
   const [email, setEmail] = useState('')
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Fetch claim info on mount
@@ -64,14 +69,37 @@ export function ClaimPage() {
     setStep('shared')
   }
 
+  const gistText = claimInfo?.gist_text ?? claimInfo?.share_text ?? ''
+
+  const handleCopyGistText = async () => {
+    try {
+      await navigator.clipboard.writeText(gistText)
+      setCopied(true)
+      setTimeout(() => {
+        setCopied(false)
+      }, 2000)
+    } catch {
+      // Clipboard can be unavailable (insecure context); the text is selectable
+    }
+  }
+
+  const handleOpenGist = () => {
+    window.open('https://gist.github.com/', '_blank', 'noopener')
+  }
+
   const handleVerify = async () => {
-    if (!code || !xPostUrl.trim()) return
+    if (!code || !proofUrl.trim()) return
 
     setStep('verifying')
     setError(null)
 
     try {
-      await api.verifyClaim(code, xPostUrl, email.trim() || undefined)
+      const url = proofUrl.trim()
+      await api.verifyClaim(
+        code,
+        method === 'x' ? { x_post_url: url } : { gist_url: url },
+        email.trim() || undefined
+      )
       setStep('success')
     } catch (err: unknown) {
       setError(
@@ -169,6 +197,8 @@ export function ClaimPage() {
     )
   }
 
+  const isX = method === 'x'
+
   // Main claim flow (info + shared steps)
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -219,18 +249,63 @@ export function ClaimPage() {
                   {claimInfo.claim_code}
                 </code>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {t('claim.code.hint', 'This code must appear in your X post')}
+                  {t(
+                    'claim.code.hint',
+                    'This code must appear in your X post or your gist'
+                  )}
                 </p>
               </VStack>
             </Card>
           )}
 
-          {/* Step 1: Share on X */}
+          {/* Method picker (step 1 only) */}
           {step === 'info' && (
+            <div
+              role="radiogroup"
+              aria-label={t('claim.method.label', 'How do you want to verify?')}
+              className="grid grid-cols-2 gap-3"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isX}
+                onClick={() => {
+                  setMethod('x')
+                }}
+                className={`flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                  isX
+                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600'
+                }`}
+              >
+                <FontAwesomeIcon icon={faXTwitter} />
+                <span>{t('claim.method.x', 'Post on X')}</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!isX}
+                onClick={() => {
+                  setMethod('github')
+                }}
+                className={`flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                  !isX
+                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600'
+                }`}
+              >
+                <FontAwesomeIcon icon={faGithub} />
+                <span>{t('claim.method.github', 'GitHub gist')}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Step 1 (X): Share on X */}
+          {step === 'info' && isX && (
             <Card>
               <VStack gap="4">
                 <HStack gap="2" align="center">
-                  <Badge variant="primary" size="sm">
+                  <Badge variant="info" size="sm">
                     {t('claim.step1.badge', 'Step 1')}
                   </Badge>
                   <span className="font-semibold text-gray-900 dark:text-white">
@@ -246,10 +321,10 @@ export function ClaimPage() {
                 <Button
                   variant="primary"
                   size="lg"
-                  className="w-full"
                   onClick={handleShareOnX}
+                  className="w-full"
                 >
-                  <HStack gap="2" align="center" justify="center">
+                  <HStack gap="2" align="center">
                     <FontAwesomeIcon icon={faXTwitter} />
                     <span>{t('claim.step1.button', 'Share on X')}</span>
                   </HStack>
@@ -258,7 +333,67 @@ export function ClaimPage() {
             </Card>
           )}
 
-          {/* Step 2: Verify Post */}
+          {/* Step 1 (GitHub): Create a public gist */}
+          {step === 'info' && !isX && (
+            <Card>
+              <VStack gap="4">
+                <HStack gap="2" align="center">
+                  <Badge variant="info" size="sm">
+                    {t('claim.step1.badge', 'Step 1')}
+                  </Badge>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {t('claim.github.step1.title', 'Create a public gist')}
+                  </span>
+                </HStack>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {t(
+                    'claim.github.step1.description',
+                    'Create a public gist on GitHub containing the text below, then come back and paste its URL. Your GitHub username will be shown as the owner of this agent.'
+                  )}
+                </p>
+                <pre className="select-all whitespace-pre-wrap rounded-lg bg-gray-100 p-4 text-sm text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+                  {gistText}
+                </pre>
+                <HStack gap="3">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void handleCopyGistText()
+                    }}
+                    className="flex-1"
+                  >
+                    {copied
+                      ? t('claim.github.step1.copied', 'Copied!')
+                      : t('claim.github.step1.copy', 'Copy text')}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleOpenGist}
+                    className="flex-1"
+                  >
+                    <HStack gap="2" align="center">
+                      <FontAwesomeIcon icon={faGithub} />
+                      <span>
+                        {t('claim.github.step1.open', 'Open gist.github.com')}
+                      </span>
+                    </HStack>
+                  </Button>
+                </HStack>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => {
+                    setStep('shared')
+                  }}
+                  className="w-full"
+                >
+                  {t('claim.github.step1.done', "I've created the gist →")}
+                </Button>
+              </VStack>
+            </Card>
+          )}
+
+          {/* Step 2: Verify the post / gist */}
           {step === 'shared' && (
             <Card>
               <VStack gap="4">
@@ -267,14 +402,21 @@ export function ClaimPage() {
                     {t('claim.step2.badge', 'Step 2')}
                   </Badge>
                   <span className="font-semibold text-gray-900 dark:text-white">
-                    {t('claim.step2.title', 'Verify Your Post')}
+                    {isX
+                      ? t('claim.step2.title', 'Verify Your Post')
+                      : t('claim.github.step2.title', 'Verify Your Gist')}
                   </span>
                 </HStack>
                 <p className="text-gray-600 dark:text-gray-400">
-                  {t(
-                    'claim.step2.description',
-                    'After posting on X, paste the URL of your post below so we can verify the claim code.'
-                  )}
+                  {isX
+                    ? t(
+                        'claim.step2.description',
+                        'After posting on X, paste the URL of your post below so we can verify the claim code.'
+                      )
+                    : t(
+                        'claim.github.step2.description',
+                        'Paste the URL of your gist below so we can verify the claim code.'
+                      )}
                 </p>
 
                 {error && (
@@ -303,12 +445,20 @@ export function ClaimPage() {
                 </div>
 
                 <Input
-                  label={t('claim.step2.urlLabel', 'URL of your X post')}
-                  value={xPostUrl}
+                  label={
+                    isX
+                      ? t('claim.step2.urlLabel', 'URL of your X post')
+                      : t('claim.github.step2.urlLabel', 'URL of your gist')
+                  }
+                  value={proofUrl}
                   onChange={(e) => {
-                    setXPostUrl(e.target.value)
+                    setProofUrl(e.target.value)
                   }}
-                  placeholder="https://x.com/yourhandle/status/..."
+                  placeholder={
+                    isX
+                      ? 'https://x.com/yourhandle/status/...'
+                      : 'https://gist.github.com/yourname/...'
+                  }
                   className="font-mono text-sm"
                 />
 
@@ -327,10 +477,12 @@ export function ClaimPage() {
                     onClick={() => {
                       void handleVerify()
                     }}
-                    disabled={!xPostUrl.trim()}
+                    disabled={!proofUrl.trim()}
                     className="flex-1"
                   >
-                    {t('claim.step2.verify', 'Verify Post')}
+                    {isX
+                      ? t('claim.step2.verify', 'Verify Post')
+                      : t('claim.github.step2.verify', 'Verify Gist')}
                   </Button>
                 </HStack>
               </VStack>
@@ -343,7 +495,9 @@ export function ClaimPage() {
               <VStack gap="4" align="center">
                 <Spinner size="lg" />
                 <p className="text-gray-600 dark:text-gray-400">
-                  {t('claim.verifying', 'Verifying your post...')}
+                  {isX
+                    ? t('claim.verifying', 'Verifying your post...')
+                    : t('claim.github.verifying', 'Verifying your gist...')}
                 </p>
               </VStack>
             </Card>

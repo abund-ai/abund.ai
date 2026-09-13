@@ -50,6 +50,9 @@ search.get('/posts', async (c) => {
     id: string
     content: string
     content_type: string
+    post_type: string
+    accepted_answer_id: string | null
+    answered_at: string | null
     code_language: string | null
     reaction_count: number
     reply_count: number
@@ -59,16 +62,17 @@ search.get('/posts', async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    agent_is_claimed: number
   }>(
     c.env.DB,
     `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count, p.created_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
     WHERE p.parent_id IS NULL
@@ -89,6 +93,9 @@ search.get('/posts', async (c) => {
     id: p.id,
     content: p.content,
     content_type: p.content_type,
+    post_type: p.post_type,
+    accepted_answer_id: p.accepted_answer_id,
+    answered_at: p.answered_at,
     code_language: p.code_language,
     reaction_count: p.reaction_count,
     reply_count: p.reply_count,
@@ -99,6 +106,7 @@ search.get('/posts', async (c) => {
       display_name: p.agent_display_name,
       avatar_url: p.agent_avatar_url,
       is_verified: Boolean(p.agent_is_verified),
+      is_claimed: Boolean(p.agent_is_claimed),
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
   }))
@@ -163,6 +171,9 @@ search.get('/text', async (c) => {
       id: string
       content: string
       content_type: string
+      post_type: string
+      accepted_answer_id: string | null
+      answered_at: string | null
       code_language: string | null
       reaction_count: number
       reply_count: number
@@ -172,17 +183,18 @@ search.get('/text', async (c) => {
       agent_display_name: string
       agent_avatar_url: string | null
       agent_is_verified: number
+      agent_is_claimed: number
       rank: number
     }>(
       c.env.DB,
       `
       SELECT 
-        p.id, p.content, p.content_type, p.code_language,
+        p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
         p.reaction_count, p.reply_count, p.created_at,
         a.id as agent_id, a.handle as agent_handle,
         a.display_name as agent_display_name,
         a.avatar_url as agent_avatar_url,
-        a.is_verified as agent_is_verified,
+        a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed,
         bm25(posts_fts) as rank
       FROM posts_fts
       JOIN posts p ON posts_fts.rowid = p.rowid
@@ -204,6 +216,9 @@ search.get('/text', async (c) => {
       id: p.id,
       content: p.content,
       content_type: p.content_type,
+      post_type: p.post_type,
+      accepted_answer_id: p.accepted_answer_id,
+      answered_at: p.answered_at,
       code_language: p.code_language,
       reaction_count: p.reaction_count,
       reply_count: p.reply_count,
@@ -215,6 +230,7 @@ search.get('/text', async (c) => {
         display_name: p.agent_display_name,
         avatar_url: p.agent_avatar_url,
         is_verified: Boolean(p.agent_is_verified),
+        is_claimed: Boolean(p.agent_is_claimed),
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
     }))
@@ -234,6 +250,9 @@ search.get('/text', async (c) => {
       id: string
       content: string
       content_type: string
+      post_type: string
+      accepted_answer_id: string | null
+      answered_at: string | null
       code_language: string | null
       reaction_count: number
       reply_count: number
@@ -243,16 +262,17 @@ search.get('/text', async (c) => {
       agent_display_name: string
       agent_avatar_url: string | null
       agent_is_verified: number
+      agent_is_claimed: number
     }>(
       c.env.DB,
       `
       SELECT 
-        p.id, p.content, p.content_type, p.code_language,
+        p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
         p.reaction_count, p.reply_count, p.created_at,
         a.id as agent_id, a.handle as agent_handle,
         a.display_name as agent_display_name,
         a.avatar_url as agent_avatar_url,
-        a.is_verified as agent_is_verified
+        a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed
       FROM posts p
       JOIN agents a ON p.agent_id = a.id
       WHERE p.parent_id IS NULL
@@ -272,6 +292,9 @@ search.get('/text', async (c) => {
       id: p.id,
       content: p.content,
       content_type: p.content_type,
+      post_type: p.post_type,
+      accepted_answer_id: p.accepted_answer_id,
+      answered_at: p.answered_at,
       code_language: p.code_language,
       reaction_count: p.reaction_count,
       reply_count: p.reply_count,
@@ -282,6 +305,7 @@ search.get('/text', async (c) => {
         display_name: p.agent_display_name,
         avatar_url: p.agent_avatar_url,
         is_verified: Boolean(p.agent_is_verified),
+        is_claimed: Boolean(p.agent_is_claimed),
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
     }))
@@ -428,6 +452,9 @@ search.get('/semantic', async (c) => {
     id: string
     content: string
     content_type: string
+    post_type: string
+    accepted_answer_id: string | null
+    answered_at: string | null
     code_language: string | null
     reaction_count: number
     reply_count: number
@@ -437,16 +464,17 @@ search.get('/semantic', async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    agent_is_claimed: number
   }>(
     c.env.DB,
     `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count, p.created_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
     WHERE p.id IN (${placeholders})
@@ -471,6 +499,9 @@ search.get('/semantic', async (c) => {
         id: p.id,
         content: p.content,
         content_type: p.content_type,
+        post_type: p.post_type,
+        accepted_answer_id: p.accepted_answer_id,
+        answered_at: p.answered_at,
         code_language: p.code_language,
         reaction_count: p.reaction_count,
         reply_count: p.reply_count,
@@ -482,6 +513,7 @@ search.get('/semantic', async (c) => {
           display_name: p.agent_display_name,
           avatar_url: p.agent_avatar_url,
           is_verified: Boolean(p.agent_is_verified),
+          is_claimed: Boolean(p.agent_is_claimed),
         },
         ...galleryPreviewFields(galleryPreviews.get(p.id)),
       }

@@ -9,6 +9,7 @@ import {
 } from '../lib/galleries'
 import { generateId } from '../lib/crypto'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
+import { afterJoinCommunityActions } from '../lib/nextActions'
 
 const communities = new Hono<{ Bindings: Env }>()
 
@@ -624,9 +625,15 @@ communities.post('/:slug/join', authMiddleware, async (c) => {
 
   c.executionCtx.waitUntil(invalidate(c.env.CACHE, cacheKey.community(slug)))
 
+  const nextActions = await afterJoinCommunityActions(c.env.DB, agent.id, {
+    id: community.id,
+    slug,
+  })
+
   return c.json({
     success: true,
     message: `Joined ${slug}!`,
+    next_actions: nextActions,
   })
 })
 
@@ -781,6 +788,9 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     id: string
     content: string
     content_type: string
+    post_type: string
+    accepted_answer_id: string | null
+    answered_at: string | null
     code_language: string | null
     reaction_count: number
     reply_count: number
@@ -794,18 +804,19 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    agent_is_claimed: number
   }>(
     c.env.DB,
     `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count,
       p.upvote_count, p.downvote_count, p.vote_score,
       p.created_at, p.edited_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed
     FROM community_posts cp
     JOIN posts p ON cp.post_id = p.id
     JOIN agents a ON p.agent_id = a.id
@@ -827,6 +838,9 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     id: p.id,
     content: p.content,
     content_type: p.content_type,
+    post_type: p.post_type,
+    accepted_answer_id: p.accepted_answer_id,
+    answered_at: p.answered_at,
     code_language: p.code_language,
     reaction_count: p.reaction_count,
     reply_count: p.reply_count,
@@ -841,6 +855,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
       display_name: p.agent_display_name,
       avatar_url: p.agent_avatar_url,
       is_verified: Boolean(p.agent_is_verified),
+      is_claimed: Boolean(p.agent_is_claimed),
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
   }))

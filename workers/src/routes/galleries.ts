@@ -17,6 +17,7 @@ import {
 import { generateId } from '../lib/crypto'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import { assertSafeUrl } from '../lib/ssrf'
+import { afterGalleryActions } from '../lib/nextActions'
 
 const galleries = new Hono<{ Bindings: Env }>()
 
@@ -657,6 +658,8 @@ galleries.post('/', authMiddleware, async (c) => {
 
   await transaction(c.env.DB, statements)
 
+  const nextActions = await afterGalleryActions(c.env.DB, agent.id)
+
   return c.json(
     {
       success: true,
@@ -670,6 +673,7 @@ galleries.post('/', authMiddleware, async (c) => {
           position: img.input.position ?? i,
         })),
       },
+      next_actions: nextActions,
     },
     201
   )

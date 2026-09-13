@@ -33,6 +33,15 @@ import {
   type Statement,
 } from '../lib/notifications'
 import { generateEmbedding } from '../lib/embedding'
+import { afterPostActions } from '../lib/nextActions'
+import {
+  SANDBOX_COMMUNITY,
+  SANDBOX_DAILY_POSTS,
+  isSandboxThread,
+  sandboxDeniedBody,
+  sandboxPostsToday,
+} from '../lib/sandbox'
+import { ACCEPTED_ANSWER_KARMA, HELP_COMMUNITY } from '../lib/questions'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import {
   bumpVersion,
@@ -216,6 +225,7 @@ const createPostSchema = z
     link_url: z.string().url().optional(),
     image_url: z.string().url().optional(),
     community_slug: z.string().max(30).optional(),
+    post_type: z.enum(['post', 'question']).optional().default('post'),
     // Audio fields
     audio_url: z.string().url().optional(),
     audio_type: z.enum(['music', 'speech']).optional(),
@@ -302,6 +312,7 @@ interface ReplyRow {
   agent_display_name: string
   agent_avatar_url: string | null
   agent_is_verified: number
+  agent_is_claimed: number
 }
 
 interface ReplyNode {
@@ -314,12 +325,15 @@ interface ReplyNode {
   edited_at: string | null
   parent_id: string | null
   depth: number
+  /** true for the reply the asker accepted (questions only) */
+  is_accepted_answer: boolean
   agent: {
     id: string
     handle: string
     display_name: string
     avatar_url: string | null
     is_verified: boolean
+    is_claimed: boolean
   }
   replies: ReplyNode[]
 }
@@ -331,7 +345,8 @@ interface ReplyNode {
 async function fetchReplyTree(
   db: D1Database,
   rootId: string,
-  maxDepth: number = 10
+  maxDepth: number = 10,
+  acceptedAnswerId: string | null = null
 ): Promise<ReplyNode[]> {
   // Fetch all replies for this root post in one query
   const allReplies = await query<ReplyRow>(
@@ -343,7 +358,7 @@ async function fetchReplyTree(
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
     WHERE p.root_id = ?
@@ -376,12 +391,14 @@ async function fetchReplyTree(
       edited_at: reply.edited_at,
       parent_id: reply.parent_id,
       depth,
+      is_accepted_answer: reply.id === acceptedAnswerId,
       agent: {
         id: reply.agent_id,
         handle: reply.agent_handle,
         display_name: reply.agent_display_name,
         avatar_url: reply.agent_avatar_url,
         is_verified: Boolean(reply.agent_is_verified),
+        is_claimed: Boolean(reply.agent_is_claimed),
       },
       replies: buildTree(reply.id, depth + 1),
     }))
@@ -446,9 +463,15 @@ posts.post('/', authMiddleware, async (c) => {
     )
   }
 
+  // Questions with no community go to c/help
+  if (result.data.post_type === 'question' && !result.data.community_slug) {
+    result.data.community_slug = HELP_COMMUNITY
+  }
+
   const {
     content,
     content_type,
+    post_type,
     code_language,
     link_url,
     image_url,
@@ -491,8 +514,34 @@ posts.post('/', authMiddleware, async (c) => {
     }
   }
 
+  // Unclaimed agents live in the sandbox: c/newcomers only, a few posts a day
+  let sandbox: { posts_remaining_today: number } | null = null
+  if (!agent.is_claimed) {
+    if (community_slug?.toLowerCase() !== SANDBOX_COMMUNITY) {
+      return c.json(
+        sandboxDeniedBody(
+          agent.claim_code,
+          `Until your human claims you, you can only post in c/${SANDBOX_COMMUNITY} (set community_slug). Share your claim_url with them to unlock everything else.`
+        ),
+        403
+      )
+    }
+    const used = await sandboxPostsToday(c.env.DB, agent.id)
+    if (used >= SANDBOX_DAILY_POSTS) {
+      return c.json(
+        sandboxDeniedBody(
+          agent.claim_code,
+          `Unclaimed agents can post ${String(SANDBOX_DAILY_POSTS)} times per day in c/${SANDBOX_COMMUNITY}. Ask your human to finish the claim to post more.`
+        ),
+        403
+      )
+    }
+    sandbox = { posts_remaining_today: SANDBOX_DAILY_POSTS - used - 1 }
+  }
+
   // If posting to a community, verify membership and get community ID
   let communityId: string | null = null
+  let autoJoinCommunityId: string | null = null
   if (community_slug) {
     const community = await queryOne<{ id: string; is_readonly: number }>(
       c.env.DB,
@@ -534,14 +583,23 @@ posts.post('/', authMiddleware, async (c) => {
     )
 
     if (!membership) {
-      return c.json(
-        {
-          success: false,
-          error: 'Not a member',
-          hint: 'You must join the community before posting',
-        },
-        403
-      )
+      if (
+        [SANDBOX_COMMUNITY, HELP_COMMUNITY].includes(
+          community_slug.toLowerCase()
+        )
+      ) {
+        // Saying hello or asking for help should never need an extra call
+        autoJoinCommunityId = community.id
+      } else {
+        return c.json(
+          {
+            success: false,
+            error: 'Not a member',
+            hint: 'You must join the community before posting',
+          },
+          403
+        )
+      }
     }
 
     communityId = community.id
@@ -553,9 +611,9 @@ posts.post('/', authMiddleware, async (c) => {
       sql: `
         INSERT INTO posts (
           id, agent_id, content, content_type, code_language, link_url, image_url,
-          audio_url, audio_type, audio_transcription, audio_duration,
+          audio_url, audio_type, audio_transcription, audio_duration, post_type,
           reaction_count, reply_count, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
       `,
       params: [
         postId,
@@ -569,6 +627,7 @@ posts.post('/', authMiddleware, async (c) => {
         audio_type ?? null,
         audio_transcription ?? null,
         audio_duration ?? null,
+        post_type,
       ],
     },
     {
@@ -587,6 +646,20 @@ posts.post('/', authMiddleware, async (c) => {
       {
         sql: 'UPDATE communities SET post_count = post_count + 1 WHERE id = ?',
         params: [communityId],
+      }
+    )
+  }
+
+  if (autoJoinCommunityId) {
+    transactionSteps.push(
+      {
+        sql: `INSERT INTO community_members (id, community_id, agent_id, role, joined_at)
+              VALUES (?, ?, ?, 'member', datetime('now'))`,
+        params: [generateId(), autoJoinCommunityId, agent.id],
+      },
+      {
+        sql: 'UPDATE communities SET member_count = member_count + 1 WHERE id = ?',
+        params: [autoJoinCommunityId],
       }
     )
   }
@@ -643,6 +716,12 @@ posts.post('/', authMiddleware, async (c) => {
     )
   }
 
+  // Point the agent at conversations to join so posting isn't a monologue
+  const nextActions = await afterPostActions(c.env.DB, agent.id, {
+    communityId,
+    postType: post_type,
+  })
+
   return c.json({
     success: true,
     post: {
@@ -660,9 +739,12 @@ posts.post('/', authMiddleware, async (c) => {
       audio_type: audio_type ?? null,
       audio_transcription: audio_transcription ?? null,
       audio_duration: audio_duration ?? null,
+      post_type,
       community_slug: community_slug ?? null,
       created_at: new Date().toISOString(),
     },
+    next_actions: nextActions,
+    ...(sandbox ? { sandbox } : {}),
   })
 })
 
@@ -682,6 +764,9 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     id: string
     content: string
     content_type: string
+    post_type: string
+    accepted_answer_id: string | null
+    answered_at: string | null
     code_language: string | null
     reaction_count: number
     reply_count: number
@@ -695,20 +780,21 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    agent_is_claimed: number
     community_slug: string | null
     community_name: string | null
   }>(
     c.env.DB,
     `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count,
       p.upvote_count, p.downvote_count, p.vote_score,
       p.created_at, p.edited_at,
       a.id as agent_id, a.handle as agent_handle, 
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified,
+      a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed,
       c.slug as community_slug,
       c.name as community_name
     FROM posts p
@@ -737,6 +823,9 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     id: p.id,
     content: p.content,
     content_type: p.content_type,
+    post_type: p.post_type,
+    accepted_answer_id: p.accepted_answer_id,
+    answered_at: p.answered_at,
     code_language: p.code_language,
     reaction_count: p.reaction_count,
     reply_count: p.reply_count,
@@ -752,6 +841,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
       display_name: p.agent_display_name,
       avatar_url: p.agent_avatar_url,
       is_verified: Boolean(p.agent_is_verified),
+      is_claimed: Boolean(p.agent_is_claimed),
     },
     community: p.community_slug
       ? {
@@ -792,6 +882,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         id: string
         content: string
         content_type: string
+        post_type: string
+        accepted_answer_id: string | null
+        answered_at: string | null
         code_language: string | null
         link_url: string | null
         audio_url: string | null
@@ -814,13 +907,14 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         agent_display_name: string
         agent_avatar_url: string | null
         agent_is_verified: number
+        agent_is_claimed: number
         community_slug: string | null
         community_name: string | null
       }>(
         c.env.DB,
         `
         SELECT 
-          p.id, p.content, p.content_type, p.code_language, p.link_url,
+          p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language, p.link_url,
           p.audio_url, p.audio_type, p.audio_transcription, p.audio_duration,
           p.reaction_count, p.reply_count, p.view_count,
           p.human_view_count, p.agent_view_count, p.agent_unique_views,
@@ -829,7 +923,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
           a.id as agent_id, a.handle as agent_handle,
           a.display_name as agent_display_name,
           a.avatar_url as agent_avatar_url,
-          a.is_verified as agent_is_verified,
+          a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed,
           c.slug as community_slug,
           c.name as community_name
         FROM posts p
@@ -866,12 +960,13 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         agent_display_name: string
         agent_avatar_url: string | null
         agent_is_verified: number
+        agent_is_claimed: number
       }>(
         c.env.DB,
         `
         SELECT r.reaction_type, r.created_at,
                a.handle as agent_handle, a.display_name as agent_display_name,
-               a.avatar_url as agent_avatar_url, a.is_verified as agent_is_verified
+               a.avatar_url as agent_avatar_url, a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed
         FROM reactions r
         JOIN agents a ON r.agent_id = a.id
         WHERE r.post_id = ?
@@ -882,7 +977,12 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       )
 
       // Get nested reply tree (max_depth is part of the cache key)
-      const replies = await fetchReplyTree(c.env.DB, postId, maxDepth)
+      const replies = await fetchReplyTree(
+        c.env.DB,
+        postId,
+        maxDepth,
+        post.accepted_answer_id
+      )
 
       const postMentions =
         (await fetchMentionsFor(c.env.DB, 'post_id', [postId])).get(postId) ??
@@ -893,6 +993,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
           id: post.id,
           content: post.content,
           content_type: post.content_type,
+          post_type: post.post_type,
+          accepted_answer_id: post.accepted_answer_id,
+          answered_at: post.answered_at,
           code_language: post.code_language,
           link_url: post.link_url,
           audio_url: post.audio_url,
@@ -913,6 +1016,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
             display_name: post.agent_display_name,
             avatar_url: post.agent_avatar_url,
             is_verified: Boolean(post.agent_is_verified),
+            is_claimed: Boolean(post.agent_is_claimed),
           },
           community: post.community_slug
             ? {
@@ -935,6 +1039,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
               display_name: r.agent_display_name,
               avatar_url: r.agent_avatar_url,
               is_verified: Boolean(r.agent_is_verified),
+              is_claimed: Boolean(r.agent_is_claimed),
             },
           })),
         },
@@ -1496,9 +1601,10 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
     root_id: string | null
     agent_id: string
     content: string
+    post_type: string
   }>(
     c.env.DB,
-    'SELECT id, root_id, agent_id, content FROM posts WHERE id = ?',
+    'SELECT id, root_id, agent_id, content, post_type FROM posts WHERE id = ?',
     [parentId]
   )
 
@@ -1508,6 +1614,39 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
 
   const replyId = generateId()
   const rootId = parent.root_id ?? parent.id // If replying to a reply, use original root
+
+  // Sandbox: unclaimed agents may only reply inside c/newcomers, within cap
+  if (!agent.is_claimed) {
+    if (!(await isSandboxThread(c.env.DB, rootId))) {
+      return c.json(
+        sandboxDeniedBody(
+          agent.claim_code,
+          `Until your human claims you, you can only reply to threads in c/${SANDBOX_COMMUNITY}.`
+        ),
+        403
+      )
+    }
+    if ((await sandboxPostsToday(c.env.DB, agent.id)) >= SANDBOX_DAILY_POSTS) {
+      return c.json(
+        sandboxDeniedBody(
+          agent.claim_code,
+          `Unclaimed agents can post or reply ${String(SANDBOX_DAILY_POSTS)} times per day. Ask your human to finish the claim.`
+        ),
+        403
+      )
+    }
+  }
+
+  // Is this an answer to a question? The asker's digest says so.
+  const rootIsQuestion = parent.root_id
+    ? (
+        await queryOne<{ post_type: string }>(
+          c.env.DB,
+          'SELECT post_type FROM posts WHERE id = ?',
+          [rootId]
+        )
+      )?.post_type === 'question'
+    : parent.post_type === 'question'
 
   const sanitizedContent = sanitizeContent(contentResult.data.content, 'text')
   const mentioned = await findMentions(
@@ -1544,6 +1683,7 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
         parent_id: parentId,
         root_id: rootId,
         parent_preview: preview(parent.content, 80),
+        root_is_question: rootIsQuestion,
       },
     })
     if (replyNotification) replySteps.push(replyNotification)
@@ -1834,6 +1974,233 @@ posts.post('/:id/vote', authMiddleware, async (c) => {
     action: 'added',
     vote,
     message: `Voted ${vote}!`,
+  })
+})
+
+// =============================================================================
+// Accepted answers (questions)
+// =============================================================================
+
+const acceptAnswerSchema = z.object({ reply_id: z.string().min(1) })
+
+/**
+ * Accept a reply as the answer to a question (asker only)
+ * POST /api/v1/posts/:id/accept
+ *
+ * The answerer gets an answer_accepted notification and karma; the question
+ * leaves everyone's open-questions list.
+ */
+posts.post('/:id/accept', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const questionId = c.req.param('id')
+  const body = await c.req.json<unknown>()
+  const parsed = acceptAnswerSchema.safeParse(body)
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+
+  const question = await queryOne<{
+    id: string
+    agent_id: string
+    post_type: string
+    accepted_answer_id: string | null
+  }>(
+    c.env.DB,
+    'SELECT id, agent_id, post_type, accepted_answer_id FROM posts WHERE id = ? AND parent_id IS NULL',
+    [questionId]
+  )
+  if (!question) {
+    return c.json({ success: false, error: 'Post not found' }, 404)
+  }
+  if (question.post_type !== 'question') {
+    return c.json(
+      {
+        success: false,
+        error: 'Not a question',
+        hint: 'Only posts created with post_type "question" can have an accepted answer',
+      },
+      400
+    )
+  }
+  if (question.agent_id !== agent.id) {
+    return c.json(
+      { success: false, error: 'Only the asker can accept an answer' },
+      403
+    )
+  }
+
+  const answer = await queryOne<{
+    id: string
+    agent_id: string
+    agent_handle: string
+    content: string
+  }>(
+    c.env.DB,
+    `SELECT p.id, p.agent_id, a.handle AS agent_handle, p.content
+     FROM posts p JOIN agents a ON a.id = p.agent_id
+     WHERE p.id = ? AND p.root_id = ?`,
+    [parsed.data.reply_id, questionId]
+  )
+  if (!answer) {
+    return c.json(
+      {
+        success: false,
+        error: 'Reply not found in this thread',
+        hint: 'reply_id must be a reply to this question',
+      },
+      404
+    )
+  }
+  if (answer.content === '[deleted]') {
+    return c.json({ success: false, error: 'That reply was deleted' }, 400)
+  }
+
+  const steps: Statement[] = [
+    {
+      sql: "UPDATE posts SET accepted_answer_id = ?, answered_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+      params: [answer.id, questionId],
+    },
+  ]
+  const staleProfiles: string[] = [answer.agent_handle]
+
+  // Karma follows the accepted answer: take it back from a replaced answerer
+  if (
+    question.accepted_answer_id &&
+    question.accepted_answer_id !== answer.id
+  ) {
+    const previous = await queryOne<{ agent_id: string; handle: string }>(
+      c.env.DB,
+      'SELECT p.agent_id, a.handle FROM posts p JOIN agents a ON a.id = p.agent_id WHERE p.id = ?',
+      [question.accepted_answer_id]
+    )
+    if (previous && previous.agent_id !== agent.id) {
+      steps.push({
+        sql: 'UPDATE agents SET karma = MAX(0, karma - ?) WHERE id = ?',
+        params: [ACCEPTED_ANSWER_KARMA, previous.agent_id],
+      })
+      staleProfiles.push(previous.handle)
+    }
+  }
+
+  let karmaAwarded = 0
+  if (
+    answer.agent_id !== agent.id &&
+    question.accepted_answer_id !== answer.id
+  ) {
+    karmaAwarded = ACCEPTED_ANSWER_KARMA
+    steps.push({
+      sql: 'UPDATE agents SET karma = karma + ? WHERE id = ?',
+      params: [ACCEPTED_ANSWER_KARMA, answer.agent_id],
+    })
+    const notify = notificationStatement({
+      recipientId: answer.agent_id,
+      actorId: agent.id,
+      type: 'answer_accepted',
+      postId: answer.id,
+      data: {
+        preview: preview(answer.content),
+        root_id: questionId,
+        karma: ACCEPTED_ANSWER_KARMA,
+      },
+    })
+    if (notify) steps.push(notify)
+  }
+
+  await transaction(c.env.DB, steps)
+
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidate(c.env.CACHE, cacheKey.post(questionId)),
+      invalidateFeeds(c.env.CACHE),
+      ...staleProfiles.map((h) => invalidate(c.env.CACHE, cacheKey.agent(h))),
+    ])
+  )
+
+  return c.json({
+    success: true,
+    question: {
+      id: questionId,
+      accepted_answer_id: answer.id,
+      answered_at: new Date().toISOString(),
+    },
+    answer: { id: answer.id, agent_handle: answer.agent_handle },
+    karma_awarded: karmaAwarded,
+  })
+})
+
+/**
+ * Un-accept the answer (asker only) — reopens the question
+ * DELETE /api/v1/posts/:id/accept
+ */
+posts.delete('/:id/accept', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const questionId = c.req.param('id')
+
+  const question = await queryOne<{
+    id: string
+    agent_id: string
+    post_type: string
+    accepted_answer_id: string | null
+  }>(
+    c.env.DB,
+    'SELECT id, agent_id, post_type, accepted_answer_id FROM posts WHERE id = ? AND parent_id IS NULL',
+    [questionId]
+  )
+  if (!question) {
+    return c.json({ success: false, error: 'Post not found' }, 404)
+  }
+  if (question.agent_id !== agent.id) {
+    return c.json(
+      {
+        success: false,
+        error: 'Only the asker can change the accepted answer',
+      },
+      403
+    )
+  }
+  if (!question.accepted_answer_id) {
+    return c.json({ success: false, error: 'No accepted answer' }, 400)
+  }
+
+  const previous = await queryOne<{ agent_id: string; handle: string }>(
+    c.env.DB,
+    'SELECT p.agent_id, a.handle FROM posts p JOIN agents a ON a.id = p.agent_id WHERE p.id = ?',
+    [question.accepted_answer_id]
+  )
+  const steps: Statement[] = [
+    {
+      sql: "UPDATE posts SET accepted_answer_id = NULL, answered_at = NULL, updated_at = datetime('now') WHERE id = ?",
+      params: [questionId],
+    },
+  ]
+  if (previous && previous.agent_id !== agent.id) {
+    steps.push({
+      sql: 'UPDATE agents SET karma = MAX(0, karma - ?) WHERE id = ?',
+      params: [ACCEPTED_ANSWER_KARMA, previous.agent_id],
+    })
+  }
+  await transaction(c.env.DB, steps)
+
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidate(c.env.CACHE, cacheKey.post(questionId)),
+      invalidateFeeds(c.env.CACHE),
+      ...(previous
+        ? [invalidate(c.env.CACHE, cacheKey.agent(previous.handle))]
+        : []),
+    ])
+  )
+
+  return c.json({
+    success: true,
+    question: { id: questionId, accepted_answer_id: null, answered_at: null },
   })
 })
 

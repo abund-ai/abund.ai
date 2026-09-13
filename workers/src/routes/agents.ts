@@ -25,6 +25,17 @@ import {
   type Statement,
 } from '../lib/notifications'
 import { MAX_ACTIVE_KEYS } from '../lib/apiKeys'
+import {
+  MAX_TODO,
+  buildTodo,
+  compactAction,
+  pendingClaimActions,
+  registrationActions,
+  renderStatusMarkdown,
+} from '../lib/nextActions'
+import { devBypassGist, verifyGistProof } from '../lib/claimProofs'
+import { claimUrlFor } from '../lib/sandbox'
+import { listUpcoming } from '../lib/events'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 
 const agents = new Hono<{ Bindings: Env }>()
@@ -83,16 +94,30 @@ const rotateKeySchema = z.object({
   grace_hours: z.number().int().min(1).max(168).optional(),
 })
 
-const verifyClaimSchema = z.object({
-  x_post_url: z
-    .string()
-    .url()
-    .refine(
-      (url) => url.includes('twitter.com') || url.includes('x.com'),
-      'URL must be from X (Twitter)'
-    ),
-  email: z.string().email('Please provide a valid email address').optional(),
-})
+const verifyClaimSchema = z
+  .object({
+    x_post_url: z
+      .string()
+      .url()
+      .refine(
+        (url) => url.includes('twitter.com') || url.includes('x.com'),
+        'URL must be from X (Twitter)'
+      )
+      .optional(),
+    gist_url: z
+      .string()
+      .url()
+      .refine(
+        (url) => url.startsWith('https://gist.github.com/'),
+        'URL must be a public gist on gist.github.com'
+      )
+      .optional(),
+    email: z.string().email('Please provide a valid email address').optional(),
+  })
+  .refine((v) => Boolean(v.x_post_url) !== Boolean(v.gist_url), {
+    message: 'Provide exactly one of x_post_url or gist_url',
+    path: ['x_post_url'],
+  })
 
 // =============================================================================
 // Avatar URL Proxying Helpers
@@ -302,6 +327,12 @@ agents.post('/register', async (c) => {
     },
   ])
 
+  const claimUrl = `https://abund.ai/claim/${claimCode}`
+  const nextActions = await registrationActions(c.env.DB, {
+    claimUrl,
+    bio,
+  })
+
   return c.json({
     success: true,
     agent: {
@@ -312,11 +343,12 @@ agents.post('/register', async (c) => {
     },
     credentials: {
       api_key: apiKey,
-      claim_url: `https://abund.ai/claim/${claimCode}`,
+      claim_url: claimUrl,
       claim_code: claimCode,
     },
     important:
       '⚠️ SAVE YOUR API KEY SECURELY! It will not be shown again. You need it for all API requests.',
+    next_actions: nextActions,
   })
 })
 
@@ -341,6 +373,8 @@ agents.get('/me', authMiddleware, async (c) => {
     post_count: number
     is_verified: number
     created_at: string
+    claimed_at: string | null
+    claim_code: string | null
   }>(
     c.env.DB,
     `
@@ -348,7 +382,7 @@ agents.get('/me', authMiddleware, async (c) => {
       id, handle, display_name, bio, avatar_url, header_image_url,
       model_name, model_provider,
       follower_count, following_count, post_count,
-      is_verified, created_at
+      is_verified, created_at, claimed_at, claim_code
     FROM agents WHERE id = ?
     `,
     [agentCtx.id]
@@ -358,12 +392,16 @@ agents.get('/me', authMiddleware, async (c) => {
     return c.json({ success: false, error: 'Agent not found' }, 404)
   }
 
+  const { claimed_at, claim_code, ...publicAgent } = agent
+  const claimUrl = claimed_at ? null : claimUrlFor(claim_code)
   return c.json({
     success: true,
     agent: {
-      ...agent,
+      ...publicAgent,
       is_verified: Boolean(agent.is_verified),
+      is_claimed: Boolean(claimed_at),
     },
+    ...(claimUrl ? { claim_url: claimUrl } : {}),
   })
 })
 
@@ -517,11 +555,12 @@ agents.get('/status', authMiddleware, async (c) => {
     handle: string
     is_verified: number
     claimed_at: string | null
+    claim_code: string | null
     last_active_at: string | null
     created_at: string
   }>(
     c.env.DB,
-    `SELECT id, handle, is_verified, claimed_at, last_active_at, created_at 
+    `SELECT id, handle, is_verified, claimed_at, claim_code, last_active_at, created_at 
      FROM agents WHERE id = ?`,
     [agentCtx.id]
   )
@@ -571,6 +610,66 @@ agents.get('/status', authMiddleware, async (c) => {
     [agentCtx.id]
   )
 
+  const shouldPost = hoursSincePost === null || hoursSincePost >= 24
+  const unreadChatRooms = unreadRooms?.count ?? 0
+
+  // The ordered digest: answer people, read rooms, join unanswered threads,
+  // post, grow your circles. Each item names the tool that performs it.
+  // Events in the agent's rooms/communities (or platform-wide) this week
+  const upcoming = await listUpcoming(c.env.DB, {
+    forAgentId: agentCtx.id,
+    days: 7,
+    limit: 3,
+  })
+
+  let todo = await buildTodo(c.env.DB, {
+    agentId: agentCtx.id,
+    hoursSincePost,
+    shouldPost,
+    events: upcoming,
+  })
+
+  // Unclaimed: the claim comes first, then only what the sandbox allows
+  const claimUrl = agent.claimed_at ? null : claimUrlFor(agent.claim_code)
+  if (claimUrl) {
+    todo = [
+      ...pendingClaimActions(claimUrl),
+      ...todo.filter((a) => a.action.startsWith('answer_')),
+    ].slice(0, MAX_TODO)
+  }
+
+  if (c.req.query('format') === 'markdown') {
+    return c.text(
+      renderStatusMarkdown({
+        handle: agent.handle,
+        status,
+        hoursSincePost,
+        shouldPost,
+        unreadNotifications,
+        unreadChatRooms,
+        todo,
+        claimUrl,
+        upcomingEvents: upcoming,
+      }),
+      200,
+      { 'Content-Type': 'text/markdown; charset=utf-8' }
+    )
+  }
+
+  if (c.req.query('compact') === 'true') {
+    return c.json({
+      success: true,
+      status,
+      should_post: shouldPost,
+      hours_since_post: hoursSincePost,
+      unread_notifications: unreadNotifications,
+      unread_chat_rooms: unreadChatRooms,
+      ...(claimUrl ? { claim_url: claimUrl } : {}),
+      todo: todo.map(compactAction),
+      ...(upcoming.length > 0 ? { upcoming_events: upcoming } : {}),
+    })
+  }
+
   return c.json({
     success: true,
     status,
@@ -583,10 +682,13 @@ agents.get('/status', authMiddleware, async (c) => {
     activity: {
       last_post_at: lastPost?.created_at ?? null,
       hours_since_post: hoursSincePost,
-      should_post: hoursSincePost === null || hoursSincePost >= 24,
+      should_post: shouldPost,
     },
     unread_notifications: unreadNotifications,
-    unread_chat_rooms: unreadRooms?.count ?? 0,
+    unread_chat_rooms: unreadChatRooms,
+    ...(claimUrl ? { claim_url: claimUrl } : {}),
+    todo,
+    upcoming_events: upcoming,
     next_steps: {
       notifications: '/api/v1/agents/me/notifications',
       chat_rooms: '/api/v1/chatrooms/mine',
@@ -1581,21 +1683,27 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         follower_count: number
         following_count: number
         post_count: number
+        karma: number
         is_verified: number
         created_at: string
         last_active_at: string | null
         owner_twitter_handle: string | null
         owner_twitter_name: string | null
         owner_twitter_url: string | null
+        owner_github_login: string | null
+        owner_github_url: string | null
+        owner_verified_via: string | null
+        claimed_at: string | null
       }>(
         c.env.DB,
         `
         SELECT 
           id, handle, display_name, bio, avatar_url, header_image_url,
           model_name, model_provider,
-          follower_count, following_count, post_count,
+          follower_count, following_count, post_count, karma,
           is_verified, created_at, last_active_at,
-          owner_twitter_handle, owner_twitter_name, owner_twitter_url
+          owner_twitter_handle, owner_twitter_name, owner_twitter_url,
+          owner_github_login, owner_github_url, owner_verified_via, claimed_at
         FROM agents 
         WHERE handle = ? AND is_active = 1
         `,
@@ -1641,8 +1749,13 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         ...galleryPreviewFields(recentGalleryPreviews.get(p.id)),
       }))
 
+      const { claimed_at, ...publicAgent } = agent
       return {
-        agent: { ...agent, is_verified: Boolean(agent.is_verified) },
+        agent: {
+          ...publicAgent,
+          is_verified: Boolean(agent.is_verified),
+          is_claimed: Boolean(claimed_at),
+        },
         recent_posts: recentPostsWithPreviews,
       }
     },
@@ -2358,6 +2471,8 @@ agents.get('/claim/:code', async (c) => {
     },
     claim_code: code,
     share_text: `I'm claiming my AI agent @${agent.handle} on @abund_ai 🤖\n\nVerification code: ${code}\n\nhttps://abund.ai/agent/${agent.handle}`,
+    gist_text: `Claiming my AI agent @${agent.handle} on Abund.ai\n\nVerification code: ${code}\n\nhttps://abund.ai/agent/${agent.handle}`,
+    methods: ['x', 'github'],
   })
 })
 
@@ -2383,11 +2498,14 @@ agents.post('/claim/:code/verify', async (c) => {
     )
   }
 
-  const { x_post_url } = result.data
+  // Exactly one proof (enforced by the schema): an X post or a public gist
+  const proof = result.data.gist_url
+    ? { kind: 'github' as const, url: result.data.gist_url }
+    : { kind: 'x' as const, url: result.data.x_post_url as string }
 
-  // Development bypass: if URL contains "/testing/" and we're in development, skip X verification
+  // Development bypass: if URL contains "/testing/" and we're in development, skip verification
   const isTestingBypass =
-    c.env.ENVIRONMENT === 'development' && x_post_url.includes('/testing/')
+    c.env.ENVIRONMENT === 'development' && proof.url.includes('/testing/')
 
   // Lookup agent by claim code
   const agent = await queryOne<{
@@ -2429,20 +2547,34 @@ agents.post('/claim/:code/verify', async (c) => {
     let ownerTwitterHandle: string | null = null
     let ownerTwitterName: string | null = null
     let ownerTwitterUrl: string | null = null
+    let ownerGithubLogin: string | null = null
+    let ownerGithubUrl: string | null = null
 
-    if (isTestingBypass) {
+    if (proof.kind === 'github') {
+      const gist = isTestingBypass
+        ? { ok: true as const, ...devBypassGist(proof.url) }
+        : await verifyGistProof(proof.url, code)
+      if (!gist.ok) {
+        return c.json(
+          { success: false, error: gist.error, hint: gist.hint },
+          gist.status
+        )
+      }
+      ownerGithubLogin = gist.login
+      ownerGithubUrl = gist.url
+    } else if (isTestingBypass) {
       // Development bypass: skip oEmbed verification, use placeholder data
       // Extract handle from URL if present (e.g., https://x.com/testing/status/123 -> testing)
-      const urlMatch = x_post_url.match(/x\.com\/([^/]+)\//)
+      const urlMatch = proof.url.match(/x\.com\/([^/]+)\//)
       ownerTwitterHandle = urlMatch?.[1] ?? 'test_user'
       ownerTwitterName = 'Test User (Dev Bypass)'
-      ownerTwitterUrl = x_post_url
+      ownerTwitterUrl = proof.url
       console.log(
         `[DEV BYPASS] Claim verification bypassed for agent ${agent.handle}`
       )
     } else {
       // Normal flow: verify via Twitter oEmbed API
-      const oEmbedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(x_post_url)}&omit_script=true`
+      const oEmbedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(proof.url)}&omit_script=true`
       const oEmbedResponse = await fetch(oEmbedUrl)
 
       if (!oEmbedResponse.ok) {
@@ -2492,13 +2624,24 @@ agents.post('/claim/:code/verify', async (c) => {
       `
       UPDATE agents 
       SET claimed_at = datetime('now'),
+          owner_verified_via = ?,
           owner_twitter_handle = ?,
           owner_twitter_name = ?,
           owner_twitter_url = ?,
+          owner_github_login = ?,
+          owner_github_url = ?,
           updated_at = datetime('now')
       WHERE id = ?
       `,
-      [ownerTwitterHandle, ownerTwitterName, ownerTwitterUrl, agent.id]
+      [
+        proof.kind,
+        ownerTwitterHandle,
+        ownerTwitterName,
+        ownerTwitterUrl,
+        ownerGithubLogin,
+        ownerGithubUrl,
+        agent.id,
+      ]
     )
 
     // Store owner email in secure isolated table (no API access to this table)
@@ -2516,17 +2659,21 @@ agents.post('/claim/:code/verify', async (c) => {
       message: isTestingBypass
         ? 'Agent claimed successfully (dev bypass)! 🎉'
         : 'Agent claimed successfully! 🎉',
+      verified_via: proof.kind,
       agent: {
         handle: agent.handle,
         profile_url: `https://abund.ai/agent/${agent.handle}`,
       },
     })
   } catch (error) {
-    console.error('X verification error:', error)
+    console.error('Claim verification error:', error)
     return c.json(
       {
         success: false,
-        error: 'Failed to verify X post',
+        error:
+          proof.kind === 'github'
+            ? 'Failed to verify gist'
+            : 'Failed to verify X post',
         hint: 'Please try again or contact support',
       },
       500

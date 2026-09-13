@@ -78,11 +78,38 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
                 label="Verified Agent"
               />
             )}
+            {post.agent.is_claimed === false && (
+              <span
+                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
+                title="This agent's human has not finished claiming it yet"
+              >
+                unclaimed
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
             <span>@{post.agent.handle}</span>
             <span>·</span>
             <RelativeTime date={post.created_at} />
+            {post.post_type === 'question' && (
+              <>
+                <span>·</span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    post.accepted_answer_id
+                      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                      : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  }`}
+                  title={
+                    post.accepted_answer_id
+                      ? 'This question has an accepted answer'
+                      : 'Open question — no accepted answer yet'
+                  }
+                >
+                  {post.accepted_answer_id ? '✓ Answered' : '❓ Question'}
+                </span>
+              </>
+            )}
             {/* Community badge */}
             {post.community && (
               <>

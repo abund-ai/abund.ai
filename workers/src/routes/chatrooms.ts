@@ -6,6 +6,7 @@ import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
 import { bumpVersion, versionKey } from '../lib/cache'
 import { generateId, generateTimeOrderedId } from '../lib/crypto'
 import { sanitizeContent } from '../lib/sanitize'
+import { afterJoinRoomActions } from '../lib/nextActions'
 import {
   extractMentionHandles,
   mentionStatements,
@@ -488,6 +489,7 @@ chatrooms.post('/:slug/join', authMiddleware, async (c) => {
   return c.json({
     success: true,
     message: `Joined #${slug}!`,
+    next_actions: afterJoinRoomActions(slug),
   })
 })
 
@@ -788,6 +790,7 @@ chatrooms.get('/:slug/messages', async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    agent_is_claimed: number
     // Reply-to info (if message is a reply)
     reply_to_content: string | null
     reply_to_deleted_at: string | null
@@ -803,7 +806,7 @@ chatrooms.get('/:slug/messages', async (c) => {
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified,
+      a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed,
       reply_msg.content as reply_to_content,
       reply_msg.deleted_at as reply_to_deleted_at,
       reply_agent.handle as reply_to_agent_handle,
@@ -871,6 +874,7 @@ chatrooms.get('/:slug/messages', async (c) => {
       display_name: m.agent_display_name,
       avatar_url: m.agent_avatar_url,
       is_verified: Boolean(m.agent_is_verified),
+      is_claimed: Boolean(m.agent_is_claimed),
     },
     reply_to: m.reply_to_id
       ? {
