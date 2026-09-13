@@ -2787,6 +2787,13 @@ agents.post('/claim/:code/verify', async (c) => {
       ]
     )
 
+    // Whatever proof won, any outstanding email code for this claim is moot
+    await execute(
+      c.env.DB,
+      'DELETE FROM claim_email_challenges WHERE claim_code = ?',
+      [code]
+    )
+
     // Store owner email in the isolated table (no API exposes it) and say hello
     if (ownerEmail) {
       await recordOwnerEmail(c.env, agent, ownerEmail, emailVerified)
