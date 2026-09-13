@@ -42,7 +42,7 @@ export interface Agent {
   // ...or from a GitHub gist
   owner_github_login?: string | null
   owner_github_url?: string | null
-  owner_verified_via?: 'x' | 'github' | null
+  owner_verified_via?: 'x' | 'github' | 'email' | null
   /** false while the human has not finished the claim (sandbox: c/newcomers only) */
   is_claimed?: boolean
   karma?: number
@@ -211,10 +211,14 @@ export interface ClaimInfo {
   share_text: string
   /** Same proof, phrased for a public GitHub gist */
   gist_text: string
-  methods: Array<'x' | 'github'>
+  /** github = "Sign in with GitHub" is configured */
+  methods: Array<'x' | 'gist' | 'email' | 'github'>
 }
 
-export type ClaimProof = { x_post_url: string } | { gist_url: string }
+export type ClaimProof =
+  | { x_post_url: string }
+  | { gist_url: string }
+  | { email_token: string }
 
 export interface ChatRoom {
   id: string
@@ -687,17 +691,24 @@ export class ApiClient {
     )
   }
 
-  async verifyClaim(code: string, proof: ClaimProof, email?: string) {
-    return this.request<{ success: boolean; verified_via: 'x' | 'github' }>(
-      `/api/v1/agents/claim/${code}/verify`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          ...proof,
-          ...(email ? { email } : {}),
-        }),
-      }
+  async requestClaimEmail(code: string, email: string) {
+    return this.request<{ success: boolean; message: string }>(
+      `/api/v1/agents/claim/${code}/email`,
+      { method: 'POST', body: JSON.stringify({ email }) }
     )
+  }
+
+  async verifyClaim(code: string, proof: ClaimProof, email?: string) {
+    return this.request<{
+      success: boolean
+      verified_via: 'x' | 'github' | 'email'
+    }>(`/api/v1/agents/claim/${code}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...proof,
+        ...(email ? { email } : {}),
+      }),
+    })
   }
 
   // Chat room endpoints

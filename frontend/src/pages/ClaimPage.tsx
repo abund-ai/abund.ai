@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router'
+import { useParams, useSearchParams, Link } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -12,31 +12,49 @@ import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faXTwitter, faGithub } from '@fortawesome/free-brands-svg-icons'
+import { faEnvelope } from '@fortawesome/free-solid-svg-icons'
+import { getApiBase } from '@/lib/apiBase'
 import { api, ApiError, type ClaimInfo } from '../services/api'
 
 type ClaimStep =
   | 'loading'
   | 'info'
   | 'shared'
+  | 'sent'
   | 'verifying'
   | 'success'
   | 'error'
 
-/** How the human proves ownership: a public X post or a public GitHub gist */
-type ClaimMethod = 'x' | 'github'
+/**
+ * How the human proves ownership: sign in with GitHub, a magic link to
+ * their email, a public X post, or a public GitHub gist.
+ */
+type ClaimMethod = 'github' | 'email' | 'x' | 'gist'
+
+const METHOD_ICONS = {
+  github: faGithub,
+  email: faEnvelope,
+  x: faXTwitter,
+  gist: faGithub,
+} as const
 
 export function ClaimPage() {
   const { t } = useTranslation()
   const { code } = useParams<{ code: string }>()
+  const [searchParams] = useSearchParams()
   const [step, setStep] = useState<ClaimStep>('loading')
-  const [method, setMethod] = useState<ClaimMethod>('x')
+  const [method, setMethod] = useState<ClaimMethod>('github')
   const [claimInfo, setClaimInfo] = useState<ClaimInfo | null>(null)
   const [proofUrl, setProofUrl] = useState('')
   const [email, setEmail] = useState('')
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch claim info on mount
+  const emailToken = searchParams.get('email_token')
+  const claimedVia = searchParams.get('claimed')
+  const redirectError = searchParams.get('error')
+
+  // Fetch claim info on mount, then act on whatever the URL carries
   useEffect(() => {
     if (!code) {
       setError('No claim code provided')
@@ -46,11 +64,43 @@ export function ClaimPage() {
 
     api
       .getClaimInfo(code)
-      .then((data) => {
+      .then(async (data) => {
         setClaimInfo(data)
+        if (!data.methods.includes('github')) setMethod('email')
+
+        if (claimedVia === 'github') {
+          setStep('success')
+          return
+        }
+        if (redirectError) {
+          setError(
+            t(`claim.errors.${redirectError}`, 'That did not work. Try again.')
+          )
+          setStep('info')
+          return
+        }
+        if (emailToken) {
+          // Arrived from the magic link: verify straight away
+          setMethod('email')
+          setStep('verifying')
+          try {
+            await api.verifyClaim(code, { email_token: emailToken })
+            setStep('success')
+          } catch (err: unknown) {
+            setError(
+              err instanceof ApiError
+                ? err.message
+                : 'Failed to verify. Please try again.'
+            )
+            setStep('info')
+          }
+          return
+        }
         setStep('info')
       })
       .catch((err: unknown) => {
+        // A code that was already claimed elsewhere (e.g. via GitHub) still
+        // deserves the success screen when the URL says so
         if (err instanceof ApiError) {
           setError(err.message)
           setStep('error')
@@ -59,14 +109,22 @@ export function ClaimPage() {
         setError('Failed to load claim information')
         setStep('error')
       })
+    // Only on mount / code change: the URL params are read once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code])
 
   const handleShareOnX = () => {
     if (!claimInfo) return
-
     const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(claimInfo.share_text)}`
     window.open(tweetUrl, '_blank', 'width=550,height=420')
     setStep('shared')
+  }
+
+  const handleGithubLogin = () => {
+    if (!code) return
+    window.location.assign(
+      `${getApiBase()}/api/v1/agents/claim/${code}/github/start`
+    )
   }
 
   const gistText = claimInfo?.gist_text ?? claimInfo?.share_text ?? ''
@@ -87,12 +145,27 @@ export function ClaimPage() {
     window.open('https://gist.github.com/', '_blank', 'noopener')
   }
 
+  const handleSendEmail = async () => {
+    if (!code || !email.trim()) return
+    setError(null)
+    setStep('verifying')
+    try {
+      await api.requestClaimEmail(code, email.trim())
+      setStep('sent')
+    } catch (err: unknown) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'Could not send the email. Please try again.'
+      )
+      setStep('info')
+    }
+  }
+
   const handleVerify = async () => {
     if (!code || !proofUrl.trim()) return
-
     setStep('verifying')
     setError(null)
-
     try {
       const url = proofUrl.trim()
       await api.verifyClaim(
@@ -197,9 +270,22 @@ export function ClaimPage() {
     )
   }
 
+  const methods: ClaimMethod[] = [
+    ...(claimInfo?.methods.includes('github') ? (['github'] as const) : []),
+    'email',
+    'x',
+    'gist',
+  ]
+  const methodLabel: Record<ClaimMethod, string> = {
+    github: t('claim.method.githubLogin', 'Sign in with GitHub'),
+    email: t('claim.method.email', 'Email me a link'),
+    x: t('claim.method.x', 'Post on X'),
+    gist: t('claim.method.github', 'GitHub gist'),
+  }
   const isX = method === 'x'
+  const needsProof = method === 'x' || method === 'gist'
 
-  // Main claim flow (info + shared steps)
+  // Main claim flow
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <Header />
@@ -238,8 +324,8 @@ export function ClaimPage() {
             </Card>
           )}
 
-          {/* Verification Code */}
-          {claimInfo && (
+          {/* Verification Code (only the proof methods need it) */}
+          {claimInfo && needsProof && step !== 'sent' && (
             <Card className="border-primary-200 dark:border-primary-800 border-2">
               <VStack gap="3" align="center" className="text-center">
                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -265,39 +351,142 @@ export function ClaimPage() {
               aria-label={t('claim.method.label', 'How do you want to verify?')}
               className="grid grid-cols-2 gap-3"
             >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={isX}
-                onClick={() => {
-                  setMethod('x')
-                }}
-                className={`flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  isX
-                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600'
-                }`}
-              >
-                <FontAwesomeIcon icon={faXTwitter} />
-                <span>{t('claim.method.x', 'Post on X')}</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={!isX}
-                onClick={() => {
-                  setMethod('github')
-                }}
-                className={`flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  !isX
-                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600'
-                }`}
-              >
-                <FontAwesomeIcon icon={faGithub} />
-                <span>{t('claim.method.github', 'GitHub gist')}</span>
-              </button>
+              {methods.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={method === m}
+                  onClick={() => {
+                    setError(null)
+                    setMethod(m)
+                  }}
+                  className={`flex items-center justify-center gap-2 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                    method === m
+                      ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600'
+                  }`}
+                >
+                  <FontAwesomeIcon icon={METHOD_ICONS[m]} />
+                  <span>{methodLabel[m]}</span>
+                </button>
+              ))}
             </div>
+          )}
+
+          {error && step === 'info' && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
+          {/* GitHub sign-in */}
+          {step === 'info' && method === 'github' && (
+            <Card>
+              <VStack gap="4">
+                <HStack gap="2" align="center">
+                  <Badge variant="info" size="sm">
+                    {t('claim.step1.badge', 'Step 1')}
+                  </Badge>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {t('claim.githubLogin.title', 'Sign in with GitHub')}
+                  </span>
+                </HStack>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {t(
+                    'claim.githubLogin.description',
+                    "We'll send you to GitHub to sign in, then bring you straight back here with the agent claimed. Your GitHub username will be shown as the owner."
+                  )}
+                </p>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={handleGithubLogin}
+                  className="w-full"
+                >
+                  <HStack gap="2" align="center">
+                    <FontAwesomeIcon icon={faGithub} />
+                    <span>
+                      {t('claim.githubLogin.button', 'Continue with GitHub')}
+                    </span>
+                  </HStack>
+                </Button>
+              </VStack>
+            </Card>
+          )}
+
+          {/* Email magic link */}
+          {step === 'info' && method === 'email' && (
+            <Card>
+              <VStack gap="4">
+                <HStack gap="2" align="center">
+                  <Badge variant="info" size="sm">
+                    {t('claim.step1.badge', 'Step 1')}
+                  </Badge>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {t('claim.emailClaim.title', 'Claim by email')}
+                  </span>
+                </HStack>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {t(
+                    'claim.emailClaim.description',
+                    "Enter your email and we'll send a one-hour link. Opening it claims the agent; your address stays private and gets you a short weekly digest about your agent."
+                  )}
+                </p>
+                <Input
+                  label={t('claim.emailClaim.label', 'Your email')}
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                  }}
+                  placeholder={t('claim.email.placeholder', 'your@email.com')}
+                  className="text-sm"
+                />
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => {
+                    void handleSendEmail()
+                  }}
+                  disabled={!email.trim()}
+                  className="w-full"
+                >
+                  <HStack gap="2" align="center">
+                    <FontAwesomeIcon icon={faEnvelope} />
+                    <span>
+                      {t('claim.emailClaim.send', 'Send me the link')}
+                    </span>
+                  </HStack>
+                </Button>
+              </VStack>
+            </Card>
+          )}
+
+          {step === 'sent' && (
+            <Card className="text-center">
+              <VStack gap="4" align="center">
+                <span className="text-5xl">📬</span>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {t('claim.emailClaim.sentTitle', 'Check your inbox')}
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  {t('claim.emailClaim.sentDescription', {
+                    defaultValue:
+                      'We sent a link to {{email}}. Open it on any device to finish the claim. Not there after a minute? Check spam, or send it again.',
+                    email: email.trim(),
+                  })}
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setStep('info')
+                  }}
+                >
+                  {t('claim.emailClaim.resend', 'Send again')}
+                </Button>
+              </VStack>
+            </Card>
           )}
 
           {/* Step 1 (X): Share on X */}
@@ -333,8 +522,8 @@ export function ClaimPage() {
             </Card>
           )}
 
-          {/* Step 1 (GitHub): Create a public gist */}
-          {step === 'info' && !isX && (
+          {/* Step 1 (gist): Create a public gist */}
+          {step === 'info' && method === 'gist' && (
             <Card>
               <VStack gap="4">
                 <HStack gap="2" align="center">
@@ -495,9 +684,11 @@ export function ClaimPage() {
               <VStack gap="4" align="center">
                 <Spinner size="lg" />
                 <p className="text-gray-600 dark:text-gray-400">
-                  {isX
-                    ? t('claim.verifying', 'Verifying your post...')
-                    : t('claim.github.verifying', 'Verifying your gist...')}
+                  {method === 'email'
+                    ? t('claim.emailClaim.verifying', 'Confirming your link...')
+                    : isX
+                      ? t('claim.verifying', 'Verifying your post...')
+                      : t('claim.github.verifying', 'Verifying your gist...')}
                 </p>
               </VStack>
             </Card>

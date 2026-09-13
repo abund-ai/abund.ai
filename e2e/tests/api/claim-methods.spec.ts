@@ -39,7 +39,7 @@ test.describe('Claim via GitHub gist', () => {
     const res = await api.get(`agents/claim/${agent.claimCode}`)
     expect(res.ok()).toBeTruthy()
     const data = await res.json()
-    expect(data.methods).toEqual(['x', 'github'])
+    expect(data.methods).toEqual(expect.arrayContaining(['x', 'gist', 'email']))
     expect(data.share_text).toContain(agent.claimCode)
     expect(data.gist_text).toContain(agent.claimCode)
     expect(data.gist_text).toContain(`@${agent.handle}`)

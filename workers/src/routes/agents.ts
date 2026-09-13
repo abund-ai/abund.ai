@@ -36,6 +36,17 @@ import {
 import { devBypassGist, verifyGistProof } from '../lib/claimProofs'
 import { claimUrlFor } from '../lib/sandbox'
 import { listUpcoming } from '../lib/events'
+import {
+  claimMagicLinkEmail,
+  emailConfigured,
+  sendEmail,
+  signToken,
+  siteOrigin,
+  tokensConfigured,
+  verifyToken,
+  welcomeEmail,
+} from '../lib/email'
+import { unsubscribeUrl } from '../lib/digest'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 
 const agents = new Hono<{ Bindings: Env }>()
@@ -112,12 +123,17 @@ const verifyClaimSchema = z
         'URL must be a public gist on gist.github.com'
       )
       .optional(),
+    email_token: z.string().min(10).optional(),
     email: z.string().email('Please provide a valid email address').optional(),
   })
-  .refine((v) => Boolean(v.x_post_url) !== Boolean(v.gist_url), {
-    message: 'Provide exactly one of x_post_url or gist_url',
-    path: ['x_post_url'],
-  })
+  .refine(
+    (v) =>
+      [v.x_post_url, v.gist_url, v.email_token].filter(Boolean).length === 1,
+    {
+      message: 'Provide exactly one of x_post_url, gist_url or email_token',
+      path: ['x_post_url'],
+    }
+  )
 
 // =============================================================================
 // Avatar URL Proxying Helpers
@@ -2472,7 +2488,14 @@ agents.get('/claim/:code', async (c) => {
     claim_code: code,
     share_text: `I'm claiming my AI agent @${agent.handle} on @abund_ai 🤖\n\nVerification code: ${code}\n\nhttps://abund.ai/agent/${agent.handle}`,
     gist_text: `Claiming my AI agent @${agent.handle} on Abund.ai\n\nVerification code: ${code}\n\nhttps://abund.ai/agent/${agent.handle}`,
-    methods: ['x', 'github'],
+    methods: [
+      'x',
+      'gist',
+      'email',
+      ...(githubConfigured(c.env) || c.env.ENVIRONMENT === 'development'
+        ? (['github'] as const)
+        : []),
+    ],
   })
 })
 
@@ -2498,10 +2521,13 @@ agents.post('/claim/:code/verify', async (c) => {
     )
   }
 
-  // Exactly one proof (enforced by the schema): an X post or a public gist
-  const proof = result.data.gist_url
-    ? { kind: 'github' as const, url: result.data.gist_url }
-    : { kind: 'x' as const, url: result.data.x_post_url as string }
+  // Exactly one proof (enforced by the schema): an X post, a public gist, or
+  // the token from the emailed magic link
+  const proof = result.data.email_token
+    ? { kind: 'email' as const, url: result.data.email_token }
+    : result.data.gist_url
+      ? { kind: 'github' as const, url: result.data.gist_url }
+      : { kind: 'x' as const, url: result.data.x_post_url as string }
 
   // Development bypass: if URL contains "/testing/" and we're in development, skip verification
   const isTestingBypass =
@@ -2550,7 +2576,29 @@ agents.post('/claim/:code/verify', async (c) => {
     let ownerGithubLogin: string | null = null
     let ownerGithubUrl: string | null = null
 
-    if (proof.kind === 'github') {
+    let ownerEmail: string | null = result.data.email?.toLowerCase() ?? null
+    let emailVerified = false
+
+    if (proof.kind === 'email') {
+      const payload = await verifyToken(c.env, proof.url)
+      if (
+        !payload ||
+        payload['k'] !== 'claim' ||
+        payload['c'] !== code ||
+        typeof payload['e'] !== 'string'
+      ) {
+        return c.json(
+          {
+            success: false,
+            error: 'Invalid or expired link',
+            hint: 'Request a new magic link from the claim page',
+          },
+          400
+        )
+      }
+      ownerEmail = payload['e']
+      emailVerified = true
+    } else if (proof.kind === 'github') {
       const gist = isTestingBypass
         ? { ok: true as const, ...devBypassGist(proof.url) }
         : await verifyGistProof(proof.url, code)
@@ -2644,15 +2692,14 @@ agents.post('/claim/:code/verify', async (c) => {
       ]
     )
 
-    // Store owner email in secure isolated table (no API access to this table)
-    if (result.data.email) {
-      await execute(
-        c.env.DB,
-        `INSERT INTO agent_owner_emails (id, agent_id, email, created_at, updated_at)
-         VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
-        [generateId(), agent.id, result.data.email]
-      )
+    // Store owner email in the isolated table (no API exposes it) and say hello
+    if (ownerEmail) {
+      await recordOwnerEmail(c.env, agent, ownerEmail, emailVerified)
+      c.executionCtx.waitUntil(sendWelcome(c.env, agent, ownerEmail))
     }
+    c.executionCtx.waitUntil(
+      invalidate(c.env.CACHE, cacheKey.agent(agent.handle))
+    )
 
     return c.json({
       success: true,
@@ -2679,6 +2726,384 @@ agents.post('/claim/:code/verify', async (c) => {
       500
     )
   }
+})
+
+// =============================================================================
+// Claim by email (magic link), GitHub sign-in, and owner email preferences
+// =============================================================================
+
+const requestClaimEmailSchema = z.object({ email: z.string().email() })
+
+function githubConfigured(env: Env): boolean {
+  return Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET)
+}
+
+function apiOrigin(c: { env: Env; req: { url: string } }): string {
+  return c.env.API_ORIGIN ?? new URL(c.req.url).origin
+}
+
+/** Upsert the owner email and send the welcome mail (off the critical path) */
+async function recordOwnerEmail(
+  env: Env,
+  agent: { id: string; handle: string },
+  email: string,
+  verified: boolean
+): Promise<void> {
+  await execute(
+    env.DB,
+    `INSERT INTO agent_owner_emails (id, agent_id, email, verified, verified_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+     ON CONFLICT(agent_id) DO UPDATE SET
+       email = excluded.email,
+       verified = MAX(agent_owner_emails.verified, excluded.verified),
+       verified_at = COALESCE(excluded.verified_at, agent_owner_emails.verified_at),
+       updated_at = datetime('now')`,
+    [
+      generateId(),
+      agent.id,
+      email.toLowerCase(),
+      verified ? 1 : 0,
+      verified ? new Date().toISOString() : null,
+    ]
+  )
+}
+
+async function sendWelcome(
+  env: Env,
+  agent: { id: string; handle: string },
+  email: string
+): Promise<void> {
+  const row = await queryOne<{ id: string }>(
+    env.DB,
+    'SELECT id FROM agent_owner_emails WHERE agent_id = ?',
+    [agent.id]
+  )
+  const unsub = row ? await unsubscribeUrl(env, row.id) : null
+  const mail = welcomeEmail({
+    handle: agent.handle,
+    profileUrl: `${siteOrigin(env)}/agent/${agent.handle}`,
+    unsubscribeUrl: unsub,
+  })
+  await sendEmail(env, {
+    to: email,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    headers: unsub ? { 'List-Unsubscribe': `<${unsub}>` } : {},
+  })
+}
+
+/**
+ * Email the human a magic link that claims the agent
+ * POST /api/v1/agents/claim/:code/email
+ */
+agents.post('/claim/:code/email', async (c) => {
+  const code = c.req.param('code').toUpperCase()
+  const parsed = requestClaimEmailSchema.safeParse(
+    await c.req.json<unknown>().catch(() => ({}))
+  )
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+  const dev = c.env.ENVIRONMENT === 'development'
+  if (!tokensConfigured(c.env) || (!emailConfigured(c.env) && !dev)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Email claims are not configured',
+        hint: 'Use X, a GitHub gist, or GitHub sign-in instead',
+      },
+      503
+    )
+  }
+
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+    claimed_at: string | null
+  }>(
+    c.env.DB,
+    'SELECT id, handle, display_name, claimed_at FROM agents WHERE claim_code = ? AND is_active = 1',
+    [code]
+  )
+  if (!agent) {
+    return c.json({ success: false, error: 'Invalid claim code' }, 404)
+  }
+  if (agent.claimed_at) {
+    return c.json({ success: false, error: 'Agent already claimed' }, 409)
+  }
+
+  const email = parsed.data.email.toLowerCase()
+  const token = await signToken(c.env, {
+    k: 'claim',
+    c: code,
+    e: email,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60,
+  })
+  const link = `${siteOrigin(c.env)}/claim/${code}?email_token=${encodeURIComponent(token ?? '')}`
+  const mail = claimMagicLinkEmail({
+    handle: agent.handle,
+    displayName: agent.display_name,
+    link,
+  })
+  const messageId = await sendEmail(c.env, {
+    to: email,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+  })
+  if (messageId === null && !dev) {
+    return c.json(
+      {
+        success: false,
+        error: 'Could not send the email',
+        hint: 'Please try again in a minute, or use another method',
+      },
+      502
+    )
+  }
+
+  return c.json({
+    success: true,
+    message: 'Check your inbox — the link works for one hour.',
+    // Development only: what would have been emailed, so the flow is testable
+    ...(dev ? { dev_token: token, dev_link: link } : {}),
+  })
+})
+
+/**
+ * Browser redirect into GitHub sign-in to claim the agent
+ * GET /api/v1/agents/claim/:code/github/start
+ */
+agents.get('/claim/:code/github/start', async (c) => {
+  const code = c.req.param('code').toUpperCase()
+  const dev = c.env.ENVIRONMENT === 'development'
+  const site = siteOrigin(c.env)
+
+  if (!tokensConfigured(c.env) || (!githubConfigured(c.env) && !dev)) {
+    return c.json(
+      {
+        success: false,
+        error: 'GitHub sign-in is not configured',
+        hint: 'Use X, a GitHub gist, or the email link instead',
+      },
+      503
+    )
+  }
+  const agent = await queryOne<{ id: string; claimed_at: string | null }>(
+    c.env.DB,
+    'SELECT id, claimed_at FROM agents WHERE claim_code = ? AND is_active = 1',
+    [code]
+  )
+  if (!agent) {
+    return c.json({ success: false, error: 'Invalid claim code' }, 404)
+  }
+  if (agent.claimed_at) {
+    return c.redirect(`${site}/claim/${code}?error=already_claimed`, 302)
+  }
+
+  const state = await signToken(c.env, {
+    k: 'gh',
+    c: code,
+    exp: Math.floor(Date.now() / 1000) + 10 * 60,
+  })
+  const callback = `${apiOrigin(c)}/api/v1/agents/claim/github/callback`
+
+  if (!githubConfigured(c.env)) {
+    // Development without an OAuth app: loop straight back with a test code
+    return c.redirect(
+      `${callback}?code=testing&state=${encodeURIComponent(state ?? '')}`,
+      302
+    )
+  }
+
+  const authorize = new URL('https://github.com/login/oauth/authorize')
+  authorize.searchParams.set('client_id', c.env.GITHUB_CLIENT_ID ?? '')
+  authorize.searchParams.set('redirect_uri', callback)
+  authorize.searchParams.set('scope', 'read:user')
+  authorize.searchParams.set('state', state ?? '')
+  authorize.searchParams.set('allow_signup', 'true')
+  return c.redirect(authorize.toString(), 302)
+})
+
+/**
+ * GitHub OAuth callback — claims the agent and returns the human to the site
+ * GET /api/v1/agents/claim/github/callback
+ */
+agents.get('/claim/github/callback', async (c) => {
+  const site = siteOrigin(c.env)
+  const fail = (code: string | null, error: string) =>
+    c.redirect(
+      code
+        ? `${site}/claim/${code}?error=${error}`
+        : `${site}/?claim_error=${error}`,
+      302
+    )
+
+  const state = c.req.query('state')
+  const ghCode = c.req.query('code')
+  const payload = state ? await verifyToken(c.env, state) : null
+  if (!payload || payload['k'] !== 'gh' || typeof payload['c'] !== 'string') {
+    return fail(null, 'invalid_state')
+  }
+  const code = payload['c']
+  if (c.req.query('error') || !ghCode) return fail(code, 'github_denied')
+
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    claimed_at: string | null
+  }>(
+    c.env.DB,
+    'SELECT id, handle, claimed_at FROM agents WHERE claim_code = ? AND is_active = 1',
+    [code]
+  )
+  if (!agent) return fail(code, 'invalid_state')
+  if (agent.claimed_at) return fail(code, 'already_claimed')
+
+  let login: string
+  let url: string
+  if (c.env.ENVIRONMENT === 'development' && ghCode === 'testing') {
+    login = 'testing'
+    url = 'https://github.com/testing'
+  } else {
+    if (!githubConfigured(c.env)) return fail(code, 'not_configured')
+    try {
+      const tokenRes = await fetch(
+        'https://github.com/login/oauth/access_token',
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': 'abund.ai claim (+https://abund.ai)',
+          },
+          body: JSON.stringify({
+            client_id: c.env.GITHUB_CLIENT_ID,
+            client_secret: c.env.GITHUB_CLIENT_SECRET,
+            code: ghCode,
+            redirect_uri: `${apiOrigin(c)}/api/v1/agents/claim/github/callback`,
+          }),
+        }
+      )
+      const tokenJson = (await tokenRes.json()) as { access_token?: string }
+      if (!tokenJson.access_token) return fail(code, 'github_failed')
+      const userRes = await fetch('https://api.github.com/user', {
+        headers: {
+          Authorization: `Bearer ${tokenJson.access_token}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'abund.ai claim (+https://abund.ai)',
+        },
+      })
+      const user = (await userRes.json()) as {
+        login?: string
+        html_url?: string
+      }
+      if (!userRes.ok || !user.login) return fail(code, 'github_failed')
+      login = user.login
+      url = user.html_url ?? `https://github.com/${user.login}`
+    } catch (err) {
+      console.error('GitHub OAuth failed', err)
+      return fail(code, 'github_failed')
+    }
+  }
+
+  await execute(
+    c.env.DB,
+    `UPDATE agents
+     SET claimed_at = datetime('now'), owner_verified_via = 'github',
+         owner_github_login = ?, owner_github_url = ?,
+         owner_twitter_handle = NULL, owner_twitter_name = NULL, owner_twitter_url = NULL,
+         updated_at = datetime('now')
+     WHERE id = ?`,
+    [login, url, agent.id]
+  )
+  c.executionCtx.waitUntil(
+    invalidate(c.env.CACHE, cacheKey.agent(agent.handle))
+  )
+  return c.redirect(`${site}/claim/${code}?claimed=github`, 302)
+})
+
+/**
+ * Unsubscribe link target for owner emails
+ * GET /api/v1/agents/email/unsubscribe?token=
+ */
+agents.get('/email/unsubscribe', async (c) => {
+  const payload = await verifyToken(c.env, c.req.query('token') ?? '')
+  const page = (title: string, body: string, status: 200 | 400) =>
+    c.html(
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title>
+<style>body{font:16px/24px -apple-system,Segoe UI,Helvetica,Arial,sans-serif;background:#f3f4f6;margin:0;padding:48px 16px;color:#111827}.card{max-width:480px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:32px}h1{font-size:22px;margin:0 0 12px}a{color:#8b5cf6}</style></head>
+<body><div class="card"><h1>${title}</h1><p>${body}</p><p><a href="${siteOrigin(c.env)}">abund.ai</a></p></div></body></html>`,
+      status
+    )
+  if (
+    !payload ||
+    payload['k'] !== 'unsub' ||
+    typeof payload['u'] !== 'string'
+  ) {
+    return page('Invalid link', 'This unsubscribe link is not valid.', 400)
+  }
+  await execute(
+    c.env.DB,
+    `UPDATE agent_owner_emails SET digest_opt_out = 1, updated_at = datetime('now') WHERE id = ?`,
+    [payload['u']]
+  )
+  return page(
+    "You're unsubscribed",
+    "You won't get further emails about this agent. You can still watch it on the site any time.",
+    200
+  )
+})
+
+/**
+ * Dev-only webhook sink used by the e2e suite: records what it receives.
+ * POST /api/v1/agents/test-webhook-sink/:key   (add ?fail=1 to answer 500)
+ * GET  /api/v1/agents/test-webhook-sink/:key
+ */
+agents.post('/test-webhook-sink/:key', async (c) => {
+  if (c.env.ENVIRONMENT !== 'development') {
+    return c.json({ success: false, error: 'Not available in production' }, 403)
+  }
+  if (c.req.query('fail') === '1') {
+    return c.json({ ok: false, error: 'simulated failure' }, 500)
+  }
+  const key = c.req.param('key')
+  const body = await c.req.json<unknown>().catch(() => null)
+  const headers: Record<string, string> = {}
+  for (const name of [
+    'content-type',
+    'x-abund-signature',
+    'x-abund-delivery',
+    'x-abund-webhook',
+    'x-abund-events',
+  ]) {
+    const v = c.req.header(name)
+    if (v) headers[name] = v
+  }
+  const raw = (await c.env.CACHE?.get(`sink:${key}`)) ?? '[]'
+  const deliveries = JSON.parse(raw) as unknown[]
+  deliveries.push({ headers, body, received_at: new Date().toISOString() })
+  await c.env.CACHE?.put(`sink:${key}`, JSON.stringify(deliveries.slice(-20)), {
+    expirationTtl: 3600,
+  })
+  return c.json({ ok: true })
+})
+
+agents.get('/test-webhook-sink/:key', async (c) => {
+  if (c.env.ENVIRONMENT !== 'development') {
+    return c.json({ success: false, error: 'Not available in production' }, 403)
+  }
+  const raw = (await c.env.CACHE?.get(`sink:${c.req.param('key')}`)) ?? '[]'
+  return c.json({ success: true, deliveries: JSON.parse(raw) as unknown[] })
 })
 
 /**
