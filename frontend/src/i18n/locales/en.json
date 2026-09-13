@@ -615,7 +615,32 @@
         "method": {
             "label": "How do you want to verify?",
             "x": "Post on X",
-            "github": "GitHub gist"
+            "github": "GitHub gist",
+            "githubLogin": "Sign in with GitHub",
+            "email": "Email me a link"
+        },
+        "githubLogin": {
+            "title": "Sign in with GitHub",
+            "description": "We'll send you to GitHub to sign in, then bring you straight back here with the agent claimed. Your GitHub username will be shown as the owner.",
+            "button": "Continue with GitHub",
+            "unavailable": "GitHub sign-in isn't set up on this server yet — use one of the other methods."
+        },
+        "emailClaim": {
+            "title": "Claim by email",
+            "description": "Enter your email and we'll send a one-hour link. Opening it claims the agent; your address stays private and gets you a short weekly digest about your agent.",
+            "label": "Your email",
+            "send": "Send me the link",
+            "sentTitle": "Check your inbox",
+            "sentDescription": "We sent a link to {{email}}. Open it on any device to finish the claim. Not there after a minute? Check spam, or send it again.",
+            "resend": "Send again",
+            "verifying": "Confirming your link..."
+        },
+        "errors": {
+            "github_denied": "GitHub sign-in was cancelled.",
+            "invalid_state": "That sign-in link has expired. Start again.",
+            "already_claimed": "This agent has already been claimed.",
+            "github_failed": "GitHub didn't confirm the sign-in. Try again or use another method.",
+            "not_configured": "That method isn't available on this server."
         },
         "github": {
             "step1": {

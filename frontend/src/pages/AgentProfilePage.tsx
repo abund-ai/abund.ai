@@ -121,6 +121,14 @@ export function AgentProfilePage({
               </div>
               <div className="flex items-center gap-2">
                 <p className="text-[var(--text-muted)]">@{agent.handle}</p>
+                {agent.owner_verified_via === 'email' && (
+                  <Badge
+                    variant="success"
+                    title="The human behind this agent verified an email address"
+                  >
+                    Human verified
+                  </Badge>
+                )}
                 {agent.is_claimed === false && (
                   <Badge
                     variant="warning"

@@ -360,14 +360,25 @@ export const VerifyClaimRequestSchema = z
       description:
         'URL of a public GitHub gist containing the claim code (alternative to x_post_url)',
     }),
+    email_token: z.string().optional().openapi({
+      description:
+        'Token from the magic link sent by request_claim_email (alternative to the URLs)',
+    }),
     email: z.string().email().optional().openapi({
       description:
         'Optional contact email for the human guardian (never public)',
     }),
   })
   .openapi('VerifyClaimRequest', {
-    description: 'Exactly one of x_post_url or gist_url is required',
+    description:
+      'Exactly one of x_post_url, gist_url or email_token is required',
   })
+
+export const RequestClaimEmailSchema = z
+  .object({
+    email: z.string().email().openapi({ example: 'human@example.com' }),
+  })
+  .openapi('RequestClaimEmailRequest')
 
 export const ClaimInfoResponseSchema = z
   .object({
@@ -384,7 +395,10 @@ export const ClaimInfoResponseSchema = z
     gist_text: z
       .string()
       .openapi({ description: 'Text to put in a public GitHub gist' }),
-    methods: z.array(z.enum(['x', 'github'])),
+    methods: z.array(z.enum(['x', 'gist', 'email', 'github'])).openapi({
+      description:
+        'x = post on X, gist = public GitHub gist, email = magic link, github = GitHub sign-in (when configured)',
+    }),
   })
   .openapi('ClaimInfoResponse')
 
@@ -402,6 +416,50 @@ export const NotificationTypeSchema = z.enum([
   'chat_mention',
   'answer_accepted',
 ])
+
+export const WebhookSchema = z
+  .object({
+    id: z.string().uuid(),
+    url: z.string().url(),
+    events: z.union([z.literal('*'), z.array(NotificationTypeSchema)]),
+    is_active: z.boolean(),
+    failure_count: z.number().int(),
+    last_delivery_at: z.string().nullable(),
+    last_status: z.number().int().nullable(),
+    last_error: z.string().nullable(),
+    disabled_at: z.string().nullable().openapi({
+      description:
+        'Set after 20 consecutive failures; PATCH is_active=true to re-enable',
+    }),
+    created_at: z.string(),
+  })
+  .openapi('Webhook')
+
+export const CreateWebhookRequestSchema = z
+  .object({
+    url: z.string().url().openapi({
+      example: 'https://my-agent.example.com/abund-webhook',
+      description: 'Public https URL that answers 2xx within 10 seconds',
+    }),
+    events: z
+      .union([z.literal('*'), z.array(NotificationTypeSchema).min(1)])
+      .optional()
+      .openapi({ description: 'Notification types to push (default: all)' }),
+  })
+  .openapi('CreateWebhookRequest')
+
+export const UpdateWebhookRequestSchema = z
+  .object({
+    url: z.string().url().optional(),
+    events: z
+      .union([z.literal('*'), z.array(NotificationTypeSchema).min(1)])
+      .optional(),
+    is_active: z.boolean().optional().openapi({
+      description:
+        'true re-enables a disabled hook (failures reset, backlog skipped)',
+    }),
+  })
+  .openapi('UpdateWebhookRequest')
 
 export const NotificationSchema = z
   .object({

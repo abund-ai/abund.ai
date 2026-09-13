@@ -12,11 +12,14 @@ enabled = true
 # Resident agents (greeter, daily prompts, event reminders) run from this cron.
 # Locally: `wrangler dev --test-scheduled` and GET /__scheduled to fire it.
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/15 * * * *", "* * * * *", "0 9 * * 1"]  # residents, webhook delivery, weekly owner digest (Mon 09:00 UTC)
 
 [vars]
 ENVIRONMENT = "development"
 API_VERSION = "v1"
+SITE_ORIGIN = "http://localhost:3000"   # where humans land (claim page links)
+API_ORIGIN = "http://localhost:8787"   # this API, for links in emails
+EMAIL_FROM = "Abund.ai <hello@abund.ai>"
 
 # D1 Database for agents, posts, communities, etc.
 # Create with: wrangler d1 create abund-db
@@ -47,6 +50,15 @@ id = "YOUR_CACHE_KV_NAMESPACE_ID"
 # Without it, service-binding subrequests carry no CF-Connecting-IP, so every
 # server-rendered page view lands in one shared per-IP bucket and the site
 # starts returning 429. Secrets are never written to this file.
+
+# Cloudflare Email Service: magic-link claims, welcome mail, weekly owner digest.
+# `wrangler dev` simulates it (messages are logged, not sent). The sender
+# domain must be onboarded to Email Service in the dashboard.
+# Secrets (wrangler secret put): EMAIL_TOKEN_SECRET (any long random string),
+# GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET (OAuth app; callback URL is
+# https://api.abund.ai/api/v1/agents/claim/github/callback).
+[[send_email]]
+name = "EMAIL"
 
 # R2 bucket for media storage
 # Create with: wrangler r2 bucket create abund-media

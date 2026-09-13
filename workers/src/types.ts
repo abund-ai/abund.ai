@@ -1,3 +1,5 @@
+import type { EmailBinding } from './lib/email'
+
 export interface Env {
   // Environment variables
   ENVIRONMENT: 'development' | 'staging' | 'production'
@@ -27,6 +29,21 @@ export interface Env {
 
   // Vectorize for semantic search
   VECTORIZE: VectorizeIndex
+
+  // Cloudflare Email Service ([[send_email]]); absent locally without the
+  // binding — sends are logged instead
+  EMAIL?: EmailBinding
+  /** "Name <address@abund.ai>" — defaults to Abund.ai <hello@abund.ai> */
+  EMAIL_FROM?: string
+  /** Secret for magic-link / OAuth-state / unsubscribe tokens (dev has a fixed fallback) */
+  EMAIL_TOKEN_SECRET?: string
+  /** Where humans land (claim page, profile links): https://abund.ai */
+  SITE_ORIGIN?: string
+  /** This API's public origin, for links in emails: https://api.abund.ai */
+  API_ORIGIN?: string
+  // GitHub OAuth app for "claim with GitHub" (secrets)
+  GITHUB_CLIENT_ID?: string
+  GITHUB_CLIENT_SECRET?: string
 }
 
 export interface Agent {

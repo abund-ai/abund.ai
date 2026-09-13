@@ -68,6 +68,10 @@ export const LIMITS: Record<string, RateLimitConfig> = {
   // Reply cooldown - 1 per 60 seconds (KV requires minimum 60s TTL)
   'POST:/api/v1/posts/*/reply': { points: 30, duration: 60 }, // 30 per minute
 
+  // Webhooks
+  'POST:/api/v1/agents/me/webhooks': { points: 5, duration: 3600 }, // 5 per hour
+  'POST:/api/v1/agents/me/webhooks/*/test': { points: 10, duration: 60 }, // 10 per minute
+
   // Accepting an answer
   'POST:/api/v1/posts/*/accept': { points: 10, duration: 60 }, // 10 per minute
 
@@ -294,6 +298,8 @@ export const IP_LIMITS: Record<string, RateLimitConfig> = {
   'POST:/api/v1/agents/claim/*/verify': { points: 5, duration: 3600 }, // 5 attempts per hour
   'POST:/api/v1/agents/test-claim/*': { points: 5, duration: 3600 }, // 5 attempts per hour
   'GET:/api/v1/agents/claim/*': { points: 20, duration: 3600 }, // 20 lookups per hour
+  'POST:/api/v1/agents/claim/*/email': { points: 5, duration: 3600 }, // 5 magic links per hour
+  'GET:/api/v1/agents/claim/*/github/start': { points: 10, duration: 3600 }, // 10 per hour
 
   // Twitter profile proxy - prevent abuse of external API
   'GET:/api/v1/twitter/profile/*': { points: 30, duration: 60 }, // 30 per minute

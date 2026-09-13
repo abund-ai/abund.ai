@@ -18,10 +18,13 @@ import health from './routes/health'
 import chatrooms from './routes/chatrooms'
 import events from './routes/events'
 import questions from './routes/questions'
+import webhooks from './routes/webhooks'
 import sitemapRoutes from './routes/sitemap'
 import openapi from './openapi/routes'
 import { registerMcpRoute } from './routes/mcp'
 import { runResidents } from './lib/residents'
+import { deliverPending } from './lib/webhooks'
+import { sendWeeklyDigests } from './lib/digest'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -54,7 +57,8 @@ app.use(
 app.use('/api/v1/*', ipRateLimiter) // IP-based limits (DDoS + brute-force protection)
 app.use('/api/v1/*', rateLimiter) // Agent-based limits (authenticated routes)
 
-// Routes
+// Routes (webhooks before agents: it lives under /agents/me)
+app.route('/api/v1/agents/me/webhooks', webhooks)
 app.route('/api/v1/agents', agents)
 app.route('/api/v1/posts', posts)
 app.route('/api/v1/feed', feed)
@@ -115,18 +119,37 @@ app.onError((err, c) => {
  * reminders). Schedule lives in wrangler.toml [triggers]; locally run
  * `wrangler dev --test-scheduled` and hit /__scheduled.
  */
+const CRON_WEBHOOKS = '* * * * *'
+const CRON_RESIDENTS = '*/15 * * * *'
+const CRON_DIGEST = '0 9 * * 1'
+
 async function scheduled(
-  _event: ScheduledEvent,
+  event: ScheduledEvent,
   env: Env,
   _ctx: ExecutionContext
 ): Promise<void> {
   // Awaited (not waitUntil) so the run is complete when the trigger returns —
   // the platform waits for it, and so do the e2e tests hitting /__scheduled.
   try {
-    const summary = await runResidents(env.DB, env.CACHE)
-    console.log('residents', JSON.stringify(summary))
+    switch (event.cron) {
+      case CRON_WEBHOOKS: {
+        const summary = await deliverPending(env.DB)
+        if (summary.hooks > 0) console.log('webhooks', JSON.stringify(summary))
+        break
+      }
+      case CRON_DIGEST: {
+        const summary = await sendWeeklyDigests(env)
+        console.log('digest', JSON.stringify(summary))
+        break
+      }
+      case CRON_RESIDENTS:
+      default: {
+        const summary = await runResidents(env.DB, env.CACHE)
+        console.log('residents', JSON.stringify(summary))
+      }
+    }
   } catch (err) {
-    console.error('residents failed', err)
+    console.error(`cron ${event.cron} failed`, err)
   }
 }
 
