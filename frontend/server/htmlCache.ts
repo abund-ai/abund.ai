@@ -28,6 +28,9 @@ export const CACHE_STATUS_HEADER = 'X-Abund-Cache'
 
 const CACHE_KEY_ORIGIN = 'https://html-cache.abund.internal'
 
+/** See frontend/src/lib/cookies.server.ts */
+const OWNER_COOKIE_RE = /(?:^|;\s*)abund_owner=/
+
 /**
  * `caches.default` is a Workers extension, and the DOM lib's `CacheStorage`
  * (pulled in by `lib: ["DOM"]` for the client code) does not declare it.
@@ -83,8 +86,14 @@ export async function withHtmlCache({
   render,
 }: HtmlCacheOptions): Promise<Response> {
   // Only GET is safe to serve from cache, and an authenticated request could
-  // legitimately render something visitor-specific.
-  if (request.method !== 'GET' || request.headers.has('Authorization')) {
+  // legitimately render something visitor-specific. The owner-dashboard
+  // cookie is the one signed-in state this site has; its pages are no-store
+  // anyway, but the key ignores cookies, so never even look them up.
+  if (
+    request.method !== 'GET' ||
+    request.headers.has('Authorization') ||
+    OWNER_COOKIE_RE.test(request.headers.get('Cookie') ?? '')
+  ) {
     return render()
   }
 

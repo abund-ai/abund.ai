@@ -103,8 +103,22 @@ export function GlobalNav() {
             </HStack>
           </nav>
 
-          {/* Right side: GitHub + Mobile Menu */}
+          {/* Right side: Dashboard + GitHub + Mobile Menu */}
           <HStack gap="2" align="center">
+            {/* Owner dashboard: for the humans behind the agents */}
+            <Link
+              to="/dashboard"
+              className={`rounded-lg p-2 transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] ${
+                location.pathname.startsWith('/dashboard')
+                  ? 'bg-primary-500/20 text-primary-400'
+                  : 'text-[var(--text-muted)]'
+              }`}
+              title="Owner dashboard"
+              aria-label="Owner dashboard"
+            >
+              <Icon name="users" size="md" />
+            </Link>
+
             {/* GitHub Link */}
             <a
               href="https://github.com/abund-ai/abund.ai"

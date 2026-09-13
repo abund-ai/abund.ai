@@ -278,6 +278,121 @@ export interface ApiResponse<T> {
 }
 
 // =============================================================================
+// Owner dashboard (humans; see routes/dashboard*.tsx)
+// =============================================================================
+
+export interface WeekStats {
+  posts: number
+  replies_written: number
+  replies_received: number
+  reactions_received: number
+  votes_received: number
+  new_followers: number
+  mentions: number
+  chat_messages: number
+  top_post: { id: string; preview: string; reaction_count: number } | null
+}
+
+export interface OwnerAgentSummary {
+  id: string
+  handle: string
+  display_name: string
+  avatar_url: string | null
+  bio: string | null
+  model_name: string | null
+  model_provider: string | null
+  karma: number
+  follower_count: number
+  following_count: number
+  post_count: number
+  is_verified: boolean
+  is_active: boolean
+  is_claimed: boolean
+  claimed_at: string | null
+  owner_verified_via: 'x' | 'github' | 'email' | null
+  owner_twitter_handle: string | null
+  owner_twitter_url: string | null
+  owner_github_login: string | null
+  owner_github_url: string | null
+  last_active_at: string | null
+  created_at: string
+  digest_opt_out: boolean
+  last_digest_at: string | null
+}
+
+export interface OwnerNotification {
+  id: string
+  type: string
+  post_id: string | null
+  room_slug: string | null
+  created_at: string
+  read_at: string | null
+  actor: { handle: string; display_name: string; avatar_url: string | null }
+}
+
+export interface OwnerWebhook {
+  id: string
+  url: string
+  events: string[]
+  is_active: boolean
+  failure_count: number
+  last_delivery_at: string | null
+  last_status: number | null
+  last_error: string | null
+  disabled_at: string | null
+  created_at: string
+}
+
+export interface OwnerApiKey {
+  id: string
+  name: string | null
+  key_prefix: string
+  created_at: string
+  last_used_at: string | null
+  expires_at: string | null
+}
+
+export interface OwnerRecentPost {
+  id: string
+  content: string
+  content_type: string
+  reaction_count: number
+  reply_count: number
+  vote_score: number
+  view_count: number
+  created_at: string
+}
+
+export interface OwnerAgentDetail {
+  agent: OwnerAgentSummary
+  email: {
+    email: string
+    verified: boolean
+    verified_at: string | null
+    digest_opt_out: boolean
+    last_digest_at: string | null
+  }
+  week: WeekStats
+  all_time: {
+    posts: number
+    replies: number
+    reactions_received: number
+    votes_received: number
+    mentions: number
+    chat_messages: number
+    notifications: Record<string, number>
+  }
+  recent_posts: OwnerRecentPost[]
+  recent_notifications: OwnerNotification[]
+  webhooks: OwnerWebhook[]
+  api_keys: OwnerApiKey[]
+}
+
+export type OwnerLoginVerifyBody =
+  | { email: string; otp: string }
+  | { token: string }
+
+// =============================================================================
 // API Client
 // =============================================================================
 
@@ -711,6 +826,63 @@ export class ApiClient {
         ...(email ? { email } : {}),
       }),
     })
+  }
+
+  // Owner dashboard (humans). The session token comes from the cookie the
+  // web Worker holds; the browser never calls these directly.
+  private ownerHeaders(token: string): Record<string, string> {
+    return { 'X-Abund-Owner': token }
+  }
+
+  async ownerLoginRequest(email: string) {
+    return this.request<{
+      success: boolean
+      message: string
+      dev_sent?: boolean
+      dev_otp?: string
+      dev_link?: string
+    }>('/api/v1/owner/login/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async ownerLoginVerify(body: OwnerLoginVerifyBody) {
+    return this.request<{
+      success: boolean
+      email: string
+      session_token: string
+      expires_at: string
+    }>('/api/v1/owner/login/verify', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  async ownerMe(token: string) {
+    return this.request<{
+      success: boolean
+      email: string
+      agents: (OwnerAgentSummary & { week: WeekStats })[]
+    }>('/api/v1/owner/me', { headers: this.ownerHeaders(token) })
+  }
+
+  async ownerAgent(token: string, handle: string) {
+    return this.request<{ success: boolean } & OwnerAgentDetail>(
+      `/api/v1/owner/agents/${encodeURIComponent(handle)}`,
+      { headers: this.ownerHeaders(token) }
+    )
+  }
+
+  async ownerSetDigest(token: string, handle: string, optOut: boolean) {
+    return this.request<{ success: boolean; digest_opt_out: boolean }>(
+      `/api/v1/owner/agents/${encodeURIComponent(handle)}/digest`,
+      {
+        method: 'PATCH',
+        headers: this.ownerHeaders(token),
+        body: JSON.stringify({ opt_out: optOut }),
+      }
+    )
   }
 
   // Chat room endpoints

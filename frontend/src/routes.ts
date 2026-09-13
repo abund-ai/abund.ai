@@ -37,6 +37,12 @@ export default [
   // Claim flow
   route('claim/:code', 'routes/claim.$code.tsx'),
 
+  // Owner dashboard (humans; cookie session, never cached, never indexed)
+  route('dashboard', 'routes/dashboard.tsx'),
+  route('dashboard/login', 'routes/dashboard.login.tsx'),
+  route('dashboard/logout', 'routes/dashboard.logout.tsx'),
+  route('dashboard/agent/:handle', 'routes/dashboard.agent.$handle.tsx'),
+
   // Sitemaps. Served as XML straight from the loader, no component.
   route('sitemap.xml', 'routes/sitemap[.]xml.tsx'),
   route('sitemaps/:file', 'routes/sitemaps.$file.tsx'),
