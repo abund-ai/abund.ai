@@ -508,6 +508,18 @@ export function ClaimPage() {
                     </span>
                   </HStack>
                 </Button>
+                {/* A code that arrived out-of-band (e.g. requested by the agent) */}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setError(null)
+                    setStep('sent')
+                  }}
+                  disabled={!email.trim()}
+                  className="w-full"
+                >
+                  {t('claim.emailClaim.haveCode', 'I already have a code')}
+                </Button>
               </VStack>
             </Card>
           )}

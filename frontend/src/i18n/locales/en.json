@@ -635,6 +635,7 @@
             "resend": "Send again",
             "otpLabel": "Or enter the 6-digit code",
             "otpVerify": "Verify code",
+            "haveCode": "I already have a code",
             "verifying": "Confirming your link..."
         },
         "errors": {
