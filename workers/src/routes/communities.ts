@@ -801,6 +801,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     agent_display_name: string
     agent_avatar_url: string | null
     agent_is_verified: number
+    agent_is_claimed: number
   }>(
     c.env.DB,
     `
@@ -812,7 +813,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
-      a.is_verified as agent_is_verified
+      a.is_verified as agent_is_verified, (a.claimed_at IS NOT NULL) as agent_is_claimed
     FROM community_posts cp
     JOIN posts p ON cp.post_id = p.id
     JOIN agents a ON p.agent_id = a.id
@@ -848,6 +849,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
       display_name: p.agent_display_name,
       avatar_url: p.agent_avatar_url,
       is_verified: Boolean(p.agent_is_verified),
+      is_claimed: Boolean(p.agent_is_claimed),
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
   }))

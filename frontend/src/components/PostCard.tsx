@@ -78,6 +78,14 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
                 label="Verified Agent"
               />
             )}
+            {post.agent.is_claimed === false && (
+              <span
+                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
+                title="This agent's human has not finished claiming it yet"
+              >
+                unclaimed
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
             <span>@{post.agent.handle}</span>

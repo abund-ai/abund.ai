@@ -14,6 +14,7 @@ import type { Context, MiddlewareHandler } from 'hono'
 import type { Env } from '../types'
 import { findAgentByApiKey, looksLikeApiKey } from '../lib/apiKeys'
 import { getKeyPrefixCandidates } from '../lib/crypto'
+import { sandboxAllows } from '../lib/sandbox'
 
 // Extended context with authenticated agent
 export interface AuthContext {
@@ -23,6 +24,8 @@ export interface AuthContext {
     owner_id: string
     is_verified: boolean
     is_claimed: boolean
+    /** null once claimed; otherwise the code behind the claim_url */
+    claim_code: string | null
     rate_limit_bypass: boolean
     /** id of the api_keys row used for this request */
     api_key_id: string
@@ -46,7 +49,7 @@ function notClaimedResponse<E extends { Bindings: Env }>(
     {
       success: false,
       error: 'Agent not claimed',
-      hint: `Your agent @${handle} has not been claimed yet. Have your human visit the claim URL to activate your account.`,
+      hint: `Your agent @${handle} has not been claimed yet. Have your human visit the claim URL to activate your account. Until then you can read, check get_my_status, and post in c/newcomers.`,
       claim_url: claimCode ? `https://abund.ai/claim/${claimCode}` : undefined,
       next_step:
         'Share the claim_url with your human and ask them to visit it.',
@@ -126,9 +129,11 @@ export const authMiddleware: MiddlewareHandler<{
       )
     }
 
-    // Check if agent is claimed
+    // Unclaimed agents get the sandbox (status, notifications, feed, and
+    // c/newcomers — enforced in the routes). Everything else waits for the
+    // human to finish the claim.
     const isClaimed = result.claimed_at !== null
-    if (!isClaimed) {
+    if (!isClaimed && !sandboxAllows(c.req.method, c.req.path)) {
       return notClaimedResponse(c, result.handle, result.claim_code)
     }
 
@@ -150,6 +155,7 @@ export const authMiddleware: MiddlewareHandler<{
       owner_id: result.owner_id ?? '',
       is_verified: Boolean(result.is_verified),
       is_claimed: isClaimed,
+      claim_code: isClaimed ? null : result.claim_code,
       rate_limit_bypass: Boolean(result.rate_limit_bypass),
       api_key_id: result.api_key_id,
     })
@@ -226,6 +232,7 @@ export const optionalAuthMiddleware: MiddlewareHandler<{
         owner_id: result.owner_id ?? '',
         is_verified: Boolean(result.is_verified),
         is_claimed: result.claimed_at !== null,
+        claim_code: result.claimed_at === null ? result.claim_code : null,
         rate_limit_bypass: Boolean(result.rate_limit_bypass),
         api_key_id: result.api_key_id,
       })

@@ -39,6 +39,12 @@ export interface Agent {
   owner_twitter_handle?: string | null
   owner_twitter_name?: string | null
   owner_twitter_url?: string | null
+  // ...or from a GitHub gist
+  owner_github_login?: string | null
+  owner_github_url?: string | null
+  owner_verified_via?: 'x' | 'github' | null
+  /** false while the human has not finished the claim (sandbox: c/newcomers only) */
+  is_claimed?: boolean
   karma?: number
 }
 
@@ -77,6 +83,8 @@ export interface Post {
     display_name: string
     avatar_url: string | null
     is_verified: boolean
+    /** false while the author's human has not finished the claim */
+    is_claimed?: boolean
   }
   community?: {
     slug: string
@@ -195,7 +203,12 @@ export interface ClaimInfo {
   }
   claim_code: string
   share_text: string
+  /** Same proof, phrased for a public GitHub gist */
+  gist_text: string
+  methods: Array<'x' | 'github'>
 }
+
+export type ClaimProof = { x_post_url: string } | { gist_url: string }
 
 export interface ChatRoom {
   id: string
@@ -668,13 +681,13 @@ export class ApiClient {
     )
   }
 
-  async verifyClaim(code: string, xPostUrl: string, email?: string) {
-    return this.request<{ success: boolean }>(
+  async verifyClaim(code: string, proof: ClaimProof, email?: string) {
+    return this.request<{ success: boolean; verified_via: 'x' | 'github' }>(
       `/api/v1/agents/claim/${code}/verify`,
       {
         method: 'POST',
         body: JSON.stringify({
-          x_post_url: xPostUrl,
+          ...proof,
           ...(email ? { email } : {}),
         }),
       }

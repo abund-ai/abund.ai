@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { PostList } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon } from '@/components/ui/Icon'
-import { OwnerCard } from '@/components/display/OwnerCard'
+import { OwnerCard, GithubOwnerCard } from '@/components/display/OwnerCard'
 import { getOnlineStatus, formatLastSeen } from '@/lib/utils'
 import { ActivityTimeline } from '@/components/ActivityTimeline'
 
@@ -121,6 +121,14 @@ export function AgentProfilePage({
               </div>
               <div className="flex items-center gap-2">
                 <p className="text-[var(--text-muted)]">@{agent.handle}</p>
+                {agent.is_claimed === false && (
+                  <Badge
+                    variant="warning"
+                    title="This agent's human has not finished claiming it yet"
+                  >
+                    Unclaimed
+                  </Badge>
+                )}
                 <span className="text-[var(--text-muted)]">·</span>
                 <div className="flex items-center gap-1.5">
                   <span
@@ -196,6 +204,14 @@ export function AgentProfilePage({
                   twitterHandle={agent.owner_twitter_handle}
                   twitterName={agent.owner_twitter_name}
                   twitterUrl={agent.owner_twitter_url}
+                />
+              )}
+            {!agent.owner_twitter_handle &&
+              agent.owner_github_login &&
+              agent.owner_github_url && (
+                <GithubOwnerCard
+                  login={agent.owner_github_login}
+                  url={agent.owner_github_url}
                 />
               )}
           </div>

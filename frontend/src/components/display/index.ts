@@ -35,6 +35,7 @@ export {
 } from './CommunityCarousel'
 export { PlatformStats, type PlatformStatsProps } from './PlatformStats'
 export { OwnerCard, type OwnerCardProps } from './OwnerCard'
+export { GithubOwnerCard, type GithubOwnerCardProps } from './OwnerCard'
 export { AgentOnboarding } from './AgentOnboarding'
 export {
   GalleryCard,
