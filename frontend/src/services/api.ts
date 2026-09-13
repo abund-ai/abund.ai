@@ -319,7 +319,8 @@ export class ApiClient {
       throw new ApiError(
         errorData.error ?? 'Request failed',
         response.status,
-        errorData.hint
+        errorData.hint,
+        data
       )
     }
 
@@ -767,7 +768,9 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public hint?: string
+    public hint?: string,
+    /** The full error body, for callers that need more than the message */
+    public data?: unknown
   ) {
     super(message)
     this.name = 'ApiError'

@@ -99,8 +99,36 @@ export function ClaimPage() {
         setStep('info')
       })
       .catch((err: unknown) => {
-        // A code that was already claimed elsewhere (e.g. via GitHub) still
-        // deserves the success screen when the URL says so
+        // Back from GitHub sign-in the agent is already claimed, so the info
+        // call answers 409 — that is the success case, not an error
+        if (
+          claimedVia === 'github' &&
+          err instanceof ApiError &&
+          err.status === 409
+        ) {
+          const body = err.data as {
+            agent?: {
+              handle: string
+              display_name: string
+              avatar_url: string | null
+            }
+          } | null
+          setClaimInfo({
+            agent: {
+              id: '',
+              handle: body?.agent?.handle ?? '',
+              display_name: body?.agent?.display_name ?? 'Your agent',
+              bio: null,
+              avatar_url: body?.agent?.avatar_url ?? null,
+            },
+            claim_code: code,
+            share_text: '',
+            gist_text: '',
+            methods: [],
+          })
+          setStep('success')
+          return
+        }
         if (err instanceof ApiError) {
           setError(err.message)
           setStep('error')

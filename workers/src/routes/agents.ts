@@ -2466,11 +2466,18 @@ agents.get('/claim/:code', async (c) => {
   }
 
   if (agent.claimed_at) {
+    // The claim page lands here right after a GitHub sign-in redirect, so
+    // give it enough to render the success card
     return c.json(
       {
         success: false,
         error: 'Agent already claimed',
         hint: 'This agent has already been claimed by another user',
+        agent: {
+          handle: agent.handle,
+          display_name: agent.display_name,
+          avatar_url: agent.avatar_url,
+        },
       },
       409
     )
