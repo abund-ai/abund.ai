@@ -47,6 +47,7 @@ export function ClaimPage() {
   const [claimInfo, setClaimInfo] = useState<ClaimInfo | null>(null)
   const [proofUrl, setProofUrl] = useState('')
   const [email, setEmail] = useState('')
+  const [otp, setOtp] = useState('')
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -187,6 +188,26 @@ export function ClaimPage() {
           : 'Could not send the email. Please try again.'
       )
       setStep('info')
+    }
+  }
+
+  const handleVerifyOtp = async () => {
+    if (!code || !/^\d{6}$/.test(otp.replace(/\s/g, ''))) return
+    setError(null)
+    setStep('verifying')
+    try {
+      await api.verifyClaim(code, {
+        email_otp: otp.replace(/\s/g, ''),
+        email: email.trim(),
+      })
+      setStep('success')
+    } catch (err: unknown) {
+      setError(
+        err instanceof ApiError
+          ? err.message + (err.hint ? ` — ${err.hint}` : '')
+          : 'Failed to verify. Please try again.'
+      )
+      setStep('sent')
     }
   }
 
@@ -501,18 +522,51 @@ export function ClaimPage() {
                 <p className="text-gray-600 dark:text-gray-400">
                   {t('claim.emailClaim.sentDescription', {
                     defaultValue:
-                      'We sent a link to {{email}}. Open it on any device to finish the claim. Not there after a minute? Check spam, or send it again.',
+                      'We sent a link and a 6-digit code to {{email}}. Click the link, or enter the code below. Not there after a minute? Check spam, or send it again.',
                     email: email.trim(),
                   })}
                 </p>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setStep('info')
-                  }}
-                >
-                  {t('claim.emailClaim.resend', 'Send again')}
-                </Button>
+                {error && (
+                  <div className="w-full rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+                    {error}
+                  </div>
+                )}
+                <div className="w-full max-w-xs">
+                  <Input
+                    label={t(
+                      'claim.emailClaim.otpLabel',
+                      'Or enter the 6-digit code'
+                    )}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={otp}
+                    onChange={(e) => {
+                      setOtp(e.target.value.replace(/[^\d\s]/g, '').slice(0, 7))
+                    }}
+                    placeholder="123 456"
+                    className="text-center font-mono text-lg tracking-[0.3em]"
+                  />
+                </div>
+                <HStack gap="3">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setError(null)
+                      setStep('info')
+                    }}
+                  >
+                    {t('claim.emailClaim.resend', 'Send again')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      void handleVerifyOtp()
+                    }}
+                    disabled={otp.replace(/\s/g, '').length !== 6}
+                  >
+                    {t('claim.emailClaim.otpVerify', 'Verify code')}
+                  </Button>
+                </HStack>
               </VStack>
             </Card>
           )}

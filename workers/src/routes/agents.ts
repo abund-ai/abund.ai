@@ -45,8 +45,11 @@ import {
   tokensConfigured,
   verifyToken,
   welcomeEmail,
+  generateOtp,
+  otpHash,
 } from '../lib/email'
 import { unsubscribeUrl } from '../lib/digest'
+import { blockedEmailDomain } from '../lib/emailDomains'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 
 const agents = new Hono<{ Bindings: Env }>()
@@ -124,16 +127,29 @@ const verifyClaimSchema = z
       )
       .optional(),
     email_token: z.string().min(10).optional(),
+    email_otp: z
+      .string()
+      .regex(/^\d{6}$/, 'The code is 6 digits')
+      .optional(),
     email: z.string().email('Please provide a valid email address').optional(),
   })
   .refine(
     (v) =>
-      [v.x_post_url, v.gist_url, v.email_token].filter(Boolean).length === 1,
+      [v.x_post_url, v.gist_url, v.email_token, v.email_otp].filter(Boolean)
+        .length === 1,
     {
-      message: 'Provide exactly one of x_post_url, gist_url or email_token',
+      message:
+        'Provide exactly one of x_post_url, gist_url, email_token or email_otp',
       path: ['x_post_url'],
     }
   )
+  .refine((v) => !v.email_otp || Boolean(v.email), {
+    message: 'email is required with email_otp',
+    path: ['email'],
+  })
+
+/** Wrong guesses allowed before an OTP challenge is thrown away */
+const OTP_MAX_ATTEMPTS = 5
 
 // =============================================================================
 // Avatar URL Proxying Helpers
@@ -2530,11 +2546,30 @@ agents.post('/claim/:code/verify', async (c) => {
 
   // Exactly one proof (enforced by the schema): an X post, a public gist, or
   // the token from the emailed magic link
-  const proof = result.data.email_token
-    ? { kind: 'email' as const, url: result.data.email_token }
-    : result.data.gist_url
-      ? { kind: 'github' as const, url: result.data.gist_url }
-      : { kind: 'x' as const, url: result.data.x_post_url as string }
+  const proof = result.data.email_otp
+    ? { kind: 'email_otp' as const, url: result.data.email_otp }
+    : result.data.email_token
+      ? { kind: 'email' as const, url: result.data.email_token }
+      : result.data.gist_url
+        ? { kind: 'github' as const, url: result.data.gist_url }
+        : { kind: 'x' as const, url: result.data.x_post_url as string }
+  // What the profile records; both email proofs are "email"
+  const verifiedVia = proof.kind === 'email_otp' ? 'email' : proof.kind
+
+  // An owner email must reach a real person
+  if (result.data.email) {
+    const blocked = await blockedEmailDomain(c.env.DB, result.data.email)
+    if (blocked) {
+      return c.json(
+        {
+          success: false,
+          error: 'Disposable email addresses are not accepted',
+          hint: `${blocked.domain} is a throwaway domain; use an address you actually read`,
+        },
+        400
+      )
+    }
+  }
 
   // Development bypass: if URL contains "/testing/" and we're in development, skip verification
   const isTestingBypass =
@@ -2604,6 +2639,59 @@ agents.post('/claim/:code/verify', async (c) => {
         )
       }
       ownerEmail = payload['e']
+      emailVerified = true
+    } else if (proof.kind === 'email_otp') {
+      const email = (result.data.email ?? '').toLowerCase()
+      const challenge = await queryOne<{
+        email: string
+        otp_hash: string
+        attempts: number
+        expires_at: string
+      }>(
+        c.env.DB,
+        'SELECT email, otp_hash, attempts, expires_at FROM claim_email_challenges WHERE claim_code = ?',
+        [code]
+      )
+      const expired =
+        !challenge ||
+        new Date(challenge.expires_at.replace(' ', 'T') + 'Z').getTime() <
+          Date.now()
+      if (!challenge || expired || challenge.attempts >= OTP_MAX_ATTEMPTS) {
+        return c.json(
+          {
+            success: false,
+            error: 'Code expired',
+            hint: 'Request a new code from the claim page',
+          },
+          400
+        )
+      }
+      const expected = await otpHash(code, challenge.email, proof.url)
+      if (challenge.email !== email || expected !== challenge.otp_hash) {
+        await execute(
+          c.env.DB,
+          'UPDATE claim_email_challenges SET attempts = attempts + 1 WHERE claim_code = ?',
+          [code]
+        )
+        const left = OTP_MAX_ATTEMPTS - challenge.attempts - 1
+        return c.json(
+          {
+            success: false,
+            error: 'Wrong code',
+            hint:
+              left > 0
+                ? `${String(left)} attempt${left === 1 ? '' : 's'} left`
+                : 'Too many wrong codes; request a new one',
+          },
+          400
+        )
+      }
+      await execute(
+        c.env.DB,
+        'DELETE FROM claim_email_challenges WHERE claim_code = ?',
+        [code]
+      )
+      ownerEmail = challenge.email
       emailVerified = true
     } else if (proof.kind === 'github') {
       const gist = isTestingBypass
@@ -2689,7 +2777,7 @@ agents.post('/claim/:code/verify', async (c) => {
       WHERE id = ?
       `,
       [
-        proof.kind,
+        verifiedVia,
         ownerTwitterHandle,
         ownerTwitterName,
         ownerTwitterUrl,
@@ -2713,7 +2801,7 @@ agents.post('/claim/:code/verify', async (c) => {
       message: isTestingBypass
         ? 'Agent claimed successfully (dev bypass)! 🎉'
         : 'Agent claimed successfully! 🎉',
-      verified_via: proof.kind,
+      verified_via: verifiedVia,
       agent: {
         handle: agent.handle,
         profile_url: `https://abund.ai/agent/${agent.handle}`,
@@ -2849,6 +2937,18 @@ agents.post('/claim/:code/email', async (c) => {
   }
 
   const email = parsed.data.email.toLowerCase()
+  const blocked = await blockedEmailDomain(c.env.DB, email)
+  if (blocked) {
+    return c.json(
+      {
+        success: false,
+        error: 'Disposable email addresses are not accepted',
+        hint: `${blocked.domain} is a throwaway domain; use an address you actually read`,
+      },
+      400
+    )
+  }
+
   const token = await signToken(c.env, {
     k: 'claim',
     c: code,
@@ -2856,10 +2956,25 @@ agents.post('/claim/:code/email', async (c) => {
     exp: Math.floor(Date.now() / 1000) + 60 * 60,
   })
   const link = `${siteOrigin(c.env)}/claim/${code}?email_token=${encodeURIComponent(token ?? '')}`
+
+  // The same email carries a 6-digit code for readers on another device.
+  // Only its hash is stored; a new request replaces the old challenge.
+  const otp = generateOtp()
+  await execute(
+    c.env.DB,
+    `INSERT INTO claim_email_challenges (claim_code, email, otp_hash, attempts, expires_at, created_at)
+     VALUES (?, ?, ?, 0, datetime('now', '+1 hour'), datetime('now'))
+     ON CONFLICT(claim_code) DO UPDATE SET
+       email = excluded.email, otp_hash = excluded.otp_hash, attempts = 0,
+       expires_at = excluded.expires_at, created_at = excluded.created_at`,
+    [code, email, await otpHash(code, email, otp)]
+  )
+
   const mail = claimMagicLinkEmail({
     handle: agent.handle,
     displayName: agent.display_name,
     link,
+    otp,
   })
   const messageId = await sendEmail(c.env, {
     to: email,
@@ -2880,9 +2995,10 @@ agents.post('/claim/:code/email', async (c) => {
 
   return c.json({
     success: true,
-    message: 'Check your inbox — the link works for one hour.',
+    message:
+      'Check your inbox — click the link or enter the 6-digit code. Both work for one hour.',
     // Development only: what would have been emailed, so the flow is testable
-    ...(dev ? { dev_token: token, dev_link: link } : {}),
+    ...(dev ? { dev_token: token, dev_link: link, dev_otp: otp } : {}),
   })
 })
 

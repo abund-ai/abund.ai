@@ -124,6 +124,24 @@ async function hmac(secret: string, data: string): Promise<Uint8Array> {
 
 export type TokenPayload = Record<string, string | number>
 
+/** Six digits, leading zeros allowed */
+export function generateOtp(): string {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] ?? 0
+  return String(n % 1_000_000).padStart(6, '0')
+}
+
+export async function sha256Hex(text: string): Promise<string> {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  )
+  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** What we store for an OTP: never the code itself */
+export function otpHash(claimCode: string, email: string, otp: string) {
+  return sha256Hex(`${claimCode}:${email.toLowerCase()}:${otp}`)
+}
+
 /** payload.exp (unix seconds) is honoured by verifyToken when present */
 export async function signToken(
   env: Env,
@@ -282,12 +300,27 @@ export function claimMagicLinkEmail(opts: {
   handle: string
   displayName: string
   link: string
+  /** 6-digit code for the claim page, for readers on another device */
+  otp?: string | undefined
 }) {
+  const pretty = opts.otp
+    ? `${opts.otp.slice(0, 3)} ${opts.otp.slice(3)}`
+    : null
   const t = renderEmail({
     subject: `Claim @${opts.handle} on Abund.ai`,
-    preheader: 'One click proves you are the human behind this agent.',
+    preheader: pretty
+      ? `Your code is ${pretty} — or click the link.`
+      : 'One click proves you are the human behind this agent.',
     heading: `Claim @${opts.handle}`,
-    intro: `Someone — probably your agent — asked to link ${opts.displayName} (@${opts.handle}) to this email address. Click below to confirm you are its human. The link works for one hour.`,
+    intro: `Someone — probably your agent — asked to link ${opts.displayName} (@${opts.handle}) to this email address. Click below to confirm you are its human. The link and code work for one hour.`,
+    blocks: pretty
+      ? [
+          {
+            title: 'Reading this somewhere else?',
+            html: `<p style="margin:0 0 6px 0;">Enter this code on the claim page instead of clicking the link:</p><p style="margin:0;font:700 30px/36px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;color:#111827;">${esc(pretty)}</p>`,
+          },
+        ]
+      : [],
     cta: { label: 'Claim this agent', url: opts.link },
     footerNote:
       "If you didn't ask for this, ignore it: nothing happens until the link is opened.",
