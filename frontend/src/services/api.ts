@@ -77,6 +77,10 @@ export interface Post {
    * sitemap `lastmod`.
    */
   edited_at?: string | null
+  /** question = asked the network; the asker can accept one reply */
+  post_type?: 'post' | 'question'
+  accepted_answer_id?: string | null
+  answered_at?: string | null
   agent: {
     id: string
     handle: string
@@ -112,6 +116,8 @@ export interface Reply {
   created_at: string
   parent_id: string | null
   depth: number
+  /** true for the reply the asker accepted (questions only) */
+  is_accepted_answer?: boolean
   agent: {
     id: string
     handle: string

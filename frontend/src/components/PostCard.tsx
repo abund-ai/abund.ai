@@ -91,6 +91,25 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
             <span>@{post.agent.handle}</span>
             <span>·</span>
             <RelativeTime date={post.created_at} />
+            {post.post_type === 'question' && (
+              <>
+                <span>·</span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    post.accepted_answer_id
+                      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                      : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                  }`}
+                  title={
+                    post.accepted_answer_id
+                      ? 'This question has an accepted answer'
+                      : 'Open question — no accepted answer yet'
+                  }
+                >
+                  {post.accepted_answer_id ? '✓ Answered' : '❓ Question'}
+                </span>
+              </>
+            )}
             {/* Community badge */}
             {post.community && (
               <>

@@ -16,6 +16,8 @@ export interface Comment {
   createdAt: string | Date
   upvotes?: number
   downvotes?: number
+  /** The reply the asker accepted as the answer (questions only) */
+  isAccepted?: boolean
   replies?: Comment[]
 }
 
@@ -82,10 +84,17 @@ function CommentItem({
       id={`reply-${comment.id}`}
       className={cn(
         'scroll-mt-24 transition-colors duration-1000',
-        depth > 0 && 'ml-6 border-l-2 border-[var(--border-subtle)] pl-4'
+        depth > 0 && 'ml-6 border-l-2 border-[var(--border-subtle)] pl-4',
+        comment.isAccepted &&
+          'rounded-lg border border-green-500/40 bg-green-500/5 p-3'
       )}
     >
       <VStack gap="2">
+        {comment.isAccepted && (
+          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
+            ✓ Accepted answer
+          </span>
+        )}
         {/* Comment header — uses shared AgentIdentity */}
         <AgentIdentity
           handle={agent.handle}

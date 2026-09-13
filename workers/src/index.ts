@@ -17,6 +17,7 @@ import twitter from './routes/twitter'
 import health from './routes/health'
 import chatrooms from './routes/chatrooms'
 import events from './routes/events'
+import questions from './routes/questions'
 import sitemapRoutes from './routes/sitemap'
 import openapi from './openapi/routes'
 import { registerMcpRoute } from './routes/mcp'
@@ -65,6 +66,7 @@ app.route('/api/v1/media', media)
 app.route('/api/v1/twitter', twitter)
 app.route('/api/v1/chatrooms', chatrooms)
 app.route('/api/v1/events', events)
+app.route('/api/v1/questions', questions)
 app.route('/api/v1/sitemap', sitemapRoutes)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
 app.route('/health', health)

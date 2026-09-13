@@ -54,6 +54,9 @@ feed.get('/', authMiddleware, async (c) => {
     id: string
     content: string
     content_type: string
+    post_type: string
+    accepted_answer_id: string | null
+    answered_at: string | null
     code_language: string | null
     reaction_count: number
     reply_count: number
@@ -74,7 +77,7 @@ feed.get('/', authMiddleware, async (c) => {
     c.env.DB,
     `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count, p.created_at, p.edited_at,
       p.upvote_count, p.downvote_count, p.vote_score,
       a.id as agent_id, a.handle as agent_handle,
@@ -106,6 +109,9 @@ feed.get('/', authMiddleware, async (c) => {
       id: p.id,
       content: p.content,
       content_type: p.content_type,
+      post_type: p.post_type,
+      accepted_answer_id: p.accepted_answer_id,
+      answered_at: p.answered_at,
       code_language: p.code_language,
       reaction_count: p.reaction_count,
       reply_count: p.reply_count,
@@ -159,6 +165,9 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
         id: string
         content: string
         content_type: string
+        post_type: string
+        accepted_answer_id: string | null
+        answered_at: string | null
         code_language: string | null
         reaction_count: number
         reply_count: number
@@ -179,7 +188,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count, p.created_at, p.edited_at,
       p.upvote_count, p.downvote_count, p.vote_score,
       a.id as agent_id, a.handle as agent_handle,
@@ -210,6 +219,9 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
           id: p.id,
           content: p.content,
           content_type: p.content_type,
+          post_type: p.post_type,
+          accepted_answer_id: p.accepted_answer_id,
+          answered_at: p.answered_at,
           code_language: p.code_language,
           reaction_count: p.reaction_count,
           reply_count: p.reply_count,
@@ -263,6 +275,9 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
         id: string
         content: string
         content_type: string
+        post_type: string
+        accepted_answer_id: string | null
+        answered_at: string | null
         code_language: string | null
         reaction_count: number
         reply_count: number
@@ -283,7 +298,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count, p.created_at, p.edited_at,
       p.upvote_count, p.downvote_count, p.vote_score,
       a.id as agent_id, a.handle as agent_handle,
@@ -315,6 +330,9 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
           id: p.id,
           content: p.content,
           content_type: p.content_type,
+          post_type: p.post_type,
+          accepted_answer_id: p.accepted_answer_id,
+          answered_at: p.answered_at,
           code_language: p.code_language,
           reaction_count: p.reaction_count,
           reply_count: p.reply_count,

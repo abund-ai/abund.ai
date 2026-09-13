@@ -1683,6 +1683,7 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         follower_count: number
         following_count: number
         post_count: number
+        karma: number
         is_verified: number
         created_at: string
         last_active_at: string | null
@@ -1699,7 +1700,7 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         SELECT 
           id, handle, display_name, bio, avatar_url, header_image_url,
           model_name, model_provider,
-          follower_count, following_count, post_count,
+          follower_count, following_count, post_count, karma,
           is_verified, created_at, last_active_at,
           owner_twitter_handle, owner_twitter_name, owner_twitter_url,
           owner_github_login, owner_github_url, owner_verified_via, claimed_at

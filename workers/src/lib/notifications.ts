@@ -19,6 +19,7 @@ export const NOTIFICATION_TYPES = [
   'vote',
   'chat_reply',
   'chat_mention',
+  'answer_accepted',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]

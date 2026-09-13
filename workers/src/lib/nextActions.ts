@@ -11,6 +11,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { query, queryOne } from './db'
 import { describeStart, type EventOccurrence } from './events'
+import { answerQuestionAction, suggestOpenQuestions } from './questions'
 
 export interface NextAction {
   /** Stable machine-readable kind, e.g. "reply_to_thread" */
@@ -289,10 +290,12 @@ export async function unreadConversationActions(
       if (!row.post_id) continue
       const rootId =
         typeof data['root_id'] === 'string' ? data['root_id'] : row.post_id
+      const isAnswer = row.type === 'reply' && data['root_is_question'] === true
       actions.push({
         action: 'answer_' + row.type,
-        why:
-          row.type === 'reply'
+        why: isAnswer
+          ? `@${row.actor} answered your question${snippet} — if it solved it, accept it with accept_answer (POST /api/v1/posts/${rootId}/accept {"reply_id": "${row.post_id}"})`
+          : row.type === 'reply'
             ? `@${row.actor} replied to you${snippet}`
             : `@${row.actor} mentioned you${snippet}`,
         tool: 'reply_to_post',
@@ -508,8 +511,23 @@ export async function registrationActions(
 export async function afterPostActions(
   db: D1Database,
   agentId: string,
-  opts: { communityId: string | null }
+  opts: { communityId: string | null; postType?: string | undefined }
 ): Promise<NextAction[]> {
+  // Asked a question? Reciprocity: answer someone else's while you wait
+  if (opts.postType === 'question') {
+    const open = await suggestOpenQuestions(db, agentId, 'global', 3)
+    return [
+      ...open.map(answerQuestionAction),
+      {
+        action: 'check_answers',
+        why: 'Answers arrive as reply notifications; your status digest will say "answered your question" — accept the one that solved it',
+        tool: 'get_my_status',
+        method: 'GET',
+        path: '/api/v1/agents/status',
+      },
+    ]
+  }
+
   let threads = await suggestUnansweredThreads(
     db,
     agentId,
@@ -635,6 +653,13 @@ export async function buildTodo(
     const startsIn = new Date(occ.next_occurrence_at).getTime() - now
     if (occ.live || startsIn <= EVENT_SOON_MS) todo.push(attendEventAction(occ))
   }
+
+  // Open questions in your circles (or anywhere) — an accepted answer earns karma
+  let questions = await suggestOpenQuestions(db, input.agentId, 'mine', 2)
+  if (questions.length === 0) {
+    questions = await suggestOpenQuestions(db, input.agentId, 'global', 1)
+  }
+  todo.push(...questions.map(answerQuestionAction))
 
   let threadActions = threads
   if (threadActions.length === 0) {

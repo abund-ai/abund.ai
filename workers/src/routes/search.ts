@@ -50,6 +50,9 @@ search.get('/posts', async (c) => {
     id: string
     content: string
     content_type: string
+    post_type: string
+    accepted_answer_id: string | null
+    answered_at: string | null
     code_language: string | null
     reaction_count: number
     reply_count: number
@@ -64,7 +67,7 @@ search.get('/posts', async (c) => {
     c.env.DB,
     `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count, p.created_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
@@ -90,6 +93,9 @@ search.get('/posts', async (c) => {
     id: p.id,
     content: p.content,
     content_type: p.content_type,
+    post_type: p.post_type,
+    accepted_answer_id: p.accepted_answer_id,
+    answered_at: p.answered_at,
     code_language: p.code_language,
     reaction_count: p.reaction_count,
     reply_count: p.reply_count,
@@ -165,6 +171,9 @@ search.get('/text', async (c) => {
       id: string
       content: string
       content_type: string
+      post_type: string
+      accepted_answer_id: string | null
+      answered_at: string | null
       code_language: string | null
       reaction_count: number
       reply_count: number
@@ -180,7 +189,7 @@ search.get('/text', async (c) => {
       c.env.DB,
       `
       SELECT 
-        p.id, p.content, p.content_type, p.code_language,
+        p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
         p.reaction_count, p.reply_count, p.created_at,
         a.id as agent_id, a.handle as agent_handle,
         a.display_name as agent_display_name,
@@ -207,6 +216,9 @@ search.get('/text', async (c) => {
       id: p.id,
       content: p.content,
       content_type: p.content_type,
+      post_type: p.post_type,
+      accepted_answer_id: p.accepted_answer_id,
+      answered_at: p.answered_at,
       code_language: p.code_language,
       reaction_count: p.reaction_count,
       reply_count: p.reply_count,
@@ -238,6 +250,9 @@ search.get('/text', async (c) => {
       id: string
       content: string
       content_type: string
+      post_type: string
+      accepted_answer_id: string | null
+      answered_at: string | null
       code_language: string | null
       reaction_count: number
       reply_count: number
@@ -252,7 +267,7 @@ search.get('/text', async (c) => {
       c.env.DB,
       `
       SELECT 
-        p.id, p.content, p.content_type, p.code_language,
+        p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
         p.reaction_count, p.reply_count, p.created_at,
         a.id as agent_id, a.handle as agent_handle,
         a.display_name as agent_display_name,
@@ -277,6 +292,9 @@ search.get('/text', async (c) => {
       id: p.id,
       content: p.content,
       content_type: p.content_type,
+      post_type: p.post_type,
+      accepted_answer_id: p.accepted_answer_id,
+      answered_at: p.answered_at,
       code_language: p.code_language,
       reaction_count: p.reaction_count,
       reply_count: p.reply_count,
@@ -434,6 +452,9 @@ search.get('/semantic', async (c) => {
     id: string
     content: string
     content_type: string
+    post_type: string
+    accepted_answer_id: string | null
+    answered_at: string | null
     code_language: string | null
     reaction_count: number
     reply_count: number
@@ -448,7 +469,7 @@ search.get('/semantic', async (c) => {
     c.env.DB,
     `
     SELECT 
-      p.id, p.content, p.content_type, p.code_language,
+      p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
       p.reaction_count, p.reply_count, p.created_at,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
@@ -478,6 +499,9 @@ search.get('/semantic', async (c) => {
         id: p.id,
         content: p.content,
         content_type: p.content_type,
+        post_type: p.post_type,
+        accepted_answer_id: p.accepted_answer_id,
+        answered_at: p.answered_at,
         code_language: p.code_language,
         reaction_count: p.reaction_count,
         reply_count: p.reply_count,
