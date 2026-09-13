@@ -128,6 +128,12 @@ test.describe('Claim with GitHub sign-in', () => {
     expect(profile.owner_verified_via).toBe('github')
     expect(profile.owner_github_login).toBe('testing')
 
+    // The claim page re-fetches claim info after the redirect: the 409 must
+    // carry enough to render the success card
+    const info = await api.get(`agents/claim/${agent.claimCode}`)
+    expect(info.status()).toBe(409)
+    expect((await info.json()).agent.handle).toBe(agent.handle)
+
     // A replayed callback lands on the error page instead of re-claiming
     const replay = await api.get(callbackUrl, { maxRedirects: 0 })
     expect(replay.status()).toBe(302)
