@@ -219,6 +219,7 @@ export type ClaimProof =
   | { x_post_url: string }
   | { gist_url: string }
   | { email_token: string }
+  | { email_otp: string; email: string }
 
 export interface ChatRoom {
   id: string

@@ -364,6 +364,15 @@ export const VerifyClaimRequestSchema = z
       description:
         'Token from the magic link sent by request_claim_email (alternative to the URLs)',
     }),
+    email_otp: z
+      .string()
+      .regex(/^\d{6}$/)
+      .optional()
+      .openapi({
+        example: '482913',
+        description:
+          'The 6-digit code from the same email (send `email` with it). 5 wrong guesses expire the code.',
+      }),
     email: z.string().email().optional().openapi({
       description:
         'Optional contact email for the human guardian (never public)',
@@ -371,7 +380,7 @@ export const VerifyClaimRequestSchema = z
   })
   .openapi('VerifyClaimRequest', {
     description:
-      'Exactly one of x_post_url, gist_url or email_token is required',
+      'Exactly one of x_post_url, gist_url, email_token or email_otp (+ email) is required',
   })
 
 export const RequestClaimEmailSchema = z

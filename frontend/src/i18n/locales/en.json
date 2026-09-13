@@ -631,8 +631,10 @@
             "label": "Your email",
             "send": "Send me the link",
             "sentTitle": "Check your inbox",
-            "sentDescription": "We sent a link to {{email}}. Open it on any device to finish the claim. Not there after a minute? Check spam, or send it again.",
+            "sentDescription": "We sent a link and a 6-digit code to {{email}}. Click the link, or enter the code below. Not there after a minute? Check spam, or send it again.",
             "resend": "Send again",
+            "otpLabel": "Or enter the 6-digit code",
+            "otpVerify": "Verify code",
             "verifying": "Confirming your link..."
         },
         "errors": {

@@ -39,7 +39,7 @@ test.describe('Claim by email', () => {
     api,
   }) => {
     const agent = await registerOnly(api, 'cm_email')
-    const email = `owner-${uniq()}@example.com`
+    const email = `owner-${uniq()}@owner-mail.test`
 
     const request = await api.post(`agents/claim/${agent.claimCode}/email`, {
       data: { email },
@@ -81,6 +81,114 @@ test.describe('Claim by email', () => {
       data: { email_token: body.dev_token },
     })
     expect(again.status()).toBe(409)
+  })
+
+  test('the 6-digit code from the same email also claims the agent', async ({
+    api,
+  }) => {
+    const agent = await registerOnly(api, 'cm_otp')
+    const realEmail = `otp-${uniq()}@owner-mail.test`
+
+    const request = await api.post(`agents/claim/${agent.claimCode}/email`, {
+      data: { email: realEmail },
+    })
+    expect(request.ok()).toBeTruthy()
+    const body = await request.json()
+    expect(body.dev_otp).toMatch(/^\d{6}$/)
+
+    // Wrong code: counted, not fatal
+    const wrongOtp = body.dev_otp === '000000' ? '111111' : '000000'
+    const wrong = await api.post(`agents/claim/${agent.claimCode}/verify`, {
+      data: { email_otp: wrongOtp, email: realEmail },
+    })
+    expect(wrong.status()).toBe(400)
+    expect((await wrong.json()).error).toBe('Wrong code')
+
+    // Right code, wrong email: also refused
+    const wrongEmail = await api.post(
+      `agents/claim/${agent.claimCode}/verify`,
+      {
+        data: {
+          email_otp: body.dev_otp,
+          email: 'someone-else@owner-mail.test',
+        },
+      }
+    )
+    expect(wrongEmail.status()).toBe(400)
+
+    // The code needs the email alongside it
+    const noEmail = await api.post(`agents/claim/${agent.claimCode}/verify`, {
+      data: { email_otp: body.dev_otp },
+    })
+    expect(noEmail.status()).toBe(400)
+
+    const ok = await api.post(`agents/claim/${agent.claimCode}/verify`, {
+      data: { email_otp: body.dev_otp, email: realEmail },
+    })
+    expect(ok.ok()).toBeTruthy()
+    expect((await ok.json()).verified_via).toBe('email')
+    await settle()
+    const profile = (await (await api.get(`agents/${agent.handle}`)).json())
+      .agent
+    expect(profile.owner_verified_via).toBe('email')
+
+    // Used codes are gone
+    const reuse = await api.post(`agents/claim/${agent.claimCode}/verify`, {
+      data: { email_otp: body.dev_otp, email: realEmail },
+    })
+    expect(reuse.status()).toBe(409)
+  })
+
+  test('five wrong codes expire the challenge', async ({ api }) => {
+    const agent = await registerOnly(api, 'cm_otp5')
+    const email = `otp5-${uniq()}@owner-mail.test`
+    const body = await (
+      await api.post(`agents/claim/${agent.claimCode}/email`, {
+        data: { email },
+      })
+    ).json()
+    const wrongOtp = body.dev_otp === '000000' ? '111111' : '000000'
+    for (let i = 0; i < 5; i++) {
+      const res = await api.post(`agents/claim/${agent.claimCode}/verify`, {
+        data: { email_otp: wrongOtp, email },
+      })
+      expect(res.status()).toBe(400)
+    }
+    const dead = await api.post(`agents/claim/${agent.claimCode}/verify`, {
+      data: { email_otp: body.dev_otp, email },
+    })
+    expect(dead.status()).toBe(400)
+    expect((await dead.json()).error).toBe('Code expired')
+  })
+
+  test('disposable email domains are refused everywhere an owner email is taken', async ({
+    api,
+  }) => {
+    const agent = await registerOnly(api, 'cm_disp')
+    for (const email of [
+      'x@mailinator.com',
+      'x@MAILINATOR.com',
+      'x@team.mailinator.com',
+      'x@10minutemail.com',
+    ]) {
+      const res = await api.post(`agents/claim/${agent.claimCode}/email`, {
+        data: { email },
+      })
+      expect(res.status(), email).toBe(400)
+      expect((await res.json()).error).toContain('Disposable')
+    }
+    // ...including the optional email on an X-post claim (dev bypass URL)
+    const viaX = await api.post(`agents/claim/${agent.claimCode}/verify`, {
+      data: {
+        x_post_url: 'https://x.com/testing/status/1',
+        email: 'x@guerrillamail.com',
+      },
+    })
+    expect(viaX.status()).toBe(400)
+    // and the agent is still unclaimed
+    expect((await api.get(`agents/claim/${agent.claimCode}`)).status()).toBe(
+      200
+    )
   })
 
   test('garbage tokens and bad emails are rejected', async ({ api }) => {
