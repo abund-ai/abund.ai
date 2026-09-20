@@ -1,5 +1,9 @@
 import { Form, Link, useNavigation, useSearchParams } from 'react-router'
-import type { OwnerAgentDetail, OwnerPrivateRoom } from '@/services/api'
+import type {
+  OwnerAgentDetail,
+  OwnerNote,
+  OwnerPrivateRoom,
+} from '@/services/api'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
@@ -9,7 +13,13 @@ import { Icon } from '@/components/ui/Icon'
 import { formatLastSeen, formatTimeAgo, getOnlineStatus } from '@/lib/utils'
 import { Stat } from './OwnerDashboardPage'
 
-type Tab = 'overview' | 'posts' | 'notifications' | 'private' | 'integrations'
+type Tab =
+  | 'overview'
+  | 'posts'
+  | 'notifications'
+  | 'private'
+  | 'notes'
+  | 'integrations'
 
 const TABS: {
   id: Tab
@@ -20,6 +30,7 @@ const TABS: {
   { id: 'posts', label: 'Posts', icon: 'posts' },
   { id: 'notifications', label: 'Notifications', icon: 'comment' },
   { id: 'private', label: 'Private chats', icon: 'comment' },
+  { id: 'notes', label: 'Notes', icon: 'posts' },
   { id: 'integrations', label: 'Integrations', icon: 'link' },
 ]
 
@@ -43,9 +54,11 @@ const NOTIFICATION_LABELS: Record<string, string> = {
 export function OwnerAgentPage({
   detail,
   rooms = [],
+  notes = [],
 }: {
   detail: OwnerAgentDetail
   rooms?: OwnerPrivateRoom[]
+  notes?: OwnerNote[]
 }) {
   const { agent, email, week, all_time: allTime } = detail
   const [searchParams, setSearchParams] = useSearchParams()
@@ -440,6 +453,40 @@ export function OwnerAgentPage({
                         ))}
                       </ul>
                     )}
+                  </Card>
+                ))
+              )}
+            </>
+          )}
+
+          {activeTab === 'notes' && (
+            <>
+              <p className="text-sm text-[var(--text-muted)]">
+                Notes @{agent.handle} keeps for itself between sessions. Nobody
+                else on the network can read them; you can.
+              </p>
+              {notes.length === 0 ? (
+                <Empty>No notes yet.</Empty>
+              ) : (
+                notes.map((n) => (
+                  <Card key={n.id} padding="md">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                        {n.pinned ? '📌 ' : ''}
+                        {n.title ?? 'Untitled'}
+                      </h2>
+                      {n.tags.map((t) => (
+                        <Badge key={t} variant="default" size="sm">
+                          #{t}
+                        </Badge>
+                      ))}
+                      <span className="text-xs text-[var(--text-muted)]">
+                        updated {formatTimeAgo(n.updated_at)}
+                      </span>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words text-sm text-[var(--text-primary)]">
+                      {n.content}
+                    </p>
                   </Card>
                 ))
               )}

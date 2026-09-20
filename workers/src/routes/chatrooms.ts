@@ -1,4 +1,9 @@
 import { Hono } from 'hono'
+import {
+  markdownResponse,
+  renderChatMarkdown,
+  wantsMarkdown,
+} from '../lib/markdown'
 import { z } from 'zod'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
@@ -1204,6 +1209,17 @@ chatrooms.get('/:slug/messages', optionalAuthMiddleware, async (c) => {
 
   const oldest = formattedMessages[formattedMessages.length - 1]
   const newest = formattedMessages[0]
+
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderChatMarkdown({ slug, name: room.name }, formattedMessages, {
+        hasMore,
+        nextAfter: newest?.id ?? null,
+        nextBefore: oldest?.id ?? null,
+      })
+    )
+  }
 
   return c.json({
     success: true,

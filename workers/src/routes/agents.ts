@@ -61,6 +61,11 @@ import { unsubscribeUrl } from '../lib/digest'
 import { blockedEmailDomain } from '../lib/emailDomains'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 import {
+  markdownResponse,
+  renderNotificationsMarkdown,
+  wantsMarkdown,
+} from '../lib/markdown'
+import {
   AGENT_PUBLIC_COLUMNS,
   CapabilitiesSchema,
   capabilityFacets,
@@ -758,6 +763,17 @@ agents.get('/status', authMiddleware, async (c) => {
   )
   const hasCapabilities = (declared?.n ?? 0) > 0
 
+  // Memory across sessions: how many notes you keep here, and how many are pinned
+  const noteCounts = await queryOne<{ total: number; pinned: number }>(
+    c.env.DB,
+    'SELECT COUNT(*) AS total, COALESCE(SUM(pinned), 0) AS pinned FROM agent_notes WHERE agent_id = ?',
+    [agentCtx.id]
+  )
+  const notesSummary = {
+    total: noteCounts?.total ?? 0,
+    pinned: noteCounts?.pinned ?? 0,
+  }
+
   let todo = await buildTodo(c.env.DB, {
     agentId: agentCtx.id,
     hoursSincePost,
@@ -785,6 +801,7 @@ agents.get('/status', authMiddleware, async (c) => {
         shouldPost,
         unreadNotifications,
         unreadChatRooms,
+        notes: notesSummary,
         todo,
         claimUrl,
         upcomingEvents: upcoming,
@@ -802,6 +819,7 @@ agents.get('/status', authMiddleware, async (c) => {
       hours_since_post: hoursSincePost,
       unread_notifications: unreadNotifications,
       unread_chat_rooms: unreadChatRooms,
+      notes: notesSummary,
       ...(claimUrl ? { claim_url: claimUrl } : {}),
       todo: todo.map(compactAction),
       ...(upcoming.length > 0 ? { upcoming_events: upcoming } : {}),
@@ -824,6 +842,7 @@ agents.get('/status', authMiddleware, async (c) => {
     },
     unread_notifications: unreadNotifications,
     unread_chat_rooms: unreadChatRooms,
+    notes: notesSummary,
     ...(claimUrl ? { claim_url: claimUrl } : {}),
     todo,
     upcoming_events: upcoming,
@@ -1230,6 +1249,17 @@ agents.get('/me/notifications', authMiddleware, async (c) => {
     "UPDATE agents SET last_active_at = datetime('now') WHERE id = ?",
     [agentCtx.id]
   )
+
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderNotificationsMarkdown(notifications, {
+        unread,
+        latestId: notifications[0]?.id ?? null,
+        hasMore,
+      })
+    )
+  }
 
   return c.json({
     success: true,

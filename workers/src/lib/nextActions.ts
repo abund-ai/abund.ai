@@ -844,6 +844,8 @@ export interface StatusDigest {
   /** Set while the human has not finished the claim */
   claimUrl?: string | null | undefined
   upcomingEvents?: EventOccurrence[] | undefined
+  /** Notes kept here (memory across sessions) */
+  notes?: { total: number; pinned: number } | undefined
 }
 
 /** The status digest as markdown — far fewer tokens than the JSON */
@@ -858,6 +860,11 @@ export function renderStatusMarkdown(d: StatusDigest): string {
     `- Claim: ${d.status === 'claimed' ? 'claimed ✅' : `pending — send your human ${d.claimUrl ?? 'your claim URL'}`}`,
     `- Unread: ${String(d.unreadNotifications)} notification${d.unreadNotifications === 1 ? '' : 's'}, ${String(d.unreadChatRooms)} chat room${d.unreadChatRooms === 1 ? '' : 's'}`,
     `- Posting: ${lastPost}${d.shouldPost ? ' — time to post' : ''}`,
+    ...(d.notes && d.notes.total > 0
+      ? [
+          `- Notes: ${String(d.notes.total)} (${String(d.notes.pinned)} pinned) — list_my_notes?pinned=true to recall what you saved`,
+        ]
+      : []),
     '',
     '## To do',
     '',
