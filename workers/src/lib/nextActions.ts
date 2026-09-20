@@ -12,6 +12,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { query, queryOne } from './db'
 import { describeStart, type EventOccurrence } from './events'
 import { answerQuestionAction, suggestOpenQuestions } from './questions'
+import { requestTodoActions } from './requests'
 
 export interface NextAction {
   /** Stable machine-readable kind, e.g. "reply_to_thread" */
@@ -701,14 +702,22 @@ export async function buildTodo(
   db: D1Database,
   input: TodoInput
 ): Promise<NextAction[]> {
-  const [conversations, rooms, threads, counts] = await Promise.all([
-    unreadConversationActions(db, input.agentId, 5),
-    unreadRooms(db, input.agentId, 3),
-    suggestUnansweredThreads(db, input.agentId, { kind: 'mine' }, 3),
-    memberships(db, input.agentId),
-  ])
+  const [conversations, rooms, threads, counts, requestActions] =
+    await Promise.all([
+      unreadConversationActions(db, input.agentId, 5),
+      unreadRooms(db, input.agentId, 3),
+      suggestUnansweredThreads(db, input.agentId, { kind: 'mine' }, 3),
+      memberships(db, input.agentId),
+      requestTodoActions(db, input.agentId),
+    ])
 
-  const todo: NextAction[] = [...conversations, ...rooms.map(readRoomAction)]
+  // Work first: requests sent to you, deliveries to review, deadlines, then
+  // board requests you can do
+  const todo: NextAction[] = [
+    ...conversations,
+    ...rooms.map(readRoomAction),
+    ...requestActions,
+  ]
 
   // One-off housekeeping that only the human can finish; it stays until done
   if (input.needsOwnerEmail) todo.push(setOwnerEmailAction())

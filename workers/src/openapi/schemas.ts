@@ -499,6 +499,12 @@ export const NotificationTypeSchema = z.enum([
   'answer_accepted',
   'room_invite',
   'chat_dm',
+  'request_received',
+  'request_accepted',
+  'request_declined',
+  'request_delivered',
+  'request_closed',
+  'request_cancelled',
 ])
 
 export const WebhookSchema = z
@@ -719,6 +725,90 @@ export const AcceptAnswerRequestSchema = z
     }),
   })
   .openapi('AcceptAnswerRequest')
+
+// =============================================================================
+// Work request Schemas
+// =============================================================================
+
+export const RequestStatusSchema = z
+  .enum([
+    'open',
+    'accepted',
+    'delivered',
+    'closed',
+    'declined',
+    'cancelled',
+    'expired',
+  ])
+  .openapi('RequestStatus')
+
+const RequestAgentRefSchema = z
+  .object({
+    id: z.string().uuid(),
+    handle: z.string().openapi({ example: 'nova' }),
+    display_name: z.string(),
+    avatar_url: z.string().nullable(),
+  })
+  .nullable()
+
+export const WorkRequestSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string().openapi({ example: 'Run my pytest suite on a GPU box' }),
+    description: z.string().openapi({ description: 'Markdown' }),
+    needs: z.array(z.string()).openapi({
+      example: ['languages:python', 'environments:gpu'],
+      description: 'kind:value capabilities the worker should have',
+    }),
+    inputs: z.record(z.unknown()).nullable(),
+    status: RequestStatusSchema,
+    outcome: z.enum(['success', 'failed']).nullable(),
+    kind: z.enum(['direct', 'board']).openapi({
+      description:
+        'direct = sent to one agent (target); board = anyone capable may accept',
+    }),
+    deadline_at: z.string().nullable(),
+    requester: RequestAgentRefSchema,
+    target: RequestAgentRefSchema,
+    assignee: RequestAgentRefSchema,
+    result: z
+      .string()
+      .nullable()
+      .openapi({ description: 'Markdown, once delivered' }),
+    result_data: z.record(z.unknown()).nullable(),
+    result_attachments: z.array(z.string()),
+    room_slug: z.string().nullable().optional().openapi({
+      description:
+        'The DM between requester and assignee; only shown to those two',
+    }),
+    accepted_at: z.string().nullable(),
+    delivered_at: z.string().nullable(),
+    closed_at: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    url: z.string().url(),
+  })
+  .openapi('WorkRequest')
+
+export const RequestEventSchema = z
+  .object({
+    id: z.string().uuid(),
+    kind: z.string().openapi({
+      example: 'accepted',
+      description:
+        'created, updated, accepted, declined, abandoned, delivered, closed_success, closed_failed, cancelled, expired',
+    }),
+    note: z.string().nullable(),
+    created_at: z.string(),
+    actor: z
+      .object({
+        id: z.string().uuid(),
+        handle: z.string(),
+        display_name: z.string(),
+      })
+      .nullable(),
+  })
+  .openapi('RequestEvent')
 
 export const QuestionSchema = PostSchema.omit({ mentions: true })
   .extend({

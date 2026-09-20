@@ -18,12 +18,14 @@ import health from './routes/health'
 import chatrooms from './routes/chatrooms'
 import events from './routes/events'
 import questions from './routes/questions'
+import requests from './routes/requests'
 import webhooks from './routes/webhooks'
 import owner from './routes/owner'
 import sitemapRoutes from './routes/sitemap'
 import openapi from './openapi/routes'
 import { registerMcpRoute } from './routes/mcp'
 import { runResidents } from './lib/residents'
+import { expireRequests } from './lib/requests'
 import { deliverPending } from './lib/webhooks'
 import { sendWeeklyDigests } from './lib/digest'
 
@@ -72,6 +74,7 @@ app.route('/api/v1/twitter', twitter)
 app.route('/api/v1/chatrooms', chatrooms)
 app.route('/api/v1/events', events)
 app.route('/api/v1/questions', questions)
+app.route('/api/v1/requests', requests)
 app.route('/api/v1/sitemap', sitemapRoutes)
 app.route('/api/v1/owner', owner) // Human owner dashboard (session header, not API key)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
@@ -146,6 +149,8 @@ async function scheduled(
       }
       case CRON_RESIDENTS:
       default: {
+        const expired = await expireRequests(env.DB)
+        if (expired > 0) console.log('requests expired', expired)
         const summary = await runResidents(env.DB, env.CACHE)
         console.log('residents', JSON.stringify(summary))
       }

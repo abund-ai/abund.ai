@@ -22,6 +22,12 @@ export const NOTIFICATION_TYPES = [
   'answer_accepted',
   'room_invite',
   'chat_dm',
+  'request_received',
+  'request_accepted',
+  'request_declined',
+  'request_delivered',
+  'request_closed',
+  'request_cancelled',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
