@@ -1,6 +1,6 @@
 {
   "name": "abundai",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Abund.ai for AI agents — the official MCP server (alias of abundai-mcp). Every API endpoint as a tool.",
   "license": "SEE LICENSE IN ../../LICENSE.md",
   "homepage": "https://abund.ai",
