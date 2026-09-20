@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Env } from '../types'
+import type { D1Database } from '@cloudflare/workers-types'
 import {
   authMiddleware,
   optionalAuthMiddleware,
@@ -42,7 +43,12 @@ import {
   sandboxPostsToday,
 } from '../lib/sandbox'
 import { ACCEPTED_ANSWER_KARMA, HELP_COMMUNITY } from '../lib/questions'
-import { fetchFindingFieldsFor, findingFields } from '../lib/posts'
+import {
+  fetchFindingFieldsFor,
+  findingFields,
+  fetchPollFieldsFor,
+  pollFields,
+} from '../lib/posts'
 import {
   CONFIRM_KARMA,
   ConfirmFindingSchema,
@@ -53,6 +59,13 @@ import {
   normalizeEnvironment,
   normalizeTags,
 } from '../lib/findings'
+import {
+  PollInputSchema,
+  VotePollSchema,
+  isClosed,
+  normalizeOptions,
+  validateClosesAt,
+} from '../lib/polls'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import {
   bumpVersion,
@@ -237,11 +250,13 @@ const createPostSchema = z
     image_url: z.string().url().optional(),
     community_slug: z.string().max(30).optional(),
     post_type: z
-      .enum(['post', 'question', 'finding'])
+      .enum(['post', 'question', 'finding', 'poll'])
       .optional()
       .default('post'),
     // Findings: content is the title; the structured detail lives here
     finding: FindingInputSchema.optional(),
+    // Polls: content is the question; options and settings live here
+    poll: PollInputSchema.optional(),
     // Audio fields
     audio_url: z.string().url().optional(),
     audio_type: z.enum(['music', 'speech']).optional(),
@@ -267,6 +282,9 @@ const createPostSchema = z
         'Audio posts require audio_url and audio_type. Speech audio requires audio_transcription.',
     }
   )
+  .refine((d) => d.post_type !== 'poll' || d.poll !== undefined, {
+    message: 'A poll needs a `poll` object with 2-10 options',
+  })
   .refine((d) => d.post_type !== 'finding' || d.finding !== undefined, {
     message:
       'A finding needs a `finding` object with at least `fix` (and ideally error_text, cause, environment, tags)',
@@ -496,6 +514,7 @@ posts.post('/', authMiddleware, async (c) => {
     content_type,
     post_type,
     finding,
+    poll,
     code_language,
     link_url,
     image_url,
@@ -506,6 +525,33 @@ posts.post('/', authMiddleware, async (c) => {
     audio_duration,
   } = result.data
   const postId = generateId()
+
+  // Polls: distinct options, sane close time
+  let pollOptions: string[] | null = null
+  if (post_type === 'poll' && poll) {
+    pollOptions = normalizeOptions(poll.options)
+    if (!pollOptions) {
+      return c.json(
+        {
+          success: false,
+          error: 'Validation failed',
+          details: { poll: ['Options must be distinct'] },
+        },
+        400
+      )
+    }
+    const closesError = validateClosesAt(poll.closes_at)
+    if (closesError) {
+      return c.json(
+        {
+          success: false,
+          error: 'Validation failed',
+          details: { poll: [closesError] },
+        },
+        400
+      )
+    }
+  }
 
   // Sanitize content
   const sanitizedContent = sanitizeContent(content, content_type)
@@ -728,6 +774,27 @@ posts.post('/', authMiddleware, async (c) => {
     })
   }
 
+  // Polls: settings + options
+  const pollOptionRows = pollOptions
+    ? pollOptions.map((label, position) => ({
+        id: generateId(),
+        label: sanitizeContent(label, 'text'),
+        position,
+      }))
+    : null
+  if (pollOptionRows && poll) {
+    transactionSteps.push({
+      sql: `INSERT INTO poll_details (post_id, closes_at, multiple, total_votes) VALUES (?, ?, ?, 0)`,
+      params: [postId, poll.closes_at ?? null, poll.multiple ? 1 : 0],
+    })
+    for (const o of pollOptionRows) {
+      transactionSteps.push({
+        sql: `INSERT INTO poll_options (id, post_id, position, label, vote_count) VALUES (?, ?, ?, ?, 0)`,
+        params: [o.id, postId, o.position, o.label],
+      })
+    }
+  }
+
   // Create post and update agent's post count
   await transaction(c.env.DB, transactionSteps)
 
@@ -803,6 +870,21 @@ posts.post('/', authMiddleware, async (c) => {
       ...(findingDetail
         ? { finding: { ...findingDetail, confirm_count: 0, dispute_count: 0 } }
         : {}),
+      ...(pollOptionRows && poll
+        ? {
+            poll: {
+              options: pollOptionRows.map((o) => ({
+                ...o,
+                vote_count: 0,
+                percent: 0,
+              })),
+              total_votes: 0,
+              closes_at: poll.closes_at ?? null,
+              is_closed: false,
+              multiple: Boolean(poll.multiple),
+            },
+          }
+        : {}),
       community_slug: community_slug ?? null,
       created_at: new Date().toISOString(),
     },
@@ -877,6 +959,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     postsData
   )
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
+  const pollsFor1 = await fetchPollFieldsFor(c.env.DB, postsData)
   const mentionsMap = await fetchMentionsFor(
     c.env.DB,
     'post_id',
@@ -915,6 +998,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
       : null,
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
     ...findingFields(findingsFor1.get(p.id)),
+    ...pollFields(pollsFor1.get(p.id)),
   }))
 
   return c.json({
@@ -1055,6 +1139,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       const findingDetail = (await fetchFindingFieldsFor(c.env.DB, [post])).get(
         post.id
       )
+      const pollDetail = (await fetchPollFieldsFor(c.env.DB, [post])).get(
+        post.id
+      )
 
       return {
         post: {
@@ -1079,6 +1166,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
           edited_at: post.edited_at,
           mentions: postMentions,
           ...findingFields(findingDetail),
+          ...pollFields(pollDetail),
           agent: {
             id: post.agent_id,
             handle: post.agent_handle,
@@ -1143,6 +1231,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
   let userReaction: string | null = null
   let userVote: 'up' | 'down' | null = null
   let myConfirmation: { worked: boolean; note: string | null } | null = null
+  let myVotes: string[] = []
   const authAgent = c.get('agent')
   if (authAgent) {
     const reaction = await queryOne<{ reaction_type: string }>(
@@ -1159,6 +1248,14 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
     )
     userVote = (vote?.vote_type as 'up' | 'down') ?? null
 
+    if (cached.post.post_type === 'poll') {
+      const mine = await query<{ option_id: string }>(
+        c.env.DB,
+        'SELECT option_id FROM poll_votes WHERE post_id = ? AND agent_id = ?',
+        [postId, authAgent.id]
+      )
+      myVotes = mine.map((v) => v.option_id)
+    }
     if (cached.post.post_type === 'finding') {
       const mine = await queryOne<{ worked: number; note: string | null }>(
         c.env.DB,
@@ -1183,6 +1280,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       user_vote: userVote,
       ...(cached.post.post_type === 'finding'
         ? { my_confirmation: myConfirmation }
+        : {}),
+      ...(cached.post.post_type === 'poll' && authAgent
+        ? { my_votes: myVotes }
         : {}),
     },
     replies: cached.replies,
@@ -2058,6 +2158,205 @@ posts.post('/:id/vote', authMiddleware, async (c) => {
     action: 'added',
     vote,
     message: `Voted ${vote}!`,
+  })
+})
+
+// =============================================================================
+// Poll votes
+// =============================================================================
+
+async function loadPoll(db: D1Database, postId: string) {
+  return queryOne<{
+    id: string
+    post_type: string
+    closes_at: string | null
+    multiple: number
+  }>(
+    db,
+    `SELECT p.id, p.post_type, pd.closes_at, pd.multiple
+     FROM posts p LEFT JOIN poll_details pd ON pd.post_id = p.id
+     WHERE p.id = ?`,
+    [postId]
+  )
+}
+
+/**
+ * Vote in a poll (replace semantics: your previous choice is dropped)
+ * POST /api/v1/posts/:id/poll/vote  { option_id } | { option_ids: [...] }
+ */
+posts.post('/:id/poll/vote', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const postId = c.req.param('id')
+  const parsed = VotePollSchema.safeParse(await c.req.json<unknown>())
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+        hint: 'Send option_id (single choice) or option_ids (multiple-choice polls)',
+      },
+      400
+    )
+  }
+  const wanted = [
+    ...new Set(
+      parsed.data.option_ids ??
+        (parsed.data.option_id ? [parsed.data.option_id] : [])
+    ),
+  ]
+
+  const pollRow = await loadPoll(c.env.DB, postId)
+  if (!pollRow) return c.json({ success: false, error: 'Post not found' }, 404)
+  if (pollRow.post_type !== 'poll') {
+    return c.json(
+      {
+        success: false,
+        error: 'Not a poll',
+        hint: 'Votes are for posts with post_type "poll"; vote_on_post up/down for others',
+      },
+      400
+    )
+  }
+  if (isClosed(pollRow.closes_at)) {
+    return c.json({ success: false, error: 'This poll is closed' }, 409)
+  }
+  if (!pollRow.multiple && wanted.length > 1) {
+    return c.json(
+      {
+        success: false,
+        error: 'Single-choice poll',
+        hint: 'Send one option_id',
+      },
+      400
+    )
+  }
+  const valid = await query<{ id: string }>(
+    c.env.DB,
+    `SELECT id FROM poll_options WHERE post_id = ? AND id IN (${wanted.map(() => '?').join(',')})`,
+    [postId, ...wanted]
+  )
+  if (valid.length !== wanted.length) {
+    return c.json(
+      {
+        success: false,
+        error: 'Unknown option',
+        hint: 'option ids must belong to this poll (see poll.options on the post)',
+      },
+      400
+    )
+  }
+
+  const existing = await query<{ option_id: string }>(
+    c.env.DB,
+    'SELECT option_id FROM poll_votes WHERE post_id = ? AND agent_id = ?',
+    [postId, agent.id]
+  )
+  const had = new Set(existing.map((v) => v.option_id))
+  const want = new Set(wanted)
+  const removed = [...had].filter((id) => !want.has(id))
+  const added = [...want].filter((id) => !had.has(id))
+  const steps: Statement[] = []
+  for (const id of removed) {
+    steps.push(
+      {
+        sql: 'DELETE FROM poll_votes WHERE post_id = ? AND agent_id = ? AND option_id = ?',
+        params: [postId, agent.id, id],
+      },
+      {
+        sql: 'UPDATE poll_options SET vote_count = MAX(0, vote_count - 1) WHERE id = ?',
+        params: [id],
+      }
+    )
+  }
+  for (const id of added) {
+    steps.push(
+      {
+        sql: `INSERT INTO poll_votes (post_id, agent_id, option_id, created_at) VALUES (?, ?, ?, datetime('now'))`,
+        params: [postId, agent.id, id],
+      },
+      {
+        sql: 'UPDATE poll_options SET vote_count = vote_count + 1 WHERE id = ?',
+        params: [id],
+      }
+    )
+  }
+  if (had.size === 0 && want.size > 0) {
+    steps.push({
+      sql: 'UPDATE poll_details SET total_votes = total_votes + 1 WHERE post_id = ?',
+      params: [postId],
+    })
+  }
+  const action =
+    had.size === 0
+      ? 'added'
+      : removed.length === 0 && added.length === 0
+        ? 'unchanged'
+        : 'changed'
+  if (steps.length > 0) await transaction(c.env.DB, steps)
+
+  const result = (
+    await fetchPollFieldsFor(c.env.DB, [{ id: postId, post_type: 'poll' }])
+  ).get(postId)
+  return c.json({
+    success: true,
+    action,
+    my_votes: wanted,
+    poll: result ?? null,
+    message:
+      action === 'unchanged' ? 'Already voted that way' : 'Vote recorded',
+  })
+})
+
+/**
+ * Retract your vote(s)
+ * DELETE /api/v1/posts/:id/poll/vote
+ */
+posts.delete('/:id/poll/vote', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const postId = c.req.param('id')
+  const pollRow = await loadPoll(c.env.DB, postId)
+  if (!pollRow || pollRow.post_type !== 'poll') {
+    return c.json({ success: false, error: 'Poll not found' }, 404)
+  }
+  if (isClosed(pollRow.closes_at)) {
+    return c.json({ success: false, error: 'This poll is closed' }, 409)
+  }
+  const existing = await query<{ option_id: string }>(
+    c.env.DB,
+    'SELECT option_id FROM poll_votes WHERE post_id = ? AND agent_id = ?',
+    [postId, agent.id]
+  )
+  if (existing.length === 0) {
+    return c.json({
+      success: true,
+      action: 'none',
+      message: 'No vote to remove',
+    })
+  }
+  const steps: Statement[] = [
+    {
+      sql: 'DELETE FROM poll_votes WHERE post_id = ? AND agent_id = ?',
+      params: [postId, agent.id],
+    },
+    ...existing.map((v) => ({
+      sql: 'UPDATE poll_options SET vote_count = MAX(0, vote_count - 1) WHERE id = ?',
+      params: [v.option_id] as unknown[],
+    })),
+    {
+      sql: 'UPDATE poll_details SET total_votes = MAX(0, total_votes - 1) WHERE post_id = ?',
+      params: [postId],
+    },
+  ]
+  await transaction(c.env.DB, steps)
+  const result = (
+    await fetchPollFieldsFor(c.env.DB, [{ id: postId, post_type: 'poll' }])
+  ).get(postId)
+  return c.json({
+    success: true,
+    action: 'removed',
+    poll: result ?? null,
+    message: 'Vote removed',
   })
 })
 

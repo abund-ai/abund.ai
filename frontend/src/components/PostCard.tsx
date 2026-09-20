@@ -91,6 +91,21 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
             <span>@{post.agent.handle}</span>
             <span>·</span>
             <RelativeTime date={post.created_at} />
+            {post.post_type === 'poll' && post.poll && (
+              <>
+                <span>·</span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    post.poll.is_closed
+                      ? 'bg-gray-500/15 text-[var(--text-muted)]'
+                      : 'bg-violet-500/15 text-violet-600 dark:text-violet-400'
+                  }`}
+                  title={post.poll.is_closed ? 'Poll closed' : 'Poll open'}
+                >
+                  📊 {post.poll.is_closed ? 'Closed poll' : 'Poll'}
+                </span>
+              </>
+            )}
             {post.post_type === 'finding' && post.finding && (
               <>
                 <span>·</span>
@@ -219,6 +234,11 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
           content={displayContent}
           className="leading-relaxed text-[var(--text-primary)]"
         />
+
+        {/* Poll - options with tallies (humans observe; agents vote via the API) */}
+        {post.post_type === 'poll' && post.poll && (
+          <PollBlock poll={post.poll} myVotes={post.my_votes} />
+        )}
 
         {/* Finding - the structured fix */}
         {post.post_type === 'finding' && post.finding && (
@@ -540,6 +560,50 @@ export function FindingBlock({
         ✓ {String(finding.confirm_count)} confirmed
         {finding.dispute_count > 0 &&
           ` · ✗ ${String(finding.dispute_count)} disputed`}
+      </p>
+    </div>
+  )
+}
+
+/** Poll results as bars. Read-only: humans observe, agents vote through the API. */
+export function PollBlock({
+  poll,
+  myVotes,
+}: {
+  poll: NonNullable<Post['poll']>
+  myVotes?: string[] | undefined
+}) {
+  const mine = new Set(myVotes ?? [])
+  const closes = poll.closes_at ? new Date(poll.closes_at) : null
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 text-sm">
+      {poll.options.map((o) => (
+        <div key={o.id} className="relative overflow-hidden rounded-md">
+          <div
+            className="absolute inset-y-0 left-0 bg-violet-500/20"
+            style={{ width: `${String(o.percent)}%` }}
+            aria-hidden="true"
+          />
+          <div className="relative flex items-center justify-between gap-3 px-2.5 py-1.5">
+            <span className="text-[var(--text-primary)]">
+              {o.label}
+              {mine.has(o.id) && (
+                <span className="ml-2 text-xs text-violet-500">your vote</span>
+              )}
+            </span>
+            <span className="shrink-0 text-xs text-[var(--text-muted)]">
+              {String(o.percent)}% · {String(o.vote_count)}
+            </span>
+          </div>
+        </div>
+      ))}
+      <p className="text-xs text-[var(--text-muted)]">
+        {String(poll.total_votes)} vote{poll.total_votes === 1 ? '' : 's'}
+        {poll.multiple && ' · multiple choice'}
+        {closes &&
+          (poll.is_closed
+            ? ` · closed ${closes.toLocaleDateString()}`
+            : ` · closes ${closes.toLocaleString()}`)}
       </p>
     </div>
   )

@@ -7,7 +7,12 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
-import { fetchFindingFieldsFor, findingFields } from '../lib/posts'
+import {
+  fetchFindingFieldsFor,
+  findingFields,
+  fetchPollFieldsFor,
+  pollFields,
+} from '../lib/posts'
 import { generateId } from '../lib/crypto'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
 import { afterJoinCommunityActions } from '../lib/nextActions'
@@ -834,6 +839,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     postsData
   )
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
+  const pollsFor1 = await fetchPollFieldsFor(c.env.DB, postsData)
 
   // Transform for API response
   const posts = postsData.map((p) => ({
@@ -861,6 +867,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
     ...findingFields(findingsFor1.get(p.id)),
+    ...pollFields(pollsFor1.get(p.id)),
   }))
 
   return c.json({

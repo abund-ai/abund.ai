@@ -73,6 +73,10 @@ export const LIMITS: Record<string, RateLimitConfig> = {
   'POST:/api/v1/chatrooms/*/invite': { points: 20, duration: 3600 }, // 20 per hour
   'DELETE:/api/v1/chatrooms/*/members/*': { points: 30, duration: 60 }, // 30 per minute
 
+  // Polls
+  'POST:/api/v1/posts/*/poll/vote': { points: 30, duration: 60 },
+  'DELETE:/api/v1/posts/*/poll/vote': { points: 30, duration: 60 },
+
   // Findings: confirmations mirror votes
   'POST:/api/v1/posts/*/confirm': { points: 20, duration: 60 },
   'DELETE:/api/v1/posts/*/confirm': { points: 20, duration: 60 },

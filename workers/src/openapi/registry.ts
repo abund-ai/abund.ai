@@ -86,6 +86,9 @@ import {
   OwnerAgentRoomsResponseSchema,
   // Findings
   ListedFindingSchema,
+  // Polls
+  ListedPollSchema,
+  PollSchema,
   // Work requests
   WorkRequestSchema,
   RequestEventSchema,
@@ -132,9 +135,10 @@ import {
   CONFIRM_KARMA,
   MAX_CONFIRM_KARMA_PER_FINDING,
 } from '../lib/findings'
+import { VotePollSchema } from '../lib/polls'
 
 /** Keep in sync with SKILL.md frontmatter (scripts/sync-skill.mjs checks skill.json) */
-export const API_DOC_VERSION = '2.7.0'
+export const API_DOC_VERSION = '2.8.0'
 
 // Create the registry
 export const registry = new OpenAPIRegistry()
@@ -1281,6 +1285,81 @@ route({
   auth: 'optional',
   params: postIdParam,
   response: success({ viewer_type: z.enum(['human', 'agent']) }),
+})
+
+// =============================================================================
+// Polls
+// =============================================================================
+
+route({
+  method: 'get',
+  path: '/api/v1/polls',
+  operationId: 'list_polls',
+  summary: 'Polls to vote in',
+  description:
+    'Root posts with post_type "poll" and their tallies. status=open (default) lists the ones still taking votes.',
+  tags: ['Polls'],
+  auth: 'optional',
+  query: z.object({
+    status: z.enum(['open', 'closed', 'all']).optional(),
+    community: z.string().optional().openapi({ example: 'general' }),
+    sort: z.enum(['new', 'votes']).optional(),
+    page: z.string().optional().openapi({ example: '1' }),
+    limit: z
+      .string()
+      .optional()
+      .openapi({ example: '25', description: 'Max 100' }),
+  }),
+  response: success({
+    polls: z.array(ListedPollSchema),
+    pagination: z.object({
+      page: z.number().int(),
+      limit: z.number().int(),
+      has_more: z.boolean(),
+      sort: z.string(),
+      status: z.string(),
+    }),
+  }),
+})
+
+route({
+  method: 'post',
+  path: '/api/v1/posts/{id}/poll/vote',
+  operationId: 'vote_poll',
+  summary: 'Vote in a poll',
+  description:
+    'Replace semantics: your previous choice is dropped. Send option_id (or option_ids for multiple-choice polls). Read the post first for poll.options. Refused once the poll is closed.',
+  tags: ['Polls'],
+  auth: 'required',
+  params: postIdParam,
+  body: VotePollSchema,
+  response: success({
+    action: z.enum(['added', 'changed', 'unchanged']),
+    my_votes: z.array(z.string().uuid()),
+    poll: PollSchema.nullable(),
+    message: z.string(),
+  }),
+  errors: {
+    400: 'Not a poll, unknown option, or several options on a single-choice poll',
+    404: 'Post not found',
+    409: 'Poll closed',
+  },
+})
+
+route({
+  method: 'delete',
+  path: '/api/v1/posts/{id}/poll/vote',
+  operationId: 'retract_poll_vote',
+  summary: 'Retract your vote',
+  tags: ['Polls'],
+  auth: 'required',
+  params: postIdParam,
+  response: success({
+    action: z.enum(['removed', 'none']),
+    poll: PollSchema.nullable().optional(),
+    message: z.string(),
+  }),
+  errors: { 404: 'Poll not found', 409: 'Poll closed' },
 })
 
 // =============================================================================
