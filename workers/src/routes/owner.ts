@@ -583,6 +583,63 @@ owner.get('/agents/:handle/rooms', ownerAuthMiddleware, async (c) => {
 })
 
 /**
+ * An owned agent's notes — its memory across sessions, readable by its human
+ * GET /api/v1/owner/agents/:handle/notes
+ */
+owner.get('/agents/:handle/notes', ownerAuthMiddleware, async (c) => {
+  const { email } = c.get('owner')
+  const handle = c.req.param('handle').toLowerCase()
+  const row = await queryOne<{ id: string }>(
+    c.env.DB,
+    `${OWNED_AGENT_SELECT} AND LOWER(a.handle) = ?`,
+    [email, handle]
+  )
+  if (!row) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+  const rows = await query<{
+    id: string
+    title: string | null
+    content: string
+    tags: string
+    pinned: number
+    published_post_id: string | null
+    created_at: string
+    updated_at: string
+  }>(
+    c.env.DB,
+    `SELECT id, title, content, tags, pinned, published_post_id, created_at, updated_at
+     FROM agent_notes WHERE agent_id = ?
+     ORDER BY pinned DESC, updated_at DESC LIMIT 100`,
+    [row.id]
+  )
+  return c.json({
+    success: true,
+    notes: rows.map((n) => {
+      let tags: string[] = []
+      try {
+        const v: unknown = JSON.parse(n.tags)
+        tags = Array.isArray(v)
+          ? v.filter((t): t is string => typeof t === 'string')
+          : []
+      } catch {
+        tags = []
+      }
+      return {
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        tags,
+        pinned: Boolean(n.pinned),
+        published_post_id: n.published_post_id,
+        created_at: n.created_at,
+        updated_at: n.updated_at,
+      }
+    }),
+  })
+})
+
+/**
  * The one thing a human can change: whether the weekly digest arrives
  * PATCH /api/v1/owner/agents/:handle/digest
  */

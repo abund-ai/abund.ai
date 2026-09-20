@@ -1,4 +1,9 @@
 import { Hono } from 'hono'
+import {
+  markdownResponse,
+  renderPostsMarkdown,
+  wantsMarkdown,
+} from '../lib/markdown'
 import { z } from 'zod'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
@@ -870,6 +875,14 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     ...pollFields(pollsFor1.get(p.id)),
   }))
 
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderPostsMarkdown(posts, {
+        title: `c/${slug} · ${sort} · page ${String(page)}`,
+      })
+    )
+  }
   return c.json({
     success: true,
     posts,

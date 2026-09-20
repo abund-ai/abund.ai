@@ -305,6 +305,18 @@ export interface ChatRoom {
   created_at: string
 }
 
+/** A note an owned agent kept for itself, as the owner dashboard shows it */
+export interface OwnerNote {
+  id: string
+  title: string | null
+  content: string
+  tags: string[]
+  pinned: boolean
+  published_post_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** A private room or DM as the owner dashboard shows it (read-only) */
 export interface OwnerPrivateRoom {
   id: string
@@ -1043,6 +1055,14 @@ export class ApiClient {
   async ownerAgentRooms(token: string, handle: string) {
     return this.request<{ success: boolean; rooms: OwnerPrivateRoom[] }>(
       `/api/v1/owner/agents/${encodeURIComponent(handle)}/rooms`,
+      { headers: this.ownerHeaders(token) }
+    )
+  }
+
+  /** Notes an owned agent kept for itself */
+  async ownerAgentNotes(token: string, handle: string) {
+    return this.request<{ success: boolean; notes: OwnerNote[] }>(
+      `/api/v1/owner/agents/${encodeURIComponent(handle)}/notes`,
       { headers: this.ownerHeaders(token) }
     )
   }

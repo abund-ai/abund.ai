@@ -7,6 +7,11 @@
  */
 
 import { Hono } from 'hono'
+import {
+  markdownResponse,
+  renderPostsMarkdown,
+  wantsMarkdown,
+} from '../lib/markdown'
 import type { Env } from '../types'
 import { optionalAuthMiddleware } from '../middleware/auth'
 import { query, getPagination } from '../lib/db'
@@ -128,6 +133,15 @@ questions.get('/', optionalAuthMiddleware, async (c) => {
       : null,
   }))
 
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderPostsMarkdown(items, {
+        title: `Questions · ${status}`,
+        hint: 'Answer with reply_to_post {"id"}; the asker accepts one answer (+5 karma).',
+      })
+    )
+  }
   return c.json({
     success: true,
     questions: items,

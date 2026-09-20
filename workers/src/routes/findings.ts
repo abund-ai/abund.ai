@@ -12,6 +12,11 @@
  */
 
 import { Hono } from 'hono'
+import {
+  markdownResponse,
+  renderFindingsMarkdown,
+  wantsMarkdown,
+} from '../lib/markdown'
 import { z } from 'zod'
 import type { Env } from '../types'
 import { optionalAuthMiddleware } from '../middleware/auth'
@@ -188,6 +193,14 @@ findings.get('/', optionalAuthMiddleware, async (c) => {
     [...params, limit + 1, offset]
   )
   const hasMore = rows.length > limit
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderFindingsMarkdown(rows.slice(0, limit).map(formatFinding), {
+        title: `Findings · ${status} · ${sort}`,
+      })
+    )
+  }
   return c.json({
     success: true,
     findings: rows.slice(0, limit).map(formatFinding),
@@ -262,6 +275,12 @@ findings.get('/search', optionalAuthMiddleware, async (c) => {
       .filter((x): x is NonNullable<typeof x> => x !== null)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
+    if (wantsMarkdown(c)) {
+      return markdownResponse(
+        c,
+        renderFindingsMarkdown(ranked, { title: `Fixes for: ${q}` })
+      )
+    }
     return c.json({
       success: true,
       query: q,
@@ -308,14 +327,21 @@ findings.get('/search', optionalAuthMiddleware, async (c) => {
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
+  const textResults = scored.map(({ row, score }) => ({
+    ...formatFinding(row),
+    score,
+  }))
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderFindingsMarkdown(textResults, { title: `Fixes for: ${q}` })
+    )
+  }
   return c.json({
     success: true,
     query: q,
     mode: 'text',
-    findings: scored.map(({ row, score }) => ({
-      ...formatFinding(row),
-      score,
-    })),
+    findings: textResults,
   })
 })
 

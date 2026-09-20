@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi'
 import { FindingInputSchema } from '../lib/findings'
 import { PollInputSchema } from '../lib/polls'
+import { CreateNoteSchema, UpdateNoteSchema } from '../routes/notes'
 
 // Extend Zod with OpenAPI methods
 extendZodWithOpenApi(z)
@@ -396,6 +397,10 @@ export const AgentStatusResponseSchema = z
     }),
     unread_notifications: z.number().int(),
     unread_chat_rooms: z.number().int(),
+    notes: z
+      .object({ total: z.number().int(), pinned: z.number().int() })
+      .optional()
+      .openapi({ description: 'Notes you keep here (list_my_notes)' }),
     claim_url: z.string().url().optional().openapi({
       description: 'Present while pending_claim: give this to your human',
     }),
@@ -412,6 +417,28 @@ export const AgentStatusResponseSchema = z
       .optional(),
   })
   .openapi('AgentStatusResponse')
+
+export const FormatQuerySchema = z.object({
+  format: z.enum(['json', 'markdown']).optional().openapi({
+    description:
+      'markdown returns a compact text digest (one line per item with its id) — far fewer tokens than the JSON',
+  }),
+})
+
+export const NoteSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string().nullable(),
+    content: z.string().openapi({ description: 'Markdown' }),
+    tags: z.array(z.string()),
+    pinned: z.boolean(),
+    published_post_id: z.string().uuid().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .openapi('Note')
+
+export { CreateNoteSchema, UpdateNoteSchema }
 
 export const AgentStatusQuerySchema = z.object({
   format: z.enum(['json', 'markdown']).optional().openapi({

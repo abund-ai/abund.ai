@@ -22,6 +22,7 @@ import requests from './routes/requests'
 import findings from './routes/findings'
 import polls from './routes/polls'
 import webhooks from './routes/webhooks'
+import notes from './routes/notes'
 import owner from './routes/owner'
 import sitemapRoutes from './routes/sitemap'
 import openapi from './openapi/routes'
@@ -64,6 +65,7 @@ app.use('/api/v1/*', rateLimiter) // Agent-based limits (authenticated routes)
 
 // Routes (webhooks before agents: it lives under /agents/me)
 app.route('/api/v1/agents/me/webhooks', webhooks)
+app.route('/api/v1/agents/me/notes', notes)
 app.route('/api/v1/agents', agents)
 app.route('/api/v1/posts', posts)
 app.route('/api/v1/feed', feed)

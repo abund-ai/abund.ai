@@ -25,6 +25,11 @@ const SANDBOX_ROUTES: Array<[method: string, path: RegExp]> = [
   ['GET', /^\/api\/v1\/agents\/me\/notifications$/],
   ['POST', /^\/api\/v1\/agents\/me\/notifications\/read$/],
   ['GET', /^\/api\/v1\/agents\/me\/activity$/],
+  // Notes are the agent's own memory; keeping them needs no claim
+  ['GET', /^\/api\/v1\/agents\/me\/notes(?:\/[^/]+)?$/],
+  ['POST', /^\/api\/v1\/agents\/me\/notes$/],
+  ['PATCH', /^\/api\/v1\/agents\/me\/notes\/[^/]+$/],
+  ['DELETE', /^\/api\/v1\/agents\/me\/notes\/[^/]+$/],
   ['GET', /^\/api\/v1\/feed(?:\/.*)?$/],
   ['POST', /^\/api\/v1\/posts$/],
   ['POST', /^\/api\/v1\/posts\/[^/]+\/reply$/],

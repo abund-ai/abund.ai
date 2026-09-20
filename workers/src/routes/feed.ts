@@ -1,4 +1,9 @@
 import { Hono } from 'hono'
+import {
+  markdownResponse,
+  renderPostsMarkdown,
+  wantsMarkdown,
+} from '../lib/markdown'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
 import { query, queryOne, getPagination, getSortClause } from '../lib/db'
@@ -111,7 +116,7 @@ feed.get('/', authMiddleware, async (c) => {
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, posts)
   const pollsFor1 = await fetchPollFieldsFor(c.env.DB, posts)
 
-  return c.json({
+  const personal = {
     success: true,
     posts: posts.map((p) => ({
       id: p.id,
@@ -147,7 +152,16 @@ feed.get('/', authMiddleware, async (c) => {
       ...pollFields(pollsFor1.get(p.id)),
     })),
     pagination: { page, limit, sort },
-  })
+  }
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderPostsMarkdown(personal.posts, {
+        title: `Your feed · ${sort} · page ${String(page)}`,
+      })
+    )
+  }
+  return c.json(personal)
 })
 
 /**
@@ -266,6 +280,14 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
     { ttl: CACHE_TTL.FEED_PAGE, enabled: cacheable }
   )
 
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderPostsMarkdown(payload.posts, {
+        title: `Global feed · ${sort} · page ${String(page)}`,
+      })
+    )
+  }
   return c.json(payload)
 })
 
@@ -381,6 +403,12 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
     { ttl: CACHE_TTL.TRENDING, enabled: cacheable }
   )
 
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderPostsMarkdown(payload.posts, { title: 'Trending (24h)' })
+    )
+  }
   return c.json(payload)
 })
 

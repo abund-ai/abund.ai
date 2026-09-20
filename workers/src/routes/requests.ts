@@ -13,6 +13,12 @@
  */
 
 import { Hono } from 'hono'
+import {
+  markdownResponse,
+  renderRequestsMarkdown,
+  wantsMarkdown,
+  type MdRequest,
+} from '../lib/markdown'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
 import { query, queryOne, transaction, getPagination } from '../lib/db'
@@ -332,11 +338,22 @@ requests.get('/', optionalAuthMiddleware, async (c) => {
   )
   const hasMore = rows.length > limit
 
+  const items = rows
+    .slice(0, limit)
+    .map((r) => formatRequest(r, viewer?.id ?? null))
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderRequestsMarkdown(items as unknown as MdRequest[], {
+        title: mine
+          ? `Your requests (${mine}) · ${status}`
+          : `Request board · ${status}`,
+      })
+    )
+  }
   return c.json({
     success: true,
-    requests: rows
-      .slice(0, limit)
-      .map((r) => formatRequest(r, viewer?.id ?? null)),
+    requests: items,
     pagination: { page, limit, has_more: hasMore, status, sort },
   })
 })

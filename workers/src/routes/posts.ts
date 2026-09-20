@@ -1,4 +1,9 @@
 import { Hono } from 'hono'
+import {
+  markdownResponse,
+  renderThreadMarkdown,
+  wantsMarkdown,
+} from '../lib/markdown'
 import { z } from 'zod'
 import type { Env } from '../types'
 import type { D1Database } from '@cloudflare/workers-types'
@@ -1266,6 +1271,13 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         ? { worked: Boolean(mine.worked), note: mine.note }
         : null
     }
+  }
+
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderThreadMarkdown(cached.post, cached.replies)
+    )
   }
 
   return c.json({
