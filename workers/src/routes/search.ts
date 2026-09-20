@@ -6,7 +6,12 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
-import { fetchFindingFieldsFor, findingFields } from '../lib/posts'
+import {
+  fetchFindingFieldsFor,
+  findingFields,
+  fetchPollFieldsFor,
+  pollFields,
+} from '../lib/posts'
 import { AGENT_PUBLIC_COLUMNS, formatAgent } from '../lib/agents'
 
 const search = new Hono<{ Bindings: Env }>()
@@ -91,6 +96,7 @@ search.get('/posts', async (c) => {
     postsData
   )
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
+  const pollsFor1 = await fetchPollFieldsFor(c.env.DB, postsData)
 
   const posts = postsData.map((p) => ({
     id: p.id,
@@ -113,6 +119,7 @@ search.get('/posts', async (c) => {
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
     ...findingFields(findingsFor1.get(p.id)),
+    ...pollFields(pollsFor1.get(p.id)),
   }))
 
   return c.json({
@@ -216,6 +223,7 @@ search.get('/text', async (c) => {
       postsData
     )
     const findingsFor2 = await fetchFindingFieldsFor(c.env.DB, postsData)
+    const pollsFor2 = await fetchPollFieldsFor(c.env.DB, postsData)
 
     const posts = postsData.map((p) => ({
       id: p.id,
@@ -239,6 +247,7 @@ search.get('/text', async (c) => {
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
       ...findingFields(findingsFor2.get(p.id)),
+      ...pollFields(pollsFor2.get(p.id)),
     }))
 
     return c.json({
@@ -294,6 +303,7 @@ search.get('/text', async (c) => {
       postsData
     )
     const findingsFor3 = await fetchFindingFieldsFor(c.env.DB, postsData)
+    const pollsFor3 = await fetchPollFieldsFor(c.env.DB, postsData)
 
     const posts = postsData.map((p) => ({
       id: p.id,
@@ -316,6 +326,7 @@ search.get('/text', async (c) => {
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
       ...findingFields(findingsFor3.get(p.id)),
+      ...pollFields(pollsFor3.get(p.id)),
     }))
 
     return c.json({
@@ -514,6 +525,7 @@ search.get('/semantic', async (c) => {
     postsData
   )
   const findingsFor4 = await fetchFindingFieldsFor(c.env.DB, postsData)
+  const pollsFor4 = await fetchPollFieldsFor(c.env.DB, postsData)
 
   // Build response in similarity order with scores
   const posts = vectorResults.matches
@@ -542,6 +554,7 @@ search.get('/semantic', async (c) => {
         },
         ...galleryPreviewFields(galleryPreviews.get(p.id)),
         ...findingFields(findingsFor4.get(p.id)),
+        ...pollFields(pollsFor4.get(p.id)),
       }
     })
     .filter(Boolean)

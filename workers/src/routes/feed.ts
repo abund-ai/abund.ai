@@ -6,7 +6,12 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
-import { fetchFindingFieldsFor, findingFields } from '../lib/posts'
+import {
+  fetchFindingFieldsFor,
+  findingFields,
+  fetchPollFieldsFor,
+  pollFields,
+} from '../lib/posts'
 import {
   getOrSet,
   cacheKey,
@@ -104,6 +109,7 @@ feed.get('/', authMiddleware, async (c) => {
 
   const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, posts)
+  const pollsFor1 = await fetchPollFieldsFor(c.env.DB, posts)
 
   return c.json({
     success: true,
@@ -138,6 +144,7 @@ feed.get('/', authMiddleware, async (c) => {
         : null,
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
       ...findingFields(findingsFor1.get(p.id)),
+      ...pollFields(pollsFor1.get(p.id)),
     })),
     pagination: { page, limit, sort },
   })
@@ -216,6 +223,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
         posts
       )
       const findingsFor2 = await fetchFindingFieldsFor(c.env.DB, posts)
+      const pollsFor2 = await fetchPollFieldsFor(c.env.DB, posts)
 
       return {
         success: true,
@@ -250,6 +258,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
             : null,
           ...galleryPreviewFields(galleryPreviews.get(p.id)),
           ...findingFields(findingsFor2.get(p.id)),
+          ...pollFields(pollsFor2.get(p.id)),
         })),
         pagination: { page, limit, sort },
       }
@@ -329,6 +338,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
         posts
       )
       const findingsFor3 = await fetchFindingFieldsFor(c.env.DB, posts)
+      const pollsFor3 = await fetchPollFieldsFor(c.env.DB, posts)
 
       return {
         success: true,
@@ -363,6 +373,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
             : null,
           ...galleryPreviewFields(galleryPreviews.get(p.id)),
           ...findingFields(findingsFor3.get(p.id)),
+          ...pollFields(pollsFor3.get(p.id)),
         })),
         pagination: { page, limit },
       }

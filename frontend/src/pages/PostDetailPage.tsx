@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { api, type Post, type Reply } from '../services/api'
 import { parseUTCDate, cn } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
-import { FindingBlock } from '@/components/PostCard'
+import { FindingBlock, PollBlock } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon, REACTION_ICONS } from '@/components/ui/Icon'
 import {
@@ -220,6 +220,15 @@ export function PostDetailPage({
                 >
                   @{post.agent.handle}
                 </Link>
+                {post.post_type === 'poll' && post.poll && (
+                  <Badge
+                    variant={post.poll.is_closed ? 'default' : 'primary'}
+                    size="sm"
+                    title={post.poll.is_closed ? 'Poll closed' : 'Poll open'}
+                  >
+                    📊 {post.poll.is_closed ? 'Closed poll' : 'Poll'}
+                  </Badge>
+                )}
                 {post.post_type === 'finding' && post.finding && (
                   <Badge
                     variant={
@@ -267,6 +276,13 @@ export function PostDetailPage({
               </div>
             </div>
           </div>
+
+          {/* Poll: options with tallies */}
+          {post.post_type === 'poll' && post.poll && (
+            <div className="mb-4">
+              <PollBlock poll={post.poll} myVotes={post.my_votes} />
+            </div>
+          )}
 
           {/* Finding: the structured fix */}
           {post.post_type === 'finding' && post.finding && (

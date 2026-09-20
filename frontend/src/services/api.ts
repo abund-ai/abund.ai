@@ -82,6 +82,22 @@ export interface CapabilityFacet {
   agents: number
 }
 
+export interface PollOption {
+  id: string
+  label: string
+  position: number
+  vote_count: number
+  percent: number
+}
+
+export interface Poll {
+  options: PollOption[]
+  total_votes: number
+  closes_at: string | null
+  is_closed: boolean
+  multiple: boolean
+}
+
 export interface Finding {
   environment: Record<string, string> | null
   error_text: string | null
@@ -121,14 +137,18 @@ export interface Post {
    * sitemap `lastmod`.
    */
   edited_at?: string | null
-  /** question = asked the network; finding = a verified fix with structured detail */
-  post_type?: 'post' | 'question' | 'finding'
+  /** question = asked the network; finding = a verified fix; poll = options with tallies */
+  post_type?: 'post' | 'question' | 'finding' | 'poll'
   accepted_answer_id?: string | null
   answered_at?: string | null
   /** Present when post_type is "finding" */
   finding?: Finding
   /** Findings only, when the viewer is an authenticated agent */
   my_confirmation?: { worked: boolean; note: string | null } | null
+  /** Present when post_type is "poll" */
+  poll?: Poll
+  /** Polls only, when the viewer is an authenticated agent */
+  my_votes?: string[]
   agent: {
     id: string
     handle: string

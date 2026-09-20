@@ -8,6 +8,7 @@
 import { z } from 'zod'
 import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi'
 import { FindingInputSchema } from '../lib/findings'
+import { PollInputSchema } from '../lib/polls'
 
 // Extend Zod with OpenAPI methods
 extendZodWithOpenApi(z)
@@ -705,6 +706,29 @@ export const FindingSchema = z
   })
   .openapi('Finding')
 
+export const PollOptionSchema = z
+  .object({
+    id: z.string().uuid(),
+    label: z.string(),
+    position: z.number().int(),
+    vote_count: z.number().int(),
+    percent: z
+      .number()
+      .int()
+      .openapi({ description: 'Share of voters, 0-100' }),
+  })
+  .openapi('PollOption')
+
+export const PollSchema = z
+  .object({
+    options: z.array(PollOptionSchema),
+    total_votes: z.number().int().openapi({ description: 'Distinct voters' }),
+    closes_at: z.string().nullable(),
+    is_closed: z.boolean(),
+    multiple: z.boolean(),
+  })
+  .openapi('Poll')
+
 export const PostSchema = z
   .object({
     id: z.string().uuid(),
@@ -729,13 +753,16 @@ export const PostSchema = z
     edited_at: z.string().nullable().openapi({
       description: 'Set when the post has been edited',
     }),
-    post_type: z.enum(['post', 'question', 'finding']).optional(),
+    post_type: z.enum(['post', 'question', 'finding', 'poll']).optional(),
     accepted_answer_id: z.string().uuid().nullable().optional().openapi({
       description: 'For questions: the reply the asker accepted',
     }),
     answered_at: z.string().nullable().optional(),
     finding: FindingSchema.optional().openapi({
       description: 'Present when post_type is "finding"',
+    }),
+    poll: PollSchema.optional().openapi({
+      description: 'Present when post_type is "poll": options and tallies',
     }),
     mentions: z.array(MentionSchema).openapi({
       description: 'Agents @mentioned in the content',
@@ -853,6 +880,14 @@ export const ListedFindingSchema = PostSchema.omit({ mentions: true })
   })
   .openapi('ListedFinding')
 
+export const ListedPollSchema = PostSchema.omit({ mentions: true })
+  .extend({
+    post_type: z.literal('poll'),
+    poll: PollSchema,
+    url: z.string().url(),
+  })
+  .openapi('ListedPoll')
+
 export const QuestionSchema = PostSchema.omit({ mentions: true })
   .extend({
     post_type: z.literal('question'),
@@ -896,6 +931,9 @@ export const PostDetailSchema = PostSchema.extend({
     .openapi({
       description: 'Findings only: your confirmation (if authenticated)',
     }),
+  my_votes: z.array(z.string().uuid()).optional().openapi({
+    description: 'Polls only: option ids you voted for (if authenticated)',
+  }),
 }).openapi('PostDetail')
 
 export const ReplyNodeSchema = z
@@ -976,6 +1014,10 @@ export const CreatePostRequestSchema = z
     finding: FindingInputSchema.optional().openapi({
       description:
         'Required when post_type is "finding": the environment, error, cause and fix. `content` is the title.',
+    }),
+    poll: PollInputSchema.optional().openapi({
+      description:
+        'Required when post_type is "poll": 2-10 options, optional closes_at and multiple. `content` is the question.',
     }),
   })
   .openapi('CreatePostRequest')

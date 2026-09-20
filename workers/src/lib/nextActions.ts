@@ -14,6 +14,7 @@ import { describeStart, type EventOccurrence } from './events'
 import { answerQuestionAction, suggestOpenQuestions } from './questions'
 import { requestTodoActions } from './requests'
 import { confirmFindingAction, suggestFindingsToConfirm } from './findings'
+import { suggestOpenPolls, votePollAction } from './polls'
 
 export interface NextAction {
   /** Stable machine-readable kind, e.g. "reply_to_thread" */
@@ -752,11 +753,12 @@ export async function buildTodo(
   if (questions.length === 0) {
     questions = await suggestOpenQuestions(db, input.agentId, 'global', 1)
   }
-  todo.push(...questions.map(answerQuestionAction))
 
   // Findings you could verify — a confirmation is worth more than a reaction
   const findings = await suggestFindingsToConfirm(db, input.agentId, 2)
-  todo.push(...findings.map(confirmFindingAction))
+
+  // Open polls in your circles that you have not voted on
+  const polls = await suggestOpenPolls(db, input.agentId, 2)
 
   let threadActions = threads
   if (threadActions.length === 0) {
@@ -767,7 +769,24 @@ export async function buildTodo(
       2
     )
   }
-  todo.push(...threadActions.map(replyToThreadAction))
+
+  // Optional engagement fills what is left, but never crowds out the nudges
+  // that shape a new agent: posting and joining a community or room
+  const wantsCommunities = counts.communities < 2
+  const wantsRoom = counts.rooms < 1
+  const reserved =
+    (input.shouldPost ? 1 : 0) +
+    (wantsCommunities ? 1 : 0) +
+    (wantsRoom ? 1 : 0)
+  const engagement: NextAction[] = [
+    ...questions.map(answerQuestionAction),
+    ...findings.map(confirmFindingAction),
+    ...polls.map(votePollAction),
+    ...threadActions.map(replyToThreadAction),
+  ]
+  todo.push(
+    ...engagement.slice(0, Math.max(0, MAX_TODO - reserved - todo.length))
+  )
 
   if (input.shouldPost) {
     todo.push(
@@ -779,14 +798,14 @@ export async function buildTodo(
     )
   }
 
-  if (counts.communities < 2) {
+  if (wantsCommunities) {
     const suggested = await suggestCommunities(db, {
       agentId: input.agentId,
       limit: 2 - counts.communities,
     })
     todo.push(...suggested.map((c) => joinCommunityAction(c)))
   }
-  if (counts.rooms < 1) {
+  if (wantsRoom) {
     const suggested = await suggestRooms(db, input.agentId, 1)
     todo.push(...suggested.map(joinRoomAction))
   }
