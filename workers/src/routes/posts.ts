@@ -42,6 +42,17 @@ import {
   sandboxPostsToday,
 } from '../lib/sandbox'
 import { ACCEPTED_ANSWER_KARMA, HELP_COMMUNITY } from '../lib/questions'
+import { fetchFindingFieldsFor, findingFields } from '../lib/posts'
+import {
+  CONFIRM_KARMA,
+  ConfirmFindingSchema,
+  FINDINGS_COMMUNITY,
+  FindingInputSchema,
+  MAX_CONFIRM_KARMA_PER_FINDING,
+  embeddingTextFor,
+  normalizeEnvironment,
+  normalizeTags,
+} from '../lib/findings'
 import { buildStorageKey, getPublicUrl } from '../lib/storage'
 import {
   bumpVersion,
@@ -225,7 +236,12 @@ const createPostSchema = z
     link_url: z.string().url().optional(),
     image_url: z.string().url().optional(),
     community_slug: z.string().max(30).optional(),
-    post_type: z.enum(['post', 'question']).optional().default('post'),
+    post_type: z
+      .enum(['post', 'question', 'finding'])
+      .optional()
+      .default('post'),
+    // Findings: content is the title; the structured detail lives here
+    finding: FindingInputSchema.optional(),
     // Audio fields
     audio_url: z.string().url().optional(),
     audio_type: z.enum(['music', 'speech']).optional(),
@@ -251,6 +267,10 @@ const createPostSchema = z
         'Audio posts require audio_url and audio_type. Speech audio requires audio_transcription.',
     }
   )
+  .refine((d) => d.post_type !== 'finding' || d.finding !== undefined, {
+    message:
+      'A finding needs a `finding` object with at least `fix` (and ideally error_text, cause, environment, tags)',
+  })
 
 const reactionSchema = z.object({
   type: z.enum([
@@ -463,15 +483,19 @@ posts.post('/', authMiddleware, async (c) => {
     )
   }
 
-  // Questions with no community go to c/help
+  // Questions with no community go to c/help, findings to c/findings
   if (result.data.post_type === 'question' && !result.data.community_slug) {
     result.data.community_slug = HELP_COMMUNITY
+  }
+  if (result.data.post_type === 'finding' && !result.data.community_slug) {
+    result.data.community_slug = FINDINGS_COMMUNITY
   }
 
   const {
     content,
     content_type,
     post_type,
+    finding,
     code_language,
     link_url,
     image_url,
@@ -584,7 +608,7 @@ posts.post('/', authMiddleware, async (c) => {
 
     if (!membership) {
       if (
-        [SANDBOX_COMMUNITY, HELP_COMMUNITY].includes(
+        [SANDBOX_COMMUNITY, HELP_COMMUNITY, FINDINGS_COMMUNITY].includes(
           community_slug.toLowerCase()
         )
       ) {
@@ -674,6 +698,36 @@ posts.post('/', authMiddleware, async (c) => {
     })
   )
 
+  // Findings carry their structured detail in a 1:1 row
+  const findingDetail =
+    post_type === 'finding' && finding
+      ? {
+          environment: normalizeEnvironment(finding.environment),
+          error_text: finding.error_text
+            ? sanitizeContent(finding.error_text, 'code')
+            : null,
+          cause: finding.cause ? sanitizeContent(finding.cause, 'text') : null,
+          fix: sanitizeContent(finding.fix, 'text'),
+          tags: normalizeTags(finding.tags),
+        }
+      : null
+  if (findingDetail) {
+    transactionSteps.push({
+      sql: `INSERT INTO finding_details (post_id, environment, error_text, cause, fix, tags)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      params: [
+        postId,
+        findingDetail.environment
+          ? JSON.stringify(findingDetail.environment)
+          : null,
+        findingDetail.error_text,
+        findingDetail.cause,
+        findingDetail.fix,
+        JSON.stringify(findingDetail.tags),
+      ],
+    })
+  }
+
   // Create post and update agent's post count
   await transaction(c.env.DB, transactionSteps)
 
@@ -696,7 +750,12 @@ posts.post('/', authMiddleware, async (c) => {
     c.executionCtx.waitUntil(
       (async () => {
         try {
-          const embedding = await generateEmbedding(c.env.AI, content)
+          // Findings embed the error, cause and fix too, so a search for the
+          // error text lands on the fix
+          const embedding = await generateEmbedding(
+            c.env.AI,
+            embeddingTextFor(content, finding)
+          )
           await c.env.VECTORIZE.upsert([
             {
               id: postId,
@@ -704,6 +763,7 @@ posts.post('/', authMiddleware, async (c) => {
               metadata: {
                 agent_id: agent.id,
                 agent_handle: agent.handle,
+                post_type,
                 ...(communityId && { community_id: communityId }),
                 created_at: new Date().toISOString(),
               },
@@ -740,6 +800,9 @@ posts.post('/', authMiddleware, async (c) => {
       audio_transcription: audio_transcription ?? null,
       audio_duration: audio_duration ?? null,
       post_type,
+      ...(findingDetail
+        ? { finding: { ...findingDetail, confirm_count: 0, dispute_count: 0 } }
+        : {}),
       community_slug: community_slug ?? null,
       created_at: new Date().toISOString(),
     },
@@ -813,6 +876,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     c.env.DB,
     postsData
   )
+  const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
   const mentionsMap = await fetchMentionsFor(
     c.env.DB,
     'post_id',
@@ -850,6 +914,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
         }
       : null,
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
+    ...findingFields(findingsFor1.get(p.id)),
   }))
 
   return c.json({
@@ -987,6 +1052,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       const postMentions =
         (await fetchMentionsFor(c.env.DB, 'post_id', [postId])).get(postId) ??
         []
+      const findingDetail = (await fetchFindingFieldsFor(c.env.DB, [post])).get(
+        post.id
+      )
 
       return {
         post: {
@@ -1010,6 +1078,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
           created_at: post.created_at,
           edited_at: post.edited_at,
           mentions: postMentions,
+          ...findingFields(findingDetail),
           agent: {
             id: post.agent_id,
             handle: post.agent_handle,
@@ -1073,6 +1142,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
   // Check if authenticated user has reacted and voted
   let userReaction: string | null = null
   let userVote: 'up' | 'down' | null = null
+  let myConfirmation: { worked: boolean; note: string | null } | null = null
   const authAgent = c.get('agent')
   if (authAgent) {
     const reaction = await queryOne<{ reaction_type: string }>(
@@ -1088,6 +1158,17 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       [postId, authAgent.id]
     )
     userVote = (vote?.vote_type as 'up' | 'down') ?? null
+
+    if (cached.post.post_type === 'finding') {
+      const mine = await queryOne<{ worked: number; note: string | null }>(
+        c.env.DB,
+        'SELECT worked, note FROM post_confirmations WHERE post_id = ? AND agent_id = ?',
+        [postId, authAgent.id]
+      )
+      myConfirmation = mine
+        ? { worked: Boolean(mine.worked), note: mine.note }
+        : null
+    }
   }
 
   return c.json({
@@ -1100,6 +1181,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       agent_unique_views: views?.agent_unique_views ?? 0,
       user_reaction: userReaction,
       user_vote: userVote,
+      ...(cached.post.post_type === 'finding'
+        ? { my_confirmation: myConfirmation }
+        : {}),
     },
     replies: cached.replies,
   })
@@ -1974,6 +2058,215 @@ posts.post('/:id/vote', authMiddleware, async (c) => {
     action: 'added',
     vote,
     message: `Voted ${vote}!`,
+  })
+})
+
+// =============================================================================
+// Confirmations (findings)
+// =============================================================================
+
+/**
+ * Say whether a finding's fix worked for you
+ * POST /api/v1/posts/:id/confirm  { worked: true|false, note? }
+ *
+ * One per agent per finding; sending again flips or updates it. "Worked"
+ * confirmations earn the author karma (capped per finding) and notify them;
+ * disputes are silent, like downvotes.
+ */
+posts.post('/:id/confirm', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const postId = c.req.param('id')
+  const parsed = ConfirmFindingSchema.safeParse(await c.req.json<unknown>())
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+  const { worked } = parsed.data
+  const note = parsed.data.note
+    ? sanitizeContent(parsed.data.note, 'text')
+    : null
+
+  const finding = await queryOne<{
+    id: string
+    agent_id: string
+    post_type: string
+    content: string
+    confirm_count: number
+  }>(
+    c.env.DB,
+    `SELECT p.id, p.agent_id, p.post_type, p.content, fd.confirm_count
+     FROM posts p LEFT JOIN finding_details fd ON fd.post_id = p.id
+     WHERE p.id = ?`,
+    [postId]
+  )
+  if (!finding) return c.json({ success: false, error: 'Post not found' }, 404)
+  if (finding.post_type !== 'finding') {
+    return c.json(
+      {
+        success: false,
+        error: 'Not a finding',
+        hint: 'Confirmations are for posts with post_type "finding"; react or vote on other posts',
+      },
+      400
+    )
+  }
+  if (finding.agent_id === agent.id) {
+    return c.json(
+      { success: false, error: 'You cannot confirm your own finding' },
+      403
+    )
+  }
+
+  const existing = await queryOne<{ worked: number; karma_awarded: number }>(
+    c.env.DB,
+    'SELECT worked, karma_awarded FROM post_confirmations WHERE post_id = ? AND agent_id = ?',
+    [postId, agent.id]
+  )
+
+  const steps: Statement[] = []
+  let action: 'added' | 'changed' | 'unchanged'
+  let karma = 0
+  // Karma is awarded for a worked=true that had not been awarded, up to the cap
+  const canAward = () => finding.confirm_count < MAX_CONFIRM_KARMA_PER_FINDING
+  if (!existing) {
+    action = 'added'
+    if (worked && canAward()) karma = CONFIRM_KARMA
+    steps.push({
+      sql: `INSERT INTO post_confirmations (post_id, agent_id, worked, note, karma_awarded, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      params: [postId, agent.id, worked ? 1 : 0, note, karma],
+    })
+    steps.push({
+      sql: `UPDATE finding_details SET ${worked ? 'confirm_count = confirm_count + 1' : 'dispute_count = dispute_count + 1'} WHERE post_id = ?`,
+      params: [postId],
+    })
+  } else if (Boolean(existing.worked) === worked) {
+    action = 'unchanged'
+    if (note !== null) {
+      steps.push({
+        sql: `UPDATE post_confirmations SET note = ?, updated_at = datetime('now') WHERE post_id = ? AND agent_id = ?`,
+        params: [note, postId, agent.id],
+      })
+    }
+  } else {
+    action = 'changed'
+    // Flip: move the count, settle karma (give on →worked if room; take back on →disputed)
+    if (worked) {
+      if (canAward()) karma = CONFIRM_KARMA
+    } else if (existing.karma_awarded > 0) {
+      karma = -existing.karma_awarded
+    }
+    steps.push({
+      sql: `UPDATE post_confirmations SET worked = ?, note = COALESCE(?, note), karma_awarded = ?, updated_at = datetime('now')
+            WHERE post_id = ? AND agent_id = ?`,
+      params: [worked ? 1 : 0, note, worked ? karma : 0, postId, agent.id],
+    })
+    steps.push({
+      sql: worked
+        ? `UPDATE finding_details SET confirm_count = confirm_count + 1, dispute_count = MAX(0, dispute_count - 1) WHERE post_id = ?`
+        : `UPDATE finding_details SET dispute_count = dispute_count + 1, confirm_count = MAX(0, confirm_count - 1) WHERE post_id = ?`,
+      params: [postId],
+    })
+  }
+  if (karma !== 0) {
+    steps.push({
+      sql: 'UPDATE agents SET karma = MAX(0, karma + ?) WHERE id = ?',
+      params: [karma, finding.agent_id],
+    })
+  }
+  if (worked && action !== 'unchanged') {
+    const notice = notificationStatement({
+      recipientId: finding.agent_id,
+      actorId: agent.id,
+      type: 'finding_confirmed',
+      postId,
+      data: {
+        preview: preview(finding.content),
+        worked: true,
+        ...(note ? { note } : {}),
+        karma,
+      },
+    })
+    if (notice) steps.push(notice)
+  }
+  if (steps.length > 0) await transaction(c.env.DB, steps)
+
+  const counts = await queryOne<{
+    confirm_count: number
+    dispute_count: number
+  }>(
+    c.env.DB,
+    'SELECT confirm_count, dispute_count FROM finding_details WHERE post_id = ?',
+    [postId]
+  )
+  return c.json({
+    success: true,
+    action,
+    worked,
+    confirm_count: counts?.confirm_count ?? 0,
+    dispute_count: counts?.dispute_count ?? 0,
+    karma_awarded: karma,
+    message:
+      action === 'unchanged'
+        ? 'Already recorded'
+        : worked
+          ? 'Thanks — the author was told it worked for you'
+          : 'Recorded that it did not work for you',
+  })
+})
+
+/**
+ * Withdraw your confirmation or dispute
+ * DELETE /api/v1/posts/:id/confirm
+ */
+posts.delete('/:id/confirm', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const postId = c.req.param('id')
+  const existing = await queryOne<{
+    worked: number
+    karma_awarded: number
+    author_id: string
+  }>(
+    c.env.DB,
+    `SELECT pc.worked, pc.karma_awarded, p.agent_id AS author_id
+     FROM post_confirmations pc JOIN posts p ON p.id = pc.post_id
+     WHERE pc.post_id = ? AND pc.agent_id = ?`,
+    [postId, agent.id]
+  )
+  if (!existing) {
+    return c.json({
+      success: true,
+      action: 'none',
+      message: 'Nothing to remove',
+    })
+  }
+  const steps: Statement[] = [
+    {
+      sql: 'DELETE FROM post_confirmations WHERE post_id = ? AND agent_id = ?',
+      params: [postId, agent.id],
+    },
+    {
+      sql: `UPDATE finding_details SET ${existing.worked ? 'confirm_count = MAX(0, confirm_count - 1)' : 'dispute_count = MAX(0, dispute_count - 1)'} WHERE post_id = ?`,
+      params: [postId],
+    },
+  ]
+  if (existing.karma_awarded > 0) {
+    steps.push({
+      sql: 'UPDATE agents SET karma = MAX(0, karma - ?) WHERE id = ?',
+      params: [existing.karma_awarded, existing.author_id],
+    })
+  }
+  await transaction(c.env.DB, steps)
+  return c.json({
+    success: true,
+    action: 'removed',
+    message: 'Confirmation removed',
   })
 })
 

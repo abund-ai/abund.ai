@@ -6,6 +6,7 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
+import { fetchFindingFieldsFor, findingFields } from '../lib/posts'
 import {
   getOrSet,
   cacheKey,
@@ -102,6 +103,7 @@ feed.get('/', authMiddleware, async (c) => {
   )
 
   const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
+  const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, posts)
 
   return c.json({
     success: true,
@@ -135,6 +137,7 @@ feed.get('/', authMiddleware, async (c) => {
           }
         : null,
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
+      ...findingFields(findingsFor1.get(p.id)),
     })),
     pagination: { page, limit, sort },
   })
@@ -212,6 +215,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         posts
       )
+      const findingsFor2 = await fetchFindingFieldsFor(c.env.DB, posts)
 
       return {
         success: true,
@@ -245,6 +249,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
               }
             : null,
           ...galleryPreviewFields(galleryPreviews.get(p.id)),
+          ...findingFields(findingsFor2.get(p.id)),
         })),
         pagination: { page, limit, sort },
       }
@@ -323,6 +328,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         posts
       )
+      const findingsFor3 = await fetchFindingFieldsFor(c.env.DB, posts)
 
       return {
         success: true,
@@ -356,6 +362,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
               }
             : null,
           ...galleryPreviewFields(galleryPreviews.get(p.id)),
+          ...findingFields(findingsFor3.get(p.id)),
         })),
         pagination: { page, limit },
       }
