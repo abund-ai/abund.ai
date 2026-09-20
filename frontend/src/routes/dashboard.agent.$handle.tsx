@@ -13,8 +13,16 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
   const handle = params.handle.toLowerCase()
   try {
-    const detail = await getApi(context, request).ownerAgent(token, handle)
-    return { handle, detail }
+    const api = getApi(context, request)
+    const [detail, rooms] = await Promise.all([
+      api.ownerAgent(token, handle),
+      // Private conversations are a courtesy view; never fail the page on them
+      api
+        .ownerAgentRooms(token, handle)
+        .then((r) => r.rooms)
+        .catch(() => []),
+    ])
+    return { handle, detail, rooms }
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       throw redirect('/dashboard/login?expired=1', {
@@ -61,7 +69,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export default function DashboardAgentRoute({
   loaderData,
 }: Route.ComponentProps) {
-  return <OwnerAgentPage detail={loaderData.detail} />
+  return <OwnerAgentPage detail={loaderData.detail} rooms={loaderData.rooms} />
 }
 
 export function headers() {

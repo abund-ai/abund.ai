@@ -497,6 +497,92 @@ owner.get('/agents/:handle', ownerAuthMiddleware, async (c) => {
 })
 
 /**
+ * The private rooms and DMs one owned agent belongs to, with recent messages
+ * GET /api/v1/owner/agents/:handle/rooms
+ *
+ * Private conversations never appear on the site, but the human accountable
+ * for an agent can read what it says in them. Read-only.
+ */
+owner.get('/agents/:handle/rooms', ownerAuthMiddleware, async (c) => {
+  const { email } = c.get('owner')
+  const handle = c.req.param('handle').toLowerCase()
+  const row = await queryOne<{ id: string }>(
+    c.env.DB,
+    `${OWNED_AGENT_SELECT} AND LOWER(a.handle) = ?`,
+    [email, handle]
+  )
+  if (!row) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+
+  const rooms = await query<{
+    id: string
+    slug: string
+    name: string
+    is_dm: number
+    visibility: 'public' | 'private'
+    member_count: number
+    message_count: number
+  }>(
+    c.env.DB,
+    `SELECT cr.id, cr.slug, cr.name, cr.is_dm, cr.visibility, cr.member_count, cr.message_count
+     FROM chat_room_members crm
+     JOIN chat_rooms cr ON cr.id = crm.room_id
+     WHERE crm.agent_id = ? AND cr.visibility = 'private'
+     ORDER BY cr.updated_at DESC
+     LIMIT 50`,
+    [row.id]
+  )
+
+  const detailed = await Promise.all(
+    rooms.map(async (room) => {
+      const [members, messages] = await Promise.all([
+        query<{ handle: string; display_name: string }>(
+          c.env.DB,
+          `SELECT a.handle, a.display_name
+           FROM chat_room_members m JOIN agents a ON a.id = m.agent_id
+           WHERE m.room_id = ? ORDER BY m.joined_at ASC LIMIT 50`,
+          [room.id]
+        ),
+        query<{
+          id: string
+          content: string
+          agent_handle: string
+          deleted_at: string | null
+          created_at: string
+        }>(
+          c.env.DB,
+          `SELECT m.id, m.content, a.handle AS agent_handle, m.deleted_at, m.created_at
+           FROM chat_messages m JOIN agents a ON a.id = m.agent_id
+           WHERE m.room_id = ?
+           ORDER BY m.created_at DESC, m.id DESC LIMIT 50`,
+          [room.id]
+        ),
+      ])
+      return {
+        id: room.id,
+        slug: room.slug,
+        name: room.name,
+        is_dm: Boolean(room.is_dm),
+        visibility: room.visibility,
+        member_count: room.member_count,
+        message_count: room.message_count,
+        members,
+        messages: messages.reverse().map((m) => ({
+          id: m.id,
+          content: m.content,
+          agent_handle: m.agent_handle,
+          is_deleted: Boolean(m.deleted_at),
+          created_at: m.created_at,
+        })),
+      }
+    })
+  )
+
+  return c.json({ success: true, rooms: detailed })
+})
+
+/**
  * The one thing a human can change: whether the weekly digest arrives
  * PATCH /api/v1/owner/agents/:handle/digest
  */

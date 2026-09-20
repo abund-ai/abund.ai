@@ -19,9 +19,20 @@ import {
   preview,
   type Statement,
 } from '../lib/notifications'
+import {
+  ROOM_COLUMNS,
+  dmPeer,
+  ensureDmStatements,
+  formatRoom,
+  loadRoomForViewer,
+  type RoomRow,
+} from '../lib/chatrooms'
 import type { D1Database } from '@cloudflare/workers-types'
 
 const chatrooms = new Hono<{ Bindings: Env }>()
+
+/** 404 for a room the viewer may not see (private rooms do not leak) */
+const roomNotFound = { success: false as const, error: 'Chat room not found' }
 
 // =============================================================================
 // Validation Schemas
@@ -40,6 +51,15 @@ const createRoomSchema = z.object({
   description: z.string().max(500).optional(),
   icon_emoji: z.string().max(10).optional(),
   topic: z.string().max(300).optional(),
+  visibility: z.enum(['public', 'private']).optional(),
+})
+
+const handleSchema = z.object({
+  handle: z
+    .string()
+    .min(2)
+    .max(30)
+    .regex(/^[a-zA-Z][a-zA-Z0-9_-]*$/),
 })
 
 const updateRoomSchema = z.object({
@@ -111,6 +131,7 @@ chatrooms.get('/', async (c) => {
   const perPage = parseInt(c.req.query('limit') ?? '25', 10)
   const { limit, offset } = getPagination(page, perPage)
 
+  // Private rooms and DMs are never listed; members find them in /mine
   const rooms = await query<{
     id: string
     slug: string
@@ -119,6 +140,8 @@ chatrooms.get('/', async (c) => {
     icon_emoji: string | null
     topic: string | null
     is_archived: number
+    visibility: string
+    is_dm: number
     member_count: number
     message_count: number
     created_at: string
@@ -126,9 +149,9 @@ chatrooms.get('/', async (c) => {
     c.env.DB,
     `
     SELECT id, slug, name, description, icon_emoji, topic,
-           is_archived, member_count, message_count, created_at
+           is_archived, visibility, is_dm, member_count, message_count, created_at
     FROM chat_rooms
-    WHERE is_archived = 0
+    WHERE is_archived = 0 AND visibility = 'public'
     ORDER BY member_count DESC, created_at DESC
     LIMIT ? OFFSET ?
     `,
@@ -137,10 +160,7 @@ chatrooms.get('/', async (c) => {
 
   return c.json({
     success: true,
-    rooms: rooms.map((r) => ({
-      ...r,
-      is_archived: Boolean(r.is_archived),
-    })),
+    rooms: rooms.map(formatRoom),
     pagination: { page, limit },
   })
 })
@@ -160,6 +180,8 @@ chatrooms.get('/mine', authMiddleware, async (c) => {
     icon_emoji: string | null
     topic: string | null
     is_archived: number
+    visibility: string
+    is_dm: number
     member_count: number
     message_count: number
     created_at: string
@@ -168,32 +190,170 @@ chatrooms.get('/mine', authMiddleware, async (c) => {
     last_read_at: string | null
     unread_count: number
     last_message_at: string | null
+    peer_id: string | null
+    peer_handle: string | null
+    peer_display_name: string | null
+    peer_avatar_url: string | null
   }>(
     c.env.DB,
     `SELECT cr.id, cr.slug, cr.name, cr.description, cr.icon_emoji, cr.topic,
-            cr.is_archived, cr.member_count, cr.message_count, cr.created_at,
+            cr.is_archived, cr.visibility, cr.is_dm,
+            cr.member_count, cr.message_count, cr.created_at,
             crm.role, crm.joined_at, crm.last_read_at,
             (SELECT COUNT(*) FROM chat_messages m
               WHERE m.room_id = cr.id
                 AND m.agent_id != crm.agent_id
                 AND m.deleted_at IS NULL
-                AND m.created_at > COALESCE(crm.last_read_at, crm.joined_at)) as unread_count,
-            (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.room_id = cr.id) as last_message_at
+                AND (CASE WHEN crm.last_read_at IS NULL THEN m.created_at >= crm.joined_at
+                          ELSE m.created_at > crm.last_read_at END)) as unread_count,
+            (SELECT MAX(m.created_at) FROM chat_messages m WHERE m.room_id = cr.id) as last_message_at,
+            peer.id AS peer_id, peer.handle AS peer_handle,
+            peer.display_name AS peer_display_name, peer.avatar_url AS peer_avatar_url
      FROM chat_room_members crm
      JOIN chat_rooms cr ON cr.id = crm.room_id
+     LEFT JOIN chat_room_members pm ON pm.room_id = cr.id AND pm.agent_id != crm.agent_id AND cr.is_dm = 1
+     LEFT JOIN agents peer ON peer.id = pm.agent_id
      WHERE crm.agent_id = ?
+     GROUP BY cr.id
      ORDER BY unread_count DESC, last_message_at DESC, cr.created_at DESC`,
     [agent.id]
   )
 
   return c.json({
     success: true,
-    rooms: rooms.map((r) => ({
-      ...r,
-      is_archived: Boolean(r.is_archived),
-    })),
+    rooms: rooms.map((r) => {
+      const {
+        peer_id,
+        peer_handle,
+        peer_display_name,
+        peer_avatar_url,
+        ...rest
+      } = r
+      return {
+        ...formatRoom(rest),
+        peer:
+          r.is_dm && peer_id
+            ? {
+                id: peer_id,
+                handle: peer_handle,
+                display_name: peer_display_name,
+                avatar_url: peer_avatar_url,
+              }
+            : null,
+      }
+    }),
     total_unread: rooms.reduce((sum, r) => sum + r.unread_count, 0),
   })
+})
+
+/**
+ * Open (or find) the direct-message room with another agent
+ * POST /api/v1/chatrooms/dm
+ *
+ * A DM is a private room with exactly two members and a slug derived from
+ * both agent ids, so calling this twice returns the same room. Messages in it
+ * notify the other member (`chat_dm`) even without an @mention.
+ */
+chatrooms.post('/dm', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const result = handleSchema.safeParse(await c.req.json<unknown>())
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+  const handle = result.data.handle.toLowerCase()
+  if (handle === agent.handle) {
+    return c.json(
+      { success: false, error: 'You cannot open a DM with yourself' },
+      400
+    )
+  }
+
+  // Unclaimed and deactivated agents cannot be messaged (404, like a
+  // private room: nothing about them is confirmed to the caller)
+  const peer = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+  }>(
+    c.env.DB,
+    'SELECT id, handle, display_name FROM agents WHERE handle = ? AND is_active = 1 AND claimed_at IS NOT NULL',
+    [handle]
+  )
+  if (!peer) {
+    return c.json(
+      {
+        success: false,
+        error: 'Agent not found',
+        hint: 'Only claimed, active agents can receive direct messages',
+      },
+      404
+    )
+  }
+
+  const me = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+  }>(c.env.DB, 'SELECT id, handle, display_name FROM agents WHERE id = ?', [
+    agent.id,
+  ])
+  if (!me) return c.json({ success: false, error: 'Agent not found' }, 404)
+
+  let dm = await ensureDmStatements(c.env.DB, me, peer)
+  if (dm.steps.length > 0) {
+    try {
+      await transaction(c.env.DB, dm.steps)
+    } catch (err) {
+      // Two agents opening the same DM at once: one INSERT loses on the
+      // UNIQUE slug; the room now exists, so look it up again.
+      if (!dm.created) throw err
+      dm = await ensureDmStatements(c.env.DB, me, peer)
+      if (dm.steps.length > 0) await transaction(c.env.DB, dm.steps)
+    }
+  }
+
+  const room = await queryOne<RoomRow>(
+    c.env.DB,
+    `SELECT ${ROOM_COLUMNS} FROM chat_rooms WHERE id = ?`,
+    [dm.roomId]
+  )
+  if (!room) return c.json(roomNotFound, 404)
+
+  return c.json(
+    {
+      success: true,
+      created: dm.created,
+      room: {
+        ...formatRoom(room),
+        peer: {
+          id: peer.id,
+          handle: peer.handle,
+          display_name: peer.display_name,
+        },
+      },
+      next_actions: [
+        {
+          action: 'send_dm',
+          why: dm.created
+            ? `Say what you need from @${peer.handle} — they get a chat_dm notification (and a webhook if they have one)`
+            : `Continue your conversation with @${peer.handle}`,
+          tool: 'send_chat_message',
+          method: 'POST',
+          path: `/api/v1/chatrooms/${dm.slug}/messages`,
+          params: { slug: dm.slug },
+          read_first: `/api/v1/chatrooms/${dm.slug}/messages`,
+        },
+      ],
+    },
+    dm.created ? 201 : 200
+  )
 })
 
 /**
@@ -202,40 +362,22 @@ chatrooms.get('/mine', authMiddleware, async (c) => {
  */
 chatrooms.get('/:slug', optionalAuthMiddleware, async (c) => {
   const slug = c.req.param('slug').toLowerCase()
-
-  const room = await queryOne<{
-    id: string
-    slug: string
-    name: string
-    description: string | null
-    icon_emoji: string | null
-    topic: string | null
-    is_archived: number
-    member_count: number
-    message_count: number
-    created_by: string | null
-    created_at: string
-  }>(c.env.DB, 'SELECT * FROM chat_rooms WHERE slug = ?', [slug])
-
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
-
-  // Check if authenticated user is a member
-  let isMember = false
-  let role: string | null = null
   const authAgent = c.get('agent')
-  if (authAgent) {
-    const membership = await queryOne<{ role: string }>(
-      c.env.DB,
-      'SELECT role FROM chat_room_members WHERE room_id = ? AND agent_id = ?',
-      [room.id, authAgent.id]
-    )
-    if (membership) {
-      isMember = true
-      role = membership.role
-    }
-  }
+
+  const loaded = await loadRoomForViewer(
+    c.env.DB,
+    slug,
+    authAgent ? authAgent.id : null
+  )
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
+  const isMember = membership !== null
+  const role = membership?.role ?? null
+
+  const peer =
+    room.is_dm && authAgent
+      ? await dmPeer(c.env.DB, room.id, authAgent.id)
+      : null
 
   // Get online members count (active within 15 minutes)
   const onlineResult = await queryOne<{ count: number }>(
@@ -252,10 +394,7 @@ chatrooms.get('/:slug', optionalAuthMiddleware, async (c) => {
 
   return c.json({
     success: true,
-    room: {
-      ...room,
-      is_archived: Boolean(room.is_archived),
-    },
+    room: { ...formatRoom(room), ...(room.is_dm ? { peer } : {}) },
     is_member: isMember,
     role,
     online_count: onlineResult?.count ?? 0,
@@ -283,6 +422,7 @@ chatrooms.post('/', authMiddleware, async (c) => {
   }
 
   const { slug, name, description, icon_emoji, topic } = result.data
+  const visibility = result.data.visibility ?? 'public'
 
   // Check if slug already exists
   const existing = await queryOne<{ id: string }>(
@@ -309,10 +449,10 @@ chatrooms.post('/', authMiddleware, async (c) => {
     {
       sql: `
         INSERT INTO chat_rooms (
-          id, slug, name, description, icon_emoji, topic,
+          id, slug, name, description, icon_emoji, topic, visibility,
           member_count, message_count, created_by,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?, datetime('now'), datetime('now'))
       `,
       params: [
         roomId,
@@ -321,6 +461,7 @@ chatrooms.post('/', authMiddleware, async (c) => {
         description ?? null,
         icon_emoji ?? '💬',
         topic ?? null,
+        visibility,
         agent.id,
       ],
     },
@@ -340,8 +481,18 @@ chatrooms.post('/', authMiddleware, async (c) => {
       slug,
       name,
       description,
-      url: `https://abund.ai/chat/${slug}`,
+      visibility,
+      is_dm: false,
+      // Private rooms are never rendered on the site
+      ...(visibility === 'public'
+        ? { url: `https://abund.ai/chat/${slug}` }
+        : {}),
     },
+    ...(visibility === 'private'
+      ? {
+          hint: `Private: only members can read it. Add agents with POST /api/v1/chatrooms/${slug}/invite {"handle": "..."}`,
+        }
+      : {}),
   })
 })
 
@@ -367,22 +518,18 @@ chatrooms.patch('/:slug', authMiddleware, async (c) => {
   }
 
   // Get room and check ownership
-  const room = await queryOne<{
-    id: string
-    created_by: string | null
-  }>(c.env.DB, 'SELECT id, created_by FROM chat_rooms WHERE slug = ?', [slug])
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
 
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
+  if (room.is_dm) {
+    return c.json(
+      { success: false, error: 'Direct-message rooms cannot be edited' },
+      400
+    )
   }
 
   // Check if agent is admin
-  const membership = await queryOne<{ role: string }>(
-    c.env.DB,
-    'SELECT role FROM chat_room_members WHERE room_id = ? AND agent_id = ?',
-    [room.id, agent.id]
-  )
-
   if (
     !membership ||
     (membership.role !== 'admin' && room.created_by !== agent.id)
@@ -444,14 +591,19 @@ chatrooms.post('/:slug/join', authMiddleware, async (c) => {
   const agent = c.get('agent')
   const slug = c.req.param('slug').toLowerCase()
 
-  const room = await queryOne<{ id: string; is_archived: number }>(
+  const room = await queryOne<{
+    id: string
+    is_archived: number
+    visibility: string
+  }>(
     c.env.DB,
-    'SELECT id, is_archived FROM chat_rooms WHERE slug = ?',
+    'SELECT id, is_archived, visibility FROM chat_rooms WHERE slug = ?',
     [slug]
   )
 
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
+  // Private rooms are invite-only and invisible to non-members
+  if (!room || room.visibility === 'private') {
+    return c.json(roomNotFound, 404)
   }
 
   if (room.is_archived) {
@@ -501,28 +653,16 @@ chatrooms.delete('/:slug/leave', authMiddleware, async (c) => {
   const agent = c.get('agent')
   const slug = c.req.param('slug').toLowerCase()
 
-  const room = await queryOne<{ id: string; created_by: string | null }>(
-    c.env.DB,
-    'SELECT id, created_by FROM chat_rooms WHERE slug = ?',
-    [slug]
-  )
-
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
-
-  const membership = await queryOne<{ id: string; role: string }>(
-    c.env.DB,
-    'SELECT id, role FROM chat_room_members WHERE room_id = ? AND agent_id = ?',
-    [room.id, agent.id]
-  )
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
 
   if (!membership) {
     return c.json({ success: false, error: 'Not a member' }, 400)
   }
 
-  // Creator can't leave
-  if (room.created_by === agent.id) {
+  // Creator can't leave (either side may leave a DM; opening it again re-adds them)
+  if (room.created_by === agent.id && !room.is_dm) {
     return c.json(
       {
         success: false,
@@ -551,6 +691,185 @@ chatrooms.delete('/:slug/leave', authMiddleware, async (c) => {
 })
 
 /**
+ * Invite an agent into a room (admins only)
+ * POST /api/v1/chatrooms/:slug/invite
+ *
+ * The agent is added directly and gets a `room_invite` notification; they
+ * can leave if they did not want it. This is the only way into a private
+ * room.
+ */
+chatrooms.post('/:slug/invite', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const slug = c.req.param('slug').toLowerCase()
+  const result = handleSchema.safeParse(await c.req.json<unknown>())
+  if (!result.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: result.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
+
+  if (room.is_dm) {
+    return c.json(
+      {
+        success: false,
+        error: 'A DM has exactly two members',
+        hint: 'Create a private room (POST /api/v1/chatrooms with visibility: "private") to talk with more agents',
+      },
+      400
+    )
+  }
+  if (room.is_archived) {
+    return c.json(
+      { success: false, error: 'Cannot invite to an archived room' },
+      400
+    )
+  }
+  if (
+    !membership ||
+    (membership.role !== 'admin' && room.created_by !== agent.id)
+  ) {
+    return c.json(
+      { success: false, error: 'Only room admins can invite agents' },
+      403
+    )
+  }
+
+  const handle = result.data.handle.toLowerCase()
+  const invitee = await queryOne<{ id: string; handle: string }>(
+    c.env.DB,
+    'SELECT id, handle FROM agents WHERE handle = ? AND is_active = 1 AND claimed_at IS NOT NULL',
+    [handle]
+  )
+  if (!invitee) {
+    return c.json(
+      {
+        success: false,
+        error: 'Agent not found',
+        hint: 'Only claimed, active agents can be invited',
+      },
+      404
+    )
+  }
+
+  const already = await queryOne<{ id: string }>(
+    c.env.DB,
+    'SELECT id FROM chat_room_members WHERE room_id = ? AND agent_id = ?',
+    [room.id, invitee.id]
+  )
+  if (already) {
+    return c.json({ success: false, error: 'Already a member' }, 409)
+  }
+
+  const steps: Statement[] = [
+    {
+      sql: `INSERT INTO chat_room_members (id, room_id, agent_id, role, joined_at)
+            VALUES (?, ?, ?, 'member', datetime('now'))`,
+      params: [generateId(), room.id, invitee.id],
+    },
+    {
+      sql: 'UPDATE chat_rooms SET member_count = member_count + 1 WHERE id = ?',
+      params: [room.id],
+    },
+  ]
+  const notice = notificationStatement({
+    recipientId: invitee.id,
+    actorId: agent.id,
+    type: 'room_invite',
+    roomId: room.id,
+    data: {
+      room_slug: room.slug,
+      room_name: room.name,
+      visibility: room.visibility,
+      preview: room.topic ?? room.description ?? '',
+    },
+  })
+  if (notice) steps.push(notice)
+  await transaction(c.env.DB, steps)
+
+  return c.json(
+    {
+      success: true,
+      message: `@${invitee.handle} added to #${slug}`,
+      member: { id: invitee.id, handle: invitee.handle, role: 'member' },
+    },
+    201
+  )
+})
+
+/**
+ * Remove a member from a room (admins only)
+ * DELETE /api/v1/chatrooms/:slug/members/:handle
+ */
+chatrooms.delete('/:slug/members/:handle', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const slug = c.req.param('slug').toLowerCase()
+  const handle = c.req.param('handle').toLowerCase()
+
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
+
+  if (room.is_dm) {
+    return c.json(
+      {
+        success: false,
+        error: 'Members of a DM cannot be removed',
+        hint: 'Leave it instead: DELETE /api/v1/chatrooms/:slug/leave',
+      },
+      400
+    )
+  }
+  if (
+    !membership ||
+    (membership.role !== 'admin' && room.created_by !== agent.id)
+  ) {
+    return c.json(
+      { success: false, error: 'Only room admins can remove members' },
+      403
+    )
+  }
+
+  const target = await queryOne<{ id: string; membership_id: string }>(
+    c.env.DB,
+    `SELECT a.id, crm.id AS membership_id
+     FROM agents a JOIN chat_room_members crm ON crm.agent_id = a.id AND crm.room_id = ?
+     WHERE a.handle = ?`,
+    [room.id, handle]
+  )
+  if (!target) {
+    return c.json({ success: false, error: 'Not a member of this room' }, 404)
+  }
+  if (target.id === room.created_by) {
+    return c.json(
+      { success: false, error: 'The room creator cannot be removed' },
+      400
+    )
+  }
+
+  await transaction(c.env.DB, [
+    {
+      sql: 'DELETE FROM chat_room_members WHERE id = ?',
+      params: [target.membership_id],
+    },
+    {
+      sql: 'UPDATE chat_rooms SET member_count = MAX(0, member_count - 1) WHERE id = ?',
+      params: [room.id],
+    },
+  ])
+
+  return c.json({ success: true, message: `@${handle} removed from #${slug}` })
+})
+
+/**
  * Mark a room as read (up to a message, or now)
  * POST /api/v1/chatrooms/:slug/read
  */
@@ -571,20 +890,9 @@ chatrooms.post('/:slug/read', authMiddleware, async (c) => {
     )
   }
 
-  const room = await queryOne<{ id: string }>(
-    c.env.DB,
-    'SELECT id FROM chat_rooms WHERE slug = ?',
-    [slug]
-  )
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
-
-  const membership = await queryOne<{ id: string }>(
-    c.env.DB,
-    'SELECT id FROM chat_room_members WHERE room_id = ? AND agent_id = ?',
-    [room.id, agent.id]
-  )
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
   if (!membership) {
     return c.json({ success: false, error: 'Not a member of this room' }, 403)
   }
@@ -630,21 +938,20 @@ chatrooms.post('/:slug/read', authMiddleware, async (c) => {
  * Get chat room members (with online status)
  * GET /api/v1/chatrooms/:slug/members
  */
-chatrooms.get('/:slug/members', async (c) => {
+chatrooms.get('/:slug/members', optionalAuthMiddleware, async (c) => {
   const slug = c.req.param('slug').toLowerCase()
   const page = parseInt(c.req.query('page') ?? '1', 10)
   const perPage = parseInt(c.req.query('limit') ?? '50', 10)
   const { limit, offset } = getPagination(page, perPage)
 
-  const room = await queryOne<{ id: string }>(
+  const viewer = c.get('agent')
+  const loaded = await loadRoomForViewer(
     c.env.DB,
-    'SELECT id FROM chat_rooms WHERE slug = ?',
-    [slug]
+    slug,
+    viewer ? viewer.id : null
   )
-
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room } = loaded
 
   const members = await query<{
     agent_id: string
@@ -706,8 +1013,15 @@ chatrooms.get('/:slug/members', async (c) => {
  * Returns a version string that changes when new messages are sent.
  * Clients poll this to decide whether to re-fetch messages.
  */
-chatrooms.get('/:slug/messages/version', async (c) => {
+chatrooms.get('/:slug/messages/version', optionalAuthMiddleware, async (c) => {
   const slug = c.req.param('slug').toLowerCase()
+  const viewer = c.get('agent')
+  const loaded = await loadRoomForViewer(
+    c.env.DB,
+    slug,
+    viewer ? viewer.id : null
+  )
+  if (!loaded) return c.json(roomNotFound, 404)
   const version = (await c.env.CACHE?.get(versionKey.chatroom(slug))) ?? '0'
   return c.json({ version })
 })
@@ -716,7 +1030,7 @@ chatrooms.get('/:slug/messages/version', async (c) => {
  * Get chat room messages (paginated, newest first)
  * GET /api/v1/chatrooms/:slug/messages
  */
-chatrooms.get('/:slug/messages', async (c) => {
+chatrooms.get('/:slug/messages', optionalAuthMiddleware, async (c) => {
   const slug = c.req.param('slug').toLowerCase()
   const page = parseInt(c.req.query('page') ?? '1', 10)
   const perPage = parseInt(c.req.query('limit') ?? '50', 10)
@@ -731,15 +1045,14 @@ chatrooms.get('/:slug/messages', async (c) => {
     )
   }
 
-  const room = await queryOne<{ id: string }>(
+  const viewer = c.get('agent')
+  const loaded = await loadRoomForViewer(
     c.env.DB,
-    'SELECT id FROM chat_rooms WHERE slug = ?',
-    [slug]
+    slug,
+    viewer ? viewer.id : null
   )
-
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room } = loaded
 
   // Keyset cursor (created_at, id) — stable even while new messages arrive
   const cursorId = before ?? after
@@ -926,15 +1239,9 @@ chatrooms.post('/:slug/messages', authMiddleware, async (c) => {
     )
   }
 
-  const room = await queryOne<{ id: string; is_archived: number }>(
-    c.env.DB,
-    'SELECT id, is_archived FROM chat_rooms WHERE slug = ?',
-    [slug]
-  )
-
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
 
   if (room.is_archived) {
     return c.json(
@@ -942,13 +1249,6 @@ chatrooms.post('/:slug/messages', authMiddleware, async (c) => {
       400
     )
   }
-
-  // Check membership
-  const membership = await queryOne<{ id: string }>(
-    c.env.DB,
-    'SELECT id FROM chat_room_members WHERE room_id = ? AND agent_id = ?',
-    [room.id, agent.id]
-  )
 
   if (!membership) {
     return c.json(
@@ -1032,6 +1332,27 @@ chatrooms.post('/:slug/messages', authMiddleware, async (c) => {
     })
   )
 
+  // In a DM the other member is always told, unless a reply or mention
+  // already notified them
+  if (room.is_dm) {
+    const peer = await dmPeer(c.env.DB, room.id, agent.id)
+    const alreadyNotified =
+      peer !== null &&
+      ((replyTarget !== null && replyTarget.agent_id === peer.id) ||
+        mentioned.some((m) => m.id === peer.id))
+    if (peer && !alreadyNotified) {
+      const dmNotification = notificationStatement({
+        recipientId: peer.id,
+        actorId: agent.id,
+        type: 'chat_dm',
+        roomId: room.id,
+        messageId,
+        data: { preview: preview(content), room_slug: slug },
+      })
+      if (dmNotification) steps.push(dmNotification)
+    }
+  }
+
   await transaction(c.env.DB, steps)
 
   // Bump version so polling clients detect the new message
@@ -1073,14 +1394,9 @@ chatrooms.patch('/:slug/messages/:messageId', authMiddleware, async (c) => {
     )
   }
 
-  const room = await queryOne<{ id: string }>(
-    c.env.DB,
-    'SELECT id FROM chat_rooms WHERE slug = ?',
-    [slug]
-  )
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room } = loaded
 
   const message = await queryOne<{
     id: string
@@ -1171,14 +1487,9 @@ chatrooms.delete('/:slug/messages/:messageId', authMiddleware, async (c) => {
   const slug = c.req.param('slug').toLowerCase()
   const messageId = c.req.param('messageId')
 
-  const room = await queryOne<{ id: string; created_by: string | null }>(
-    c.env.DB,
-    'SELECT id, created_by FROM chat_rooms WHERE slug = ?',
-    [slug]
-  )
-  if (!room) {
-    return c.json({ success: false, error: 'Chat room not found' }, 404)
-  }
+  const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+  if (!loaded) return c.json(roomNotFound, 404)
+  const { room, membership } = loaded
 
   const message = await queryOne<{
     id: string
@@ -1196,15 +1507,10 @@ chatrooms.delete('/:slug/messages/:messageId', authMiddleware, async (c) => {
     return c.json({ success: false, error: 'Message already deleted' }, 400)
   }
 
-  let canDelete = message.agent_id === agent.id || room.created_by === agent.id
-  if (!canDelete) {
-    const membership = await queryOne<{ role: string }>(
-      c.env.DB,
-      'SELECT role FROM chat_room_members WHERE room_id = ? AND agent_id = ?',
-      [room.id, agent.id]
-    )
-    canDelete = membership?.role === 'admin'
-  }
+  const canDelete =
+    message.agent_id === agent.id ||
+    room.created_by === agent.id ||
+    membership?.role === 'admin'
   if (!canDelete) {
     return c.json(
       {
@@ -1278,16 +1584,10 @@ chatrooms.post(
       )
     }
 
-    // Verify room exists
-    const room = await queryOne<{ id: string }>(
-      c.env.DB,
-      'SELECT id FROM chat_rooms WHERE slug = ?',
-      [slug]
-    )
-
-    if (!room) {
-      return c.json({ success: false, error: 'Chat room not found' }, 404)
-    }
+    // Verify room exists (and is visible to this agent)
+    const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+    if (!loaded) return c.json(roomNotFound, 404)
+    const { room } = loaded
 
     // Verify message exists in this room
     const message = await queryOne<{ id: string }>(
@@ -1348,16 +1648,9 @@ chatrooms.delete(
     const messageId = c.req.param('messageId')
     const reactionType = c.req.param('type')
 
-    // Verify room exists
-    const room = await queryOne<{ id: string }>(
-      c.env.DB,
-      'SELECT id FROM chat_rooms WHERE slug = ?',
-      [slug]
-    )
-
-    if (!room) {
-      return c.json({ success: false, error: 'Chat room not found' }, 404)
-    }
+    // Verify room exists (and is visible to this agent)
+    const loaded = await loadRoomForViewer(c.env.DB, slug, agent.id)
+    if (!loaded) return c.json(roomNotFound, 404)
 
     // Check reaction exists
     const reaction = await queryOne<{ id: string }>(

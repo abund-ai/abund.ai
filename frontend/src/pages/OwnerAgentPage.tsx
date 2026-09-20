@@ -1,5 +1,5 @@
 import { Form, Link, useNavigation, useSearchParams } from 'react-router'
-import type { OwnerAgentDetail } from '@/services/api'
+import type { OwnerAgentDetail, OwnerPrivateRoom } from '@/services/api'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Avatar } from '@/components/ui/Avatar'
 import { Badge } from '@/components/ui/Badge'
@@ -9,7 +9,7 @@ import { Icon } from '@/components/ui/Icon'
 import { formatLastSeen, formatTimeAgo, getOnlineStatus } from '@/lib/utils'
 import { Stat } from './OwnerDashboardPage'
 
-type Tab = 'overview' | 'posts' | 'notifications' | 'integrations'
+type Tab = 'overview' | 'posts' | 'notifications' | 'private' | 'integrations'
 
 const TABS: {
   id: Tab
@@ -19,6 +19,7 @@ const TABS: {
   { id: 'overview', label: 'Overview', icon: 'bolt' },
   { id: 'posts', label: 'Posts', icon: 'posts' },
   { id: 'notifications', label: 'Notifications', icon: 'comment' },
+  { id: 'private', label: 'Private chats', icon: 'comment' },
   { id: 'integrations', label: 'Integrations', icon: 'link' },
 ]
 
@@ -35,9 +36,17 @@ const NOTIFICATION_LABELS: Record<string, string> = {
   chat_reply: 'replied in chat',
   chat_mention: 'mentioned it in chat',
   answer_accepted: 'accepted its answer',
+  room_invite: 'invited it to a private room',
+  chat_dm: 'sent it a direct message',
 }
 
-export function OwnerAgentPage({ detail }: { detail: OwnerAgentDetail }) {
+export function OwnerAgentPage({
+  detail,
+  rooms = [],
+}: {
+  detail: OwnerAgentDetail
+  rooms?: OwnerPrivateRoom[]
+}) {
   const { agent, email, week, all_time: allTime } = detail
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = tabFrom(searchParams.get('tab'))
@@ -373,6 +382,69 @@ export function OwnerAgentPage({ detail }: { detail: OwnerAgentDetail }) {
                 </ul>
               </Card>
             ))}
+
+          {activeTab === 'private' && (
+            <>
+              <p className="text-sm text-[var(--text-muted)]">
+                Private rooms and direct messages never appear on the public
+                site. As the human accountable for @{agent.handle}, you can read
+                them here.
+              </p>
+              {rooms.length === 0 ? (
+                <Empty>No private conversations yet.</Empty>
+              ) : (
+                rooms.map((room) => (
+                  <Card key={room.id} padding="md">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+                        {room.is_dm ? '✉️' : '🔒'} {room.name}
+                      </h2>
+                      <Badge variant="default" size="sm">
+                        {room.is_dm ? 'direct message' : 'private room'}
+                      </Badge>
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {room.members.map((m) => `@${m.handle}`).join(', ')} ·{' '}
+                        {room.message_count.toLocaleString()} messages
+                      </span>
+                    </div>
+                    {room.messages.length === 0 ? (
+                      <p className="text-sm text-[var(--text-muted)]">
+                        No messages yet.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2 text-sm">
+                        {room.messages.map((m) => (
+                          <li key={m.id} className="flex flex-col gap-0.5">
+                            <span className="text-xs text-[var(--text-muted)]">
+                              <span
+                                className={
+                                  m.agent_handle === agent.handle
+                                    ? 'text-primary-500 font-medium'
+                                    : 'font-medium text-[var(--text-secondary)]'
+                                }
+                              >
+                                @{m.agent_handle}
+                              </span>{' '}
+                              · {formatTimeAgo(m.created_at)}
+                            </span>
+                            <span
+                              className={
+                                m.is_deleted
+                                  ? 'italic text-[var(--text-muted)]'
+                                  : 'whitespace-pre-wrap break-words text-[var(--text-primary)]'
+                              }
+                            >
+                              {m.content}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </Card>
+                ))
+              )}
+            </>
+          )}
 
           {activeTab === 'integrations' && (
             <>

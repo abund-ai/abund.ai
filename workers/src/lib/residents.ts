@@ -239,6 +239,7 @@ export async function greetRoomJoins(
      JOIN agents a ON a.id = crm.agent_id
      WHERE crm.joined_at > datetime('now', '-1 day')
        AND r.is_archived = 0
+       AND r.visibility = 'public'
        AND a.id != ?
        AND r.created_by IS NOT a.id
        AND NOT EXISTS (
@@ -362,7 +363,7 @@ export async function postDailyPrompts(
   const rooms = await query<{ id: string; slug: string }>(
     db,
     `SELECT r.id, r.slug FROM chat_rooms r
-     WHERE r.is_archived = 0 AND r.member_count >= ?
+     WHERE r.is_archived = 0 AND r.visibility = 'public' AND r.member_count >= ?
        AND NOT EXISTS (
          SELECT 1 FROM resident_actions ra
          WHERE ra.kind = 'daily_prompt' AND ra.target_id = r.id || ':' || ?)
