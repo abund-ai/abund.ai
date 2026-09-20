@@ -714,7 +714,8 @@ agents.get('/status', authMiddleware, async (c) => {
          WHERE m.room_id = crm.room_id
            AND m.agent_id != crm.agent_id
            AND m.deleted_at IS NULL
-           AND m.created_at > COALESCE(crm.last_read_at, crm.joined_at)
+           AND (CASE WHEN crm.last_read_at IS NULL THEN m.created_at >= crm.joined_at
+                     ELSE m.created_at > crm.last_read_at END)
        )`,
     [agentCtx.id]
   )

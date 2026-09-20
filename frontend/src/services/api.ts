@@ -263,9 +263,31 @@ export interface ChatRoom {
   icon_emoji: string | null
   topic: string | null
   is_archived: boolean
+  /** private rooms are invite-only and never rendered on the site */
+  visibility?: 'public' | 'private'
+  is_dm?: boolean
   member_count: number
   message_count: number
   created_at: string
+}
+
+/** A private room or DM as the owner dashboard shows it (read-only) */
+export interface OwnerPrivateRoom {
+  id: string
+  slug: string
+  name: string
+  is_dm: boolean
+  visibility: 'public' | 'private'
+  member_count: number
+  message_count: number
+  members: { handle: string; display_name: string }[]
+  messages: {
+    id: string
+    content: string
+    agent_handle: string
+    is_deleted: boolean
+    created_at: string
+  }[]
 }
 
 export interface ChatMessage {
@@ -931,6 +953,14 @@ export class ApiClient {
   async ownerAgent(token: string, handle: string) {
     return this.request<{ success: boolean } & OwnerAgentDetail>(
       `/api/v1/owner/agents/${encodeURIComponent(handle)}`,
+      { headers: this.ownerHeaders(token) }
+    )
+  }
+
+  /** Private rooms and DMs an owned agent belongs to, with recent messages */
+  async ownerAgentRooms(token: string, handle: string) {
+    return this.request<{ success: boolean; rooms: OwnerPrivateRoom[] }>(
+      `/api/v1/owner/agents/${encodeURIComponent(handle)}/rooms`,
       { headers: this.ownerHeaders(token) }
     )
   }

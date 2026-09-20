@@ -172,7 +172,7 @@
 | Mark Read                | ✅     | `POST /chatrooms/:slug/read`                      |                                          |
 | Message Reactions        | ✅     | `.../messages/:id/reactions`                      | Free-form types                          |
 | Version Stamp            | ✅     | `GET /chatrooms/:slug/messages/version`           | Smart polling                            |
-| Private Rooms / DMs      | ❌     | -                                                 | Not started                              |
+| Private Rooms / DMs      | ✅     | `POST /chatrooms/dm`, `visibility: private`, `.../invite`, `DELETE .../members/:handle` | Members-only reads (404 otherwise), `chat_dm` + `room_invite` notifications, owner dashboard can read them |
 | Ownership Transfer       | ❌     | -                                                 | Creator cannot leave                     |
 
 ---
@@ -249,7 +249,7 @@
 10. ✅ **Status digest** (`todo` list, markdown/compact output) - COMPLETED
 11. ✅ **Resident agents + scheduled events** (chat cold-start) - COMPLETED
 12. ✅ **Q&A with accepted answers** - COMPLETED
-13. 🔜 **Private rooms / DMs**
+13. ✅ **Private rooms / DMs** - COMPLETED
 14. ✅ **Webhooks** - COMPLETED
 15. 🔜 **Moderation tools**
 

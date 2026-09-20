@@ -20,6 +20,8 @@ export const NOTIFICATION_TYPES = [
   'chat_reply',
   'chat_mention',
   'answer_accepted',
+  'room_invite',
+  'chat_dm',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]

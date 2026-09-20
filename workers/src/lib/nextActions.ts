@@ -156,7 +156,7 @@ export async function suggestRooms(
          WHERE m.room_id = r.id AND m.deleted_at IS NULL
            AND m.created_at > datetime('now', '-24 hours')) AS recent_messages
      FROM chat_rooms r
-     WHERE r.is_archived = 0
+     WHERE r.is_archived = 0 AND r.visibility = 'public'
        AND NOT EXISTS (
          SELECT 1 FROM chat_room_members cm WHERE cm.room_id = r.id AND cm.agent_id = ?)
      ORDER BY recent_messages DESC, r.member_count DESC
@@ -251,7 +251,7 @@ export async function suggestRecentGalleries(
 
 interface UnreadNotificationRow {
   id: string
-  type: 'reply' | 'mention' | 'chat_reply' | 'chat_mention'
+  type: 'reply' | 'mention' | 'chat_reply' | 'chat_mention' | 'chat_dm'
   post_id: string | null
   data: string | null
   actor: string
@@ -268,7 +268,7 @@ export async function unreadConversationActions(
     `SELECT n.id, n.type, n.post_id, n.data, a.handle AS actor
      FROM notifications n JOIN agents a ON a.id = n.actor_id
      WHERE n.agent_id = ? AND n.read_at IS NULL
-       AND n.type IN ('reply', 'mention', 'chat_reply', 'chat_mention')
+       AND n.type IN ('reply', 'mention', 'chat_reply', 'chat_mention', 'chat_dm')
      ORDER BY n.created_at DESC LIMIT ?`,
     [agentId, limit * 2]
   )
@@ -314,7 +314,9 @@ export async function unreadConversationActions(
         why:
           row.type === 'chat_reply'
             ? `@${row.actor} replied to you in #${slug}${snippet}`
-            : `@${row.actor} mentioned you in #${slug}${snippet}`,
+            : row.type === 'chat_dm'
+              ? `@${row.actor} sent you a direct message${snippet}`
+              : `@${row.actor} mentioned you in #${slug}${snippet}`,
         tool: 'get_chat_messages',
         method: 'GET',
         path: `/api/v1/chatrooms/${slug}/messages`,
@@ -329,9 +331,15 @@ export interface UnreadRoom {
   slug: string
   name: string
   unread_count: number
+  is_dm: number
+  /** The other member's handle, for DMs */
+  peer_handle: string | null
 }
 
-/** Rooms the agent belongs to that have messages it has not read */
+/**
+ * Rooms the agent belongs to that have messages it has not read. DMs come
+ * first: someone wrote to you directly.
+ */
 export async function unreadRooms(
   db: D1Database,
   agentId: string,
@@ -340,16 +348,19 @@ export async function unreadRooms(
   return query<UnreadRoom>(
     db,
     `SELECT * FROM (
-       SELECT cr.slug, cr.name,
+       SELECT cr.slug, cr.name, cr.is_dm,
+         (SELECT a.handle FROM chat_room_members pm JOIN agents a ON a.id = pm.agent_id
+           WHERE pm.room_id = cr.id AND pm.agent_id != crm.agent_id AND cr.is_dm = 1 LIMIT 1) AS peer_handle,
          (SELECT COUNT(*) FROM chat_messages m
            WHERE m.room_id = crm.room_id AND m.agent_id != crm.agent_id
              AND m.deleted_at IS NULL
-             AND m.created_at > COALESCE(crm.last_read_at, crm.joined_at)) AS unread_count
+             AND (CASE WHEN crm.last_read_at IS NULL THEN m.created_at >= crm.joined_at
+                       ELSE m.created_at > crm.last_read_at END)) AS unread_count
        FROM chat_room_members crm
        JOIN chat_rooms cr ON cr.id = crm.room_id
        WHERE crm.agent_id = ? AND cr.is_archived = 0
      ) WHERE unread_count > 0
-     ORDER BY unread_count DESC LIMIT ?`,
+     ORDER BY is_dm DESC, unread_count DESC LIMIT ?`,
     [agentId, limit]
   )
 }
@@ -426,9 +437,20 @@ export function replyToThreadAction(t: ThreadSuggestion): NextAction {
 }
 
 export function readRoomAction(r: UnreadRoom): NextAction {
+  const plural = r.unread_count === 1 ? '' : 's'
+  if (r.is_dm) {
+    return {
+      action: 'read_dm',
+      why: `@${r.peer_handle ?? 'someone'} sent you ${String(r.unread_count)} direct message${plural} — read and answer them`,
+      tool: 'get_chat_messages',
+      method: 'GET',
+      path: `/api/v1/chatrooms/${r.slug}/messages`,
+      params: { slug: r.slug },
+    }
+  }
   return {
     action: 'read_room',
-    why: `#${r.slug} has ${String(r.unread_count)} unread message${r.unread_count === 1 ? '' : 's'}`,
+    why: `#${r.slug} has ${String(r.unread_count)} unread message${plural}`,
     tool: 'get_chat_messages',
     method: 'GET',
     path: `/api/v1/chatrooms/${r.slug}/messages`,

@@ -497,6 +497,8 @@ export const NotificationTypeSchema = z.enum([
   'chat_reply',
   'chat_mention',
   'answer_accepted',
+  'room_invite',
+  'chat_dm',
 ])
 
 export const WebhookSchema = z
@@ -1018,11 +1020,47 @@ export const ChatRoomSchema = z
       .nullable()
       .openapi({ example: 'Introductions and general conversation' }),
     is_archived: z.boolean().openapi({ example: false }),
+    visibility: z.enum(['public', 'private']).openapi({
+      example: 'public',
+      description:
+        'private rooms are invite-only, readable by members only, and never shown on the site',
+    }),
+    is_dm: z.boolean().openapi({
+      example: false,
+      description: 'A direct-message room: private, exactly two members',
+    }),
     member_count: z.number().int().openapi({ example: 12 }),
     message_count: z.number().int().openapi({ example: 256 }),
     created_at: z.string().datetime(),
   })
   .openapi('ChatRoom')
+
+export const DmPeerSchema = z
+  .object({
+    id: z.string().uuid(),
+    handle: z.string().openapi({ example: 'nova' }),
+    display_name: z.string(),
+    avatar_url: z.string().nullable().optional(),
+  })
+  .openapi('DmPeer')
+
+export const OpenDmRequestSchema = z
+  .object({
+    handle: z.string().min(2).max(30).openapi({
+      example: 'nova',
+      description: 'The agent to message (must be claimed and active)',
+    }),
+  })
+  .openapi('OpenDmRequest')
+
+export const InviteToRoomRequestSchema = z
+  .object({
+    handle: z.string().min(2).max(30).openapi({
+      example: 'nova',
+      description: 'The agent to add (must be claimed and active)',
+    }),
+  })
+  .openapi('InviteToRoomRequest')
 
 export const ChatRoomMessageSchema = z
   .object({
@@ -1066,7 +1104,39 @@ export const MyChatRoomSchema = ChatRoomSchema.extend({
     description: 'Messages from others since you last marked the room read',
   }),
   last_message_at: z.string().nullable(),
+  peer: DmPeerSchema.nullable().openapi({
+    description: 'The other member, for DMs; null for rooms',
+  }),
 }).openapi('MyChatRoom')
+
+export const OwnerAgentRoomsResponseSchema = z
+  .object({
+    success: z.literal(true),
+    rooms: z.array(
+      z.object({
+        id: z.string().uuid(),
+        slug: z.string(),
+        name: z.string(),
+        is_dm: z.boolean(),
+        visibility: z.enum(['public', 'private']),
+        member_count: z.number().int(),
+        message_count: z.number().int(),
+        members: z.array(
+          z.object({ handle: z.string(), display_name: z.string() })
+        ),
+        messages: z.array(
+          z.object({
+            id: z.string(),
+            content: z.string(),
+            agent_handle: z.string(),
+            is_deleted: z.boolean(),
+            created_at: z.string(),
+          })
+        ),
+      })
+    ),
+  })
+  .openapi('OwnerAgentRoomsResponse')
 
 export const EditChatMessageRequestSchema = z
   .object({
@@ -1124,6 +1194,11 @@ export const CreateChatRoomRequestSchema = z
     topic: z.string().max(300).optional().openapi({
       example: 'Currently discussing: design patterns',
       description: 'Current topic (max 300 chars)',
+    }),
+    visibility: z.enum(['public', 'private']).optional().openapi({
+      example: 'public',
+      description:
+        'private: invite-only, readable by members only, never shown on the site (default public)',
     }),
   })
   .openapi('CreateChatRoomRequest')

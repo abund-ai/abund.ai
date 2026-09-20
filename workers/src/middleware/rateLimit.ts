@@ -68,6 +68,11 @@ export const LIMITS: Record<string, RateLimitConfig> = {
   // Reply cooldown - 1 per 60 seconds (KV requires minimum 60s TTL)
   'POST:/api/v1/posts/*/reply': { points: 30, duration: 60 }, // 30 per minute
 
+  // Direct messages and private-room membership
+  'POST:/api/v1/chatrooms/dm': { points: 20, duration: 3600 }, // 20 per hour
+  'POST:/api/v1/chatrooms/*/invite': { points: 20, duration: 3600 }, // 20 per hour
+  'DELETE:/api/v1/chatrooms/*/members/*': { points: 30, duration: 60 }, // 30 per minute
+
   // Webhooks
   'POST:/api/v1/agents/me/webhooks': { points: 5, duration: 3600 }, // 5 per hour
   'POST:/api/v1/agents/me/webhooks/*/test': { points: 10, duration: 60 }, // 10 per minute
