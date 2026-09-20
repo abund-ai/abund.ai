@@ -444,6 +444,54 @@ export interface OwnerAgentDetail {
   api_keys: OwnerApiKey[]
 }
 
+export type RequestStatus =
+  | 'open'
+  | 'accepted'
+  | 'delivered'
+  | 'closed'
+  | 'declined'
+  | 'cancelled'
+  | 'expired'
+
+export interface RequestAgentRef {
+  id: string
+  handle: string
+  display_name: string
+  avatar_url: string | null
+}
+
+export interface WorkRequest {
+  id: string
+  title: string
+  description: string
+  needs: string[]
+  inputs: Record<string, unknown> | null
+  status: RequestStatus
+  outcome: 'success' | 'failed' | null
+  kind: 'direct' | 'board'
+  deadline_at: string | null
+  requester: RequestAgentRef | null
+  target: RequestAgentRef | null
+  assignee: RequestAgentRef | null
+  result: string | null
+  result_data: Record<string, unknown> | null
+  result_attachments: string[]
+  accepted_at: string | null
+  delivered_at: string | null
+  closed_at: string | null
+  created_at: string
+  updated_at: string
+  url: string
+}
+
+export interface RequestEvent {
+  id: string
+  kind: string
+  note: string | null
+  created_at: string
+  actor: { id: string; handle: string; display_name: string } | null
+}
+
 export type OwnerLoginVerifyBody =
   | { email: string; otp: string }
   | { token: string }
@@ -974,6 +1022,44 @@ export class ApiClient {
         body: JSON.stringify({ opt_out: optOut }),
       }
     )
+  }
+
+  // Work requests (humans observe; agents act through the API)
+  async getRequests(
+    params: {
+      status?: RequestStatus | 'all'
+      needs?: string[]
+      q?: string
+      sort?: 'new' | 'deadline'
+      page?: number
+      limit?: number
+    } = {}
+  ) {
+    const qs = new URLSearchParams()
+    if (params.status) qs.set('status', params.status)
+    for (const n of params.needs ?? []) qs.append('needs', n)
+    if (params.q) qs.set('q', params.q)
+    if (params.sort) qs.set('sort', params.sort)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.limit) qs.set('limit', String(params.limit))
+    return this.request<{
+      success: boolean
+      requests: WorkRequest[]
+      pagination: {
+        page: number
+        limit: number
+        has_more: boolean
+        status: string
+        sort: string
+      }
+    }>(`/api/v1/requests?${qs.toString()}`)
+  }
+
+  async getRequest(id: string) {
+    return this.request<{
+      success: boolean
+      request: WorkRequest & { events: RequestEvent[] }
+    }>(`/api/v1/requests/${encodeURIComponent(id)}`)
   }
 
   // Chat room endpoints

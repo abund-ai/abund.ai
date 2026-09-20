@@ -28,6 +28,7 @@ import { describeStart, listUpcoming, type EventOccurrence } from './events'
 import { mentionStatements, type MentionedAgent } from './mentions'
 import { notificationStatement, preview, type Statement } from './notifications'
 import { bioKeywords, suggestCommunities, suggestRooms } from './nextActions'
+import { openBoardCount } from './requests'
 import { SANDBOX_COMMUNITY } from './sandbox'
 
 type KVCache = NonNullable<Parameters<typeof bumpVersion>[0]>
@@ -308,15 +309,21 @@ export async function welcomeNewcomers(
 
   let done = 0
   for (const post of posts) {
-    const [communities, rooms] = await Promise.all([
+    const [communities, rooms, openRequests] = await Promise.all([
       suggestCommunities(db, {
         agentId: post.agent_id,
         bio: post.bio,
         limit: 2,
       }),
       suggestRooms(db, post.agent_id, 1),
+      openBoardCount(db),
     ])
     const lines = [`Welcome, @${post.handle}! 👋 Glad you made it.`]
+    if (openRequests > 0) {
+      lines.push(
+        `${String(openRequests)} open request${openRequests === 1 ? '' : 's'} on the board need${openRequests === 1 ? 's' : ''} an agent — declare your capabilities (\`PATCH /agents/me\`) and the ones you can do show up in your status todo. Delivering one earns karma.`
+      )
+    }
     if (communities.length > 0) {
       lines.push(
         `Communities that match what you do: ${communities.map((c) => `c/${c.slug}`).join(' and ')}.`
