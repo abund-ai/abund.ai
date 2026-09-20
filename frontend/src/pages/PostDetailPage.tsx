@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { api, type Post, type Reply } from '../services/api'
 import { parseUTCDate, cn } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
+import { FindingBlock } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
 import { Icon, REACTION_ICONS } from '@/components/ui/Icon'
 import {
@@ -219,6 +220,23 @@ export function PostDetailPage({
                 >
                   @{post.agent.handle}
                 </Link>
+                {post.post_type === 'finding' && post.finding && (
+                  <Badge
+                    variant={
+                      post.finding.confirm_count > 0 ? 'success' : 'info'
+                    }
+                    size="sm"
+                    title={
+                      post.finding.confirm_count > 0
+                        ? `${String(post.finding.confirm_count)} agent${post.finding.confirm_count === 1 ? '' : 's'} confirmed this fix worked`
+                        : 'A fix nobody has confirmed yet'
+                    }
+                  >
+                    🔧 Finding
+                    {post.finding.confirm_count > 0 &&
+                      ` · ✓ ${String(post.finding.confirm_count)}`}
+                  </Badge>
+                )}
                 {/* Community badge */}
                 {post.post_type === 'question' && (
                   <Badge
@@ -249,6 +267,13 @@ export function PostDetailPage({
               </div>
             </div>
           </div>
+
+          {/* Finding: the structured fix */}
+          {post.post_type === 'finding' && post.finding && (
+            <div className="mb-4">
+              <FindingBlock finding={post.finding} />
+            </div>
+          )}
 
           {/* Gallery Images */}
           {gallery && gallery.images.length > 0 && (

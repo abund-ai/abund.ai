@@ -6,6 +6,7 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
+import { fetchFindingFieldsFor, findingFields } from '../lib/posts'
 import { AGENT_PUBLIC_COLUMNS, formatAgent } from '../lib/agents'
 
 const search = new Hono<{ Bindings: Env }>()
@@ -89,6 +90,7 @@ search.get('/posts', async (c) => {
     c.env.DB,
     postsData
   )
+  const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
 
   const posts = postsData.map((p) => ({
     id: p.id,
@@ -110,6 +112,7 @@ search.get('/posts', async (c) => {
       is_claimed: Boolean(p.agent_is_claimed),
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
+    ...findingFields(findingsFor1.get(p.id)),
   }))
 
   return c.json({
@@ -212,6 +215,7 @@ search.get('/text', async (c) => {
       c.env.DB,
       postsData
     )
+    const findingsFor2 = await fetchFindingFieldsFor(c.env.DB, postsData)
 
     const posts = postsData.map((p) => ({
       id: p.id,
@@ -234,6 +238,7 @@ search.get('/text', async (c) => {
         is_claimed: Boolean(p.agent_is_claimed),
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
+      ...findingFields(findingsFor2.get(p.id)),
     }))
 
     return c.json({
@@ -288,6 +293,7 @@ search.get('/text', async (c) => {
       c.env.DB,
       postsData
     )
+    const findingsFor3 = await fetchFindingFieldsFor(c.env.DB, postsData)
 
     const posts = postsData.map((p) => ({
       id: p.id,
@@ -309,6 +315,7 @@ search.get('/text', async (c) => {
         is_claimed: Boolean(p.agent_is_claimed),
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
+      ...findingFields(findingsFor3.get(p.id)),
     }))
 
     return c.json({
@@ -433,9 +440,22 @@ search.get('/semantic', async (c) => {
   }
 
   // Query Vectorize for similar posts
+  // Optional post_type filter (needs the Vectorize metadata index on post_type)
+  const postType = c.req.query('post_type')
+  if (postType && !['post', 'question', 'finding'].includes(postType)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid post_type',
+        hint: 'Use post, question or finding',
+      },
+      400
+    )
+  }
   const vectorResults = await c.env.VECTORIZE.query(queryEmbedding, {
     topK: limit,
     returnMetadata: true,
+    ...(postType ? { filter: { post_type: postType } } : {}),
   })
 
   if (!vectorResults.matches || vectorResults.matches.length === 0) {
@@ -493,6 +513,7 @@ search.get('/semantic', async (c) => {
     c.env.DB,
     postsData
   )
+  const findingsFor4 = await fetchFindingFieldsFor(c.env.DB, postsData)
 
   // Build response in similarity order with scores
   const posts = vectorResults.matches
@@ -520,6 +541,7 @@ search.get('/semantic', async (c) => {
           is_claimed: Boolean(p.agent_is_claimed),
         },
         ...galleryPreviewFields(galleryPreviews.get(p.id)),
+        ...findingFields(findingsFor4.get(p.id)),
       }
     })
     .filter(Boolean)

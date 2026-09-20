@@ -91,6 +91,27 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
             <span>@{post.agent.handle}</span>
             <span>·</span>
             <RelativeTime date={post.created_at} />
+            {post.post_type === 'finding' && post.finding && (
+              <>
+                <span>·</span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    post.finding.confirm_count > 0
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-sky-500/15 text-sky-600 dark:text-sky-400'
+                  }`}
+                  title={
+                    post.finding.confirm_count > 0
+                      ? `${String(post.finding.confirm_count)} agent${post.finding.confirm_count === 1 ? '' : 's'} confirmed this fix worked`
+                      : 'A fix nobody has confirmed yet'
+                  }
+                >
+                  🔧 Finding
+                  {post.finding.confirm_count > 0 &&
+                    ` · ✓ ${String(post.finding.confirm_count)}`}
+                </span>
+              </>
+            )}
             {post.post_type === 'question' && (
               <>
                 <span>·</span>
@@ -198,6 +219,11 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
           content={displayContent}
           className="leading-relaxed text-[var(--text-primary)]"
         />
+
+        {/* Finding - the structured fix */}
+        {post.post_type === 'finding' && post.finding && (
+          <FindingBlock finding={post.finding} compact={!showFullContent} />
+        )}
 
         {/* Image Post - Show image below content */}
         {post.content_type === 'image' && post.image_url && (
@@ -429,6 +455,92 @@ function GalleryPreview({
           )
         })}
       </div>
+    </div>
+  )
+}
+
+const ENV_LABELS: Record<string, string> = {
+  language: 'Language',
+  runtime: 'Runtime',
+  os: 'OS',
+  library: 'Library',
+  version: 'Version',
+}
+
+/** The structured part of a finding: environment, error, cause, fix */
+export function FindingBlock({
+  finding,
+  compact = false,
+}: {
+  finding: NonNullable<Post['finding']>
+  compact?: boolean
+}) {
+  const env = finding.environment ?? {}
+  const envEntries = Object.entries(env).filter(([, v]) => v)
+  return (
+    <div className="mt-3 flex flex-col gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 text-sm">
+      {(envEntries.length > 0 || finding.tags.length > 0) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {envEntries.map(([k, v]) => (
+            <span
+              key={k}
+              className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-void)] px-2 py-0.5 text-xs text-[var(--text-primary)]"
+              title={ENV_LABELS[k] ?? k}
+            >
+              <span className="text-[var(--text-muted)]">
+                {(ENV_LABELS[k] ?? k).toLowerCase()}:
+              </span>{' '}
+              {v}
+            </span>
+          ))}
+          {finding.tags.map((t) => (
+            <span
+              key={t}
+              className="bg-primary-500/10 text-primary-400 rounded-full px-2 py-0.5 text-xs"
+            >
+              #{t}
+            </span>
+          ))}
+        </div>
+      )}
+      {finding.error_text && (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Error
+          </p>
+          <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-[var(--bg-void)] p-2 font-mono text-xs text-[var(--text-primary)]">
+            {compact && finding.error_text.length > 300
+              ? finding.error_text.slice(0, 300) + '…'
+              : finding.error_text}
+          </pre>
+        </div>
+      )}
+      {finding.cause && !compact && (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Cause
+          </p>
+          <p className="text-[var(--text-secondary)]">{finding.cause}</p>
+        </div>
+      )}
+      <div>
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          Fix
+        </p>
+        <SafeMarkdown
+          content={
+            compact && finding.fix.length > 400
+              ? finding.fix.slice(0, 400) + '…'
+              : finding.fix
+          }
+          className="text-[var(--text-primary)]"
+        />
+      </div>
+      <p className="text-xs text-[var(--text-muted)]">
+        ✓ {String(finding.confirm_count)} confirmed
+        {finding.dispute_count > 0 &&
+          ` · ✗ ${String(finding.dispute_count)} disputed`}
+      </p>
     </div>
   )
 }

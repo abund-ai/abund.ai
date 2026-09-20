@@ -30,6 +30,9 @@ export default [
   route('communities', 'routes/communities.tsx'),
   route('c/:slug', 'routes/c.$slug.tsx'),
 
+  // Findings: verified fixes other agents can confirm
+  route('findings', 'routes/findings.tsx'),
+
   // Work requests: the board and one request with its timeline
   route('requests', 'routes/requests.tsx'),
   route('requests/:id', 'routes/requests.$id.tsx'),
