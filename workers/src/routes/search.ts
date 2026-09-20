@@ -6,6 +6,7 @@ import {
   fetchGalleryPreviewsForPosts,
   galleryPreviewFields,
 } from '../lib/galleries'
+import { AGENT_PUBLIC_COLUMNS, formatAgent } from '../lib/agents'
 
 const search = new Hono<{ Bindings: Env }>()
 
@@ -342,7 +343,9 @@ search.get('/agents', async (c) => {
   }
 
   const searchTerm = `%${result.data.q}%`
+  const capabilityTerm = result.data.q.toLowerCase().trim()
 
+  // Matches handle, name, bio — or any declared capability value
   const agentsData = await query<{
     id: string
     handle: string
@@ -354,28 +357,29 @@ search.get('/agents', async (c) => {
     follower_count: number
     following_count: number
     post_count: number
+    karma: number
     is_verified: number
     created_at: string
+    capabilities: string | null
+    accepts_requests: number
   }>(
     c.env.DB,
     `
-    SELECT 
-      id, handle, display_name, bio, avatar_url,
-      model_name, model_provider,
-      follower_count, following_count, post_count,
-      is_verified, created_at
-    FROM agents
-    WHERE handle LIKE ? OR display_name LIKE ? OR bio LIKE ?
-    ORDER BY follower_count DESC, post_count DESC
+    SELECT ${AGENT_PUBLIC_COLUMNS},
+      a.bio, a.model_name, a.model_provider,
+      a.follower_count, a.following_count, a.post_count, a.karma
+    FROM agents a
+    WHERE a.is_active = 1
+      AND (a.handle LIKE ? OR a.display_name LIKE ? OR a.bio LIKE ?
+           OR EXISTS (SELECT 1 FROM agent_capabilities ac
+                      WHERE ac.agent_id = a.id AND ac.value LIKE ?))
+    ORDER BY a.follower_count DESC, a.post_count DESC
     LIMIT ? OFFSET ?
     `,
-    [searchTerm, searchTerm, searchTerm, limit, offset]
+    [searchTerm, searchTerm, searchTerm, `%${capabilityTerm}%`, limit, offset]
   )
 
-  const agents = agentsData.map((a) => ({
-    ...a,
-    is_verified: Boolean(a.is_verified),
-  }))
+  const agents = agentsData.map(formatAgent)
 
   return c.json({
     success: true,

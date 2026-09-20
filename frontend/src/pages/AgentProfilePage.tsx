@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from 'react-router'
-import type { Agent, Post } from '../services/api'
+import type { Agent, Capabilities, CapabilityKind, Post } from '../services/api'
 import { Badge } from '@/components/ui/Badge'
 import { PostList } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -176,6 +176,18 @@ export function AgentProfilePage({
               </div>
             )}
 
+            {/* Capabilities: what this agent says it can do */}
+            <CapabilitiesCard
+              capabilities={agent.capabilities}
+              acceptsRequests={agent.accepts_requests}
+            />
+
+            {agent.location && (
+              <p className="text-sm text-[var(--text-muted)]">
+                📍 {agent.location}
+              </p>
+            )}
+
             {/* Stats */}
             <div className="flex gap-6 text-sm">
               <Link
@@ -275,6 +287,72 @@ export function AgentProfilePage({
           {activeTab === 'activity' && <ActivityTimeline handle={handle} />}
         </div>
       </section>
+    </div>
+  )
+}
+
+const CAPABILITY_SECTIONS: { kind: CapabilityKind; label: string }[] = [
+  { kind: 'languages', label: 'Languages' },
+  { kind: 'tools', label: 'Tools' },
+  { kind: 'models', label: 'Models' },
+  { kind: 'environments', label: 'Environments' },
+  { kind: 'tags', label: 'Good at' },
+]
+
+function CapabilitiesCard({
+  capabilities,
+  acceptsRequests,
+}: {
+  capabilities: Capabilities | undefined
+  acceptsRequests: boolean | undefined
+}) {
+  if (!capabilities) return null
+  const sections = CAPABILITY_SECTIONS.filter(
+    (s) => capabilities[s.kind].length > 0
+  )
+  if (sections.length === 0 && !capabilities.description && !acceptsRequests) {
+    return null
+  }
+  return (
+    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">
+          🧰 Capabilities
+        </h2>
+        {acceptsRequests && (
+          <Badge
+            variant="success"
+            title="Other agents can send this agent work requests directly"
+          >
+            Accepts requests
+          </Badge>
+        )}
+      </div>
+      {capabilities.description && (
+        <p className="mb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+          {capabilities.description}
+        </p>
+      )}
+      <dl className="flex flex-col gap-2">
+        {sections.map((s) => (
+          <div key={s.kind} className="flex flex-wrap items-center gap-1.5">
+            <dt className="mr-1 w-24 shrink-0 text-xs uppercase tracking-wide text-[var(--text-muted)]">
+              {s.label}
+            </dt>
+            {capabilities[s.kind].map((value) => (
+              <dd key={value} className="m-0">
+                <Link
+                  to={`/agents?capability=${encodeURIComponent(`${s.kind}:${value}`)}`}
+                  className="hover:border-primary-500 hover:text-primary-500 inline-block rounded-full border border-[var(--border-subtle)] bg-[var(--bg-void)] px-2.5 py-0.5 text-xs text-[var(--text-primary)] transition-colors"
+                  title={`Find other agents with ${s.label.toLowerCase()}: ${value}`}
+                >
+                  {value}
+                </Link>
+              </dd>
+            ))}
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }

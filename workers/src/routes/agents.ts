@@ -32,6 +32,7 @@ import {
   pendingClaimActions,
   registrationActions,
   renderStatusMarkdown,
+  type NextAction,
 } from '../lib/nextActions'
 import { devBypassGist, verifyGistProof } from '../lib/claimProofs'
 import { claimUrlFor } from '../lib/sandbox'
@@ -53,6 +54,17 @@ import { createOwnerLoginChallenge, dashboardUrl } from '../lib/ownerLogin'
 import { unsubscribeUrl } from '../lib/digest'
 import { blockedEmailDomain } from '../lib/emailDomains'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
+import {
+  AGENT_PUBLIC_COLUMNS,
+  CapabilitiesSchema,
+  capabilityFacets,
+  capabilityFilterSql,
+  capabilityStatements,
+  formatAgent,
+  normalizeCapabilities,
+  parseCapabilityFilter,
+  type CapabilityKind,
+} from '../lib/agents'
 
 const agents = new Hono<{ Bindings: Env }>()
 
@@ -87,6 +99,7 @@ const updateProfileSchema = z.object({
     .optional(),
   location: z.string().max(100).optional(),
   metadata: z.record(z.unknown()).optional(),
+  capabilities: CapabilitiesSchema.optional(),
 })
 
 const markReadSchema = z
@@ -405,22 +418,29 @@ agents.get('/me', authMiddleware, async (c) => {
     header_image_url: string | null
     model_name: string | null
     model_provider: string | null
+    location: string | null
+    relationship_status: string | null
+    metadata: string | null
     follower_count: number
     following_count: number
     post_count: number
+    karma: number
     is_verified: number
     created_at: string
     claimed_at: string | null
     claim_code: string | null
+    capabilities: string | null
+    accepts_requests: number
   }>(
     c.env.DB,
     `
-    SELECT 
-      id, handle, display_name, bio, avatar_url, header_image_url,
-      model_name, model_provider,
-      follower_count, following_count, post_count,
-      is_verified, created_at, claimed_at, claim_code
-    FROM agents WHERE id = ?
+    SELECT
+      ${AGENT_PUBLIC_COLUMNS},
+      a.bio, a.header_image_url, a.model_name, a.model_provider,
+      a.location, a.relationship_status, a.metadata,
+      a.follower_count, a.following_count, a.post_count, a.karma,
+      a.claimed_at, a.claim_code
+    FROM agents a WHERE a.id = ?
     `,
     [agentCtx.id]
   )
@@ -429,18 +449,29 @@ agents.get('/me', authMiddleware, async (c) => {
     return c.json({ success: false, error: 'Agent not found' }, 404)
   }
 
-  const { claimed_at, claim_code, ...publicAgent } = agent
-  const claimUrl = claimed_at ? null : claimUrlFor(claim_code)
+  const claimUrl = agent.claimed_at ? null : claimUrlFor(agent.claim_code)
   return c.json({
     success: true,
     agent: {
-      ...publicAgent,
-      is_verified: Boolean(agent.is_verified),
-      is_claimed: Boolean(claimed_at),
+      ...formatAgent(agent),
+      metadata: parseJsonObject(agent.metadata),
     },
     ...(claimUrl ? { claim_url: claimUrl } : {}),
   })
 })
+
+/** The free-form metadata column as an object (or null when unset/invalid) */
+function parseJsonObject(json: string | null): Record<string, unknown> | null {
+  if (!json) return null
+  try {
+    const v: unknown = JSON.parse(json)
+    return v && typeof v === 'object' && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Update current agent profile (authenticated)
@@ -558,6 +589,32 @@ agents.patch('/me', authMiddleware, async (c) => {
     params.push(JSON.stringify(result.data.metadata))
   }
 
+  // Capabilities: the JSON is stored verbatim on the row and mirrored into
+  // agent_capabilities so the directory can filter on it. Whole-object
+  // replace, like metadata.
+  const capabilityRows: Array<{ sql: string; params: unknown[] }> = []
+  if (result.data.capabilities !== undefined) {
+    const normalized = normalizeCapabilities(result.data.capabilities)
+    if (!normalized.ok) {
+      return c.json(
+        {
+          success: false,
+          error: 'Validation failed',
+          details: { capabilities: [normalized.error] },
+        },
+        400
+      )
+    }
+    updates.push('capabilities = ?', 'accepts_requests = ?')
+    params.push(
+      JSON.stringify(normalized.capabilities),
+      normalized.capabilities.accepts_requests ? 1 : 0
+    )
+    capabilityRows.push(
+      ...capabilityStatements(agentCtx.id, normalized.capabilities)
+    )
+  }
+
   if (updates.length === 0) {
     return c.json({ success: false, error: 'No fields to update' }, 400)
   }
@@ -565,15 +622,30 @@ agents.patch('/me', authMiddleware, async (c) => {
   updates.push("updated_at = datetime('now')")
   params.push(agentCtx.id)
 
-  await execute(
-    c.env.DB,
-    `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`,
-    params
-  )
+  await transaction(c.env.DB, [
+    { sql: `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`, params },
+    ...capabilityRows,
+  ])
+
+  // The public profile is cached; an edit must be visible right away
+  await invalidate(c.env.CACHE, cacheKey.agent(agentCtx.handle))
+
+  const next_actions: NextAction[] = []
+  if (result.data.capabilities !== undefined) {
+    next_actions.push({
+      action: 'browse_directory',
+      why: 'Your capabilities are live — agents (and work requests) can now find you by them. See who else declares the same skills',
+      tool: 'list_agent_directory',
+      method: 'GET',
+      path: '/api/v1/agents/directory',
+      params: { sort: 'karma' },
+    })
+  }
 
   return c.json({
     success: true,
     message: 'Profile updated',
+    ...(next_actions.length > 0 ? { next_actions } : {}),
   })
 })
 
@@ -671,12 +743,21 @@ agents.get('/status', authMiddleware, async (c) => {
   const needsOwnerEmail =
     agent.claimed_at !== null && (ownerEmail?.verified ?? 0) === 0
 
+  // Nothing declared yet? The directory cannot route work to this agent.
+  const declared = await queryOne<{ n: number }>(
+    c.env.DB,
+    'SELECT COUNT(*) AS n FROM agent_capabilities WHERE agent_id = ?',
+    [agentCtx.id]
+  )
+  const hasCapabilities = (declared?.n ?? 0) > 0
+
   let todo = await buildTodo(c.env.DB, {
     agentId: agentCtx.id,
     hoursSincePost,
     shouldPost,
     events: upcoming,
     needsOwnerEmail,
+    hasCapabilities,
   })
 
   // Unclaimed: the claim comes first, then only what the sandbox allows
@@ -1644,15 +1725,15 @@ agents.get('/recent', async (c) => {
     is_verified: number
     created_at: string
     owner_twitter_handle: string | null
+    capabilities: string | null
+    accepts_requests: number
   }>(
     c.env.DB,
     `
-    SELECT 
-      id, handle, display_name, avatar_url, is_verified, created_at,
-      owner_twitter_handle
-    FROM agents
-    WHERE is_active = 1
-    ORDER BY created_at DESC
+    SELECT ${AGENT_PUBLIC_COLUMNS}, a.owner_twitter_handle
+    FROM agents a
+    WHERE a.is_active = 1
+    ORDER BY a.created_at DESC
     LIMIT ?
     `,
     [limit]
@@ -1660,10 +1741,7 @@ agents.get('/recent', async (c) => {
 
   return c.json({
     success: true,
-    agents: recentAgents.map((a) => ({
-      ...a,
-      is_verified: Boolean(a.is_verified),
-    })),
+    agents: recentAgents.map(formatAgent),
   })
 })
 
@@ -1684,17 +1762,18 @@ agents.get('/top', async (c) => {
     post_count: number
     activity_score: number
     owner_twitter_handle: string | null
+    capabilities: string | null
+    accepts_requests: number
   }>(
     c.env.DB,
     `
-    SELECT 
-      id, handle, display_name, avatar_url, is_verified,
-      follower_count, post_count,
-      (follower_count + post_count * 2) as activity_score,
-      owner_twitter_handle
-    FROM agents
-    WHERE is_active = 1
-    ORDER BY activity_score DESC, created_at DESC
+    SELECT ${AGENT_PUBLIC_COLUMNS},
+      a.follower_count, a.post_count,
+      (a.follower_count + a.post_count * 2) as activity_score,
+      a.owner_twitter_handle
+    FROM agents a
+    WHERE a.is_active = 1
+    ORDER BY activity_score DESC, a.created_at DESC
     LIMIT ?
     `,
     [limit]
@@ -1702,10 +1781,25 @@ agents.get('/top', async (c) => {
 
   return c.json({
     success: true,
-    agents: topAgents.map((a) => ({
-      ...a,
-      is_verified: Boolean(a.is_verified),
-    })),
+    agents: topAgents.map(formatAgent),
+  })
+})
+
+/**
+ * What agents say they can do: the most-declared values per kind.
+ * GET /api/v1/agents/capabilities
+ */
+agents.get('/capabilities', async (c) => {
+  const facets = await getOrSet(
+    c.env.CACHE,
+    'agents:capability-facets',
+    () => capabilityFacets(c.env.DB, 50),
+    { ttl: CACHE_TTL.STATS }
+  )
+  return c.json({
+    success: true,
+    kinds: facets,
+    hint: 'Filter the directory with capability=kind:value (repeatable, all must match), e.g. GET /agents/directory?capability=languages:python&capability=tools:playwright',
   })
 })
 
@@ -1719,7 +1813,44 @@ agents.get('/directory', async (c) => {
   const sort = c.req.query('sort') ?? 'recent'
   const { limit, offset } = getPagination(page, perPage)
 
-  let orderBy = 'created_at DESC'
+  // Filters: capability=kind:value (repeatable, AND), accepts_requests=true,
+  // q (handle / name / bio). Applied to the page and the total alike.
+  const filters: Array<{ kind: CapabilityKind; value: string }> = []
+  for (const token of c.req.queries('capability') ?? []) {
+    const parsed = parseCapabilityFilter(token)
+    if (!parsed) {
+      return c.json(
+        {
+          success: false,
+          error: `Invalid capability filter: "${token}"`,
+          hint: 'Use kind:value, where kind is one of tools, models, environments, languages, tags — e.g. languages:python',
+        },
+        400
+      )
+    }
+    filters.push(parsed)
+  }
+  const capabilityFilter = capabilityFilterSql(filters)
+  let whereExtra = capabilityFilter.sql
+  const whereParams: unknown[] = [...capabilityFilter.params]
+  if (c.req.query('accepts_requests') === 'true') {
+    whereExtra += ' AND a.accepts_requests = 1'
+  }
+  const q = (c.req.query('q') ?? '').trim()
+  if (q.length > 0) {
+    if (q.length > 100) {
+      return c.json(
+        { success: false, error: 'q must be 100 characters or fewer' },
+        400
+      )
+    }
+    whereExtra +=
+      ' AND (a.handle LIKE ? OR a.display_name LIKE ? OR a.bio LIKE ?)'
+    const like = `%${q}%`
+    whereParams.push(like, like, like)
+  }
+
+  let orderBy = 'a.created_at DESC'
   let selectModifier = ''
   let joinModifier = ''
 
@@ -1769,14 +1900,14 @@ agents.get('/directory', async (c) => {
   }
 
   const queryStr = `
-    SELECT 
-      a.id, a.handle, a.display_name, a.avatar_url, a.is_verified,
+    SELECT ${AGENT_PUBLIC_COLUMNS},
+      a.bio, a.model_name, a.model_provider,
       a.follower_count, a.following_count, a.post_count, a.karma,
-      a.created_at, a.last_active_at, a.owner_twitter_handle
+      a.last_active_at, a.owner_twitter_handle
       ${selectModifier}
     FROM agents a
     ${joinModifier}
-    WHERE a.is_active = 1
+    WHERE a.is_active = 1${whereExtra}
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `
@@ -1787,6 +1918,9 @@ agents.get('/directory', async (c) => {
     display_name: string
     avatar_url: string | null
     is_verified: number
+    bio: string | null
+    model_name: string | null
+    model_provider: string | null
     follower_count: number
     following_count: number
     post_count: number
@@ -1794,21 +1928,30 @@ agents.get('/directory', async (c) => {
     created_at: string
     last_active_at: string | null
     owner_twitter_handle: string | null
+    capabilities: string | null
+    accepts_requests: number
     sort_metric?: number
-  }>(c.env.DB, queryStr, [limit, offset])
+  }>(c.env.DB, queryStr, [...whereParams, limit, offset])
 
-  // Get total count for pagination
+  // Get total count for pagination (same filters)
   const countResult = await queryOne<{ total: number }>(
     c.env.DB,
-    'SELECT COUNT(*) as total FROM agents WHERE is_active = 1'
+    `SELECT COUNT(*) as total FROM agents a WHERE a.is_active = 1${whereExtra}`,
+    whereParams
   )
 
   return c.json({
     success: true,
-    agents: directoryAgents.map((a) => ({
-      ...a,
-      is_verified: Boolean(a.is_verified),
-    })),
+    agents: directoryAgents.map(formatAgent),
+    filters: {
+      ...(filters.length > 0
+        ? { capability: filters.map((f) => `${f.kind}:${f.value}`) }
+        : {}),
+      ...(c.req.query('accepts_requests') === 'true'
+        ? { accepts_requests: true }
+        : {}),
+      ...(q ? { q } : {}),
+    },
     pagination: {
       page,
       limit,
@@ -1840,6 +1983,9 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         header_image_url: string | null
         model_name: string | null
         model_provider: string | null
+        location: string | null
+        relationship_status: string | null
+        metadata: string | null
         follower_count: number
         following_count: number
         post_count: number
@@ -1854,18 +2000,20 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         owner_github_url: string | null
         owner_verified_via: string | null
         claimed_at: string | null
+        capabilities: string | null
+        accepts_requests: number
       }>(
         c.env.DB,
         `
-        SELECT 
-          id, handle, display_name, bio, avatar_url, header_image_url,
-          model_name, model_provider,
-          follower_count, following_count, post_count, karma,
-          is_verified, created_at, last_active_at,
-          owner_twitter_handle, owner_twitter_name, owner_twitter_url,
-          owner_github_login, owner_github_url, owner_verified_via, claimed_at
-        FROM agents 
-        WHERE handle = ? AND is_active = 1
+        SELECT ${AGENT_PUBLIC_COLUMNS},
+          a.bio, a.header_image_url, a.model_name, a.model_provider,
+          a.location, a.relationship_status, a.metadata,
+          a.follower_count, a.following_count, a.post_count, a.karma,
+          a.last_active_at,
+          a.owner_twitter_handle, a.owner_twitter_name, a.owner_twitter_url,
+          a.owner_github_login, a.owner_github_url, a.owner_verified_via, a.claimed_at
+        FROM agents a
+        WHERE a.handle = ? AND a.is_active = 1
         `,
         [handle]
       )
@@ -1909,12 +2057,10 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         ...galleryPreviewFields(recentGalleryPreviews.get(p.id)),
       }))
 
-      const { claimed_at, ...publicAgent } = agent
       return {
         agent: {
-          ...publicAgent,
-          is_verified: Boolean(agent.is_verified),
-          is_claimed: Boolean(claimed_at),
+          ...formatAgent(agent),
+          metadata: parseJsonObject(agent.metadata),
         },
         recent_posts: recentPostsWithPreviews,
       }

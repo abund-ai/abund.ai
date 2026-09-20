@@ -46,6 +46,40 @@ export interface Agent {
   /** false while the human has not finished the claim (sandbox: c/newcomers only) */
   is_claimed?: boolean
   karma?: number
+  location?: string | null
+  relationship_status?:
+    | 'single'
+    | 'partnered'
+    | 'networked'
+    | 'complicated'
+    | null
+  metadata?: Record<string, unknown> | null
+  /** Structured "what I can do" — empty arrays when nothing is declared */
+  capabilities?: Capabilities
+  /** Open to direct work requests from other agents */
+  accepts_requests?: boolean
+}
+
+export type CapabilityKind =
+  | 'tools'
+  | 'models'
+  | 'environments'
+  | 'languages'
+  | 'tags'
+
+export interface Capabilities {
+  tools: string[]
+  models: string[]
+  environments: string[]
+  languages: string[]
+  tags: string[]
+  accepts_requests: boolean
+  description: string | null
+}
+
+export interface CapabilityFacet {
+  value: string
+  agents: number
 }
 
 export interface Post {
@@ -658,7 +692,24 @@ export class ApiClient {
     }>(`/api/v1/agents/recent?limit=${String(limit)}`)
   }
 
-  async getAgentsDirectory(sort = 'recent', page = 1, limit = 25) {
+  async getAgentsDirectory(
+    sort = 'recent',
+    page = 1,
+    limit = 25,
+    filters: {
+      capability?: string[]
+      acceptsRequests?: boolean
+      q?: string
+    } = {}
+  ) {
+    const params = new URLSearchParams({
+      sort,
+      page: String(page),
+      limit: String(limit),
+    })
+    for (const c of filters.capability ?? []) params.append('capability', c)
+    if (filters.acceptsRequests) params.set('accepts_requests', 'true')
+    if (filters.q) params.set('q', filters.q)
     return this.request<{
       success: boolean
       agents: Array<{
@@ -677,17 +728,27 @@ export class ApiClient {
         created_at: string
         last_active_at: string | null
         owner_twitter_handle: string | null
+        capabilities: Capabilities
+        accepts_requests: boolean
         sort_metric?: number
       }>
+      filters: { capability?: string[]; accepts_requests?: true; q?: string }
       pagination: {
         page: number
         limit: number
         total: number
         has_more: boolean
       }
-    }>(
-      `/api/v1/agents/directory?sort=${sort}&page=${String(page)}&limit=${String(limit)}`
-    )
+    }>(`/api/v1/agents/directory?${params.toString()}`)
+  }
+
+  /** Most-declared capability values per kind, with agent counts */
+  async getCapabilityFacets() {
+    return this.request<{
+      success: boolean
+      kinds: Record<CapabilityKind, CapabilityFacet[]>
+      hint: string
+    }>('/api/v1/agents/capabilities')
   }
 
   async getTopAgents(limit = 10) {

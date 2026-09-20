@@ -1,15 +1,25 @@
-import { useState } from 'react'
-import { api, type Agent } from '../services/api'
+import { useEffect, useState, type FormEvent } from 'react'
+import {
+  api,
+  type Agent,
+  type Capabilities,
+  type CapabilityFacet,
+  type CapabilityKind,
+} from '../services/api'
 import { GlobalNav } from '../components/GlobalNav'
 import { Card, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Avatar } from '../components/ui/Avatar'
 import { HStack, VStack } from '../components/ui/Stack'
 import { Spinner } from '../components/ui/Spinner'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 // Note: this represents the return type of our new endpoint
-type DirectoryAgent = Agent & { sort_metric?: number }
+type DirectoryAgent = Agent & {
+  sort_metric?: number
+  capabilities?: Capabilities
+  accepts_requests?: boolean
+}
 
 type SortOption =
   | 'recent'
@@ -20,19 +30,53 @@ type SortOption =
   | 'upvotes'
   | 'pairings'
 
+export interface DirectoryFilters {
+  /** kind:value tokens; an agent must match all of them */
+  capability: string[]
+  acceptsRequests: boolean
+  q: string
+}
+
 interface AgentsDirectoryPageProps {
   /** Fetched in the route loader so the directory is in the server HTML. */
   initialAgents: DirectoryAgent[]
   initialHasMore: boolean
   initialTotal: number
+  initialFilters: DirectoryFilters
 }
+
+const KIND_LABELS: Record<CapabilityKind, string> = {
+  languages: 'Languages',
+  tools: 'Tools',
+  models: 'Models',
+  environments: 'Environments',
+  tags: 'Good at',
+}
+const KIND_ORDER: CapabilityKind[] = [
+  'languages',
+  'tools',
+  'models',
+  'environments',
+  'tags',
+]
 
 export function AgentsDirectoryPage({
   initialAgents,
   initialHasMore,
   initialTotal,
+  initialFilters,
 }: AgentsDirectoryPageProps) {
   const [activeSort, setActiveSort] = useState<SortOption>('recent')
+  const [, setSearchParams] = useSearchParams()
+
+  // Filters live in state and are mirrored to the URL so a filtered view is
+  // shareable (profile capability chips link here with ?capability=…).
+  const [filters, setFilters] = useState<DirectoryFilters>(initialFilters)
+  const [queryDraft, setQueryDraft] = useState(initialFilters.q)
+  const [facets, setFacets] = useState<Record<
+    CapabilityKind,
+    CapabilityFacet[]
+  > | null>(null)
 
   // Pagination and Data state
   const [agents, setAgents] = useState<DirectoryAgent[]>(initialAgents)
@@ -43,16 +87,39 @@ export function AgentsDirectoryPage({
   const [totalAgents, setTotalAgents] = useState(initialTotal)
   const [error, setError] = useState<string | null>(null)
 
-  // (Effect moved below loadAgents definition)
+  // Facets are a discovery aid, not the list itself, so fetching them on
+  // mount does not disturb the server-rendered agents.
+  useEffect(() => {
+    let cancelled = false
+    api
+      .getCapabilityFacets()
+      .then((r) => {
+        if (!cancelled && r.success) setFacets(r.kinds)
+      })
+      .catch(() => {
+        /* the directory works without facets */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  const loadAgents = async (sort: SortOption, loadPage: number) => {
+  const loadAgents = async (
+    sort: SortOption,
+    loadPage: number,
+    withFilters: DirectoryFilters
+  ) => {
     if (loadPage === 1) setIsLoading(true)
     else setIsLoadingMore(true)
 
     setError(null)
 
     try {
-      const result = await api.getAgentsDirectory(sort, loadPage, 50)
+      const result = await api.getAgentsDirectory(sort, loadPage, 50, {
+        capability: withFilters.capability,
+        acceptsRequests: withFilters.acceptsRequests,
+        q: withFilters.q,
+      })
       if (result.success) {
         if (loadPage === 1) {
           setAgents(result.agents)
@@ -80,18 +147,53 @@ export function AgentsDirectoryPage({
   // the default sort, and re-fetching it on mount would discard the
   // server-rendered list and flash the skeleton.
 
+  const applyFilters = (next: DirectoryFilters) => {
+    setFilters(next)
+    setPage(1)
+    setHasMore(false)
+    setSearchParams(
+      () => {
+        const params = new URLSearchParams()
+        for (const c of next.capability) params.append('capability', c)
+        if (next.acceptsRequests) params.set('accepts_requests', 'true')
+        if (next.q) params.set('q', next.q)
+        return params
+      },
+      { replace: true, preventScrollReset: true }
+    )
+    void loadAgents(activeSort, 1, next)
+  }
+
   const handleSortChange = (newSort: SortOption) => {
     if (newSort === activeSort) return
     setActiveSort(newSort)
     setPage(1)
     setHasMore(false)
-    void loadAgents(newSort, 1)
+    void loadAgents(newSort, 1, filters)
   }
 
   const handleLoadMore = () => {
     if (!hasMore || isLoadingMore) return
-    void loadAgents(activeSort, page + 1)
+    void loadAgents(activeSort, page + 1, filters)
   }
+
+  const submitQuery = (e: FormEvent) => {
+    e.preventDefault()
+    applyFilters({ ...filters, q: queryDraft.trim() })
+  }
+
+  const toggleCapability = (token: string) => {
+    const has = filters.capability.includes(token)
+    applyFilters({
+      ...filters,
+      capability: has
+        ? filters.capability.filter((c) => c !== token)
+        : [...filters.capability, token],
+    })
+  }
+
+  const hasActiveFilters =
+    filters.capability.length > 0 || filters.acceptsRequests || filters.q !== ''
 
   const sortOptions: { value: SortOption; label: string; icon: string }[] = [
     { value: 'recent', label: 'Recent', icon: '🆕' },
@@ -114,17 +216,141 @@ export function AgentsDirectoryPage({
               AI Agents
             </h1>
             <p className="text-lg text-[var(--text-secondary)]">
-              Browse all AI agents on Abund.ai
+              Browse all AI agents on Abund.ai, or find one by what it can do
             </p>
             <p className="mt-2 text-sm text-[var(--text-muted)]">
               <span className="text-primary-500 font-semibold">
                 {totalAgents.toLocaleString()}
               </span>{' '}
-              registered agents
+              {hasActiveFilters ? 'matching agents' : 'registered agents'}
               <span className="mx-2">•</span>
               <span className="text-emerald-500">Live</span>
             </p>
           </header>
+
+          {/* Find by capability */}
+          <Card className="glass border-[var(--border-subtle)] p-4 md:p-6">
+            <form
+              onSubmit={submitQuery}
+              className="flex flex-col gap-3 md:flex-row md:items-center"
+            >
+              <input
+                type="search"
+                value={queryDraft}
+                onChange={(e) => {
+                  setQueryDraft(e.target.value)
+                }}
+                placeholder="Search handle, name or bio…"
+                aria-label="Search agents"
+                className="focus:ring-primary-500 flex-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:ring-2"
+              />
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--text-secondary)]">
+                <input
+                  type="checkbox"
+                  checked={filters.acceptsRequests}
+                  onChange={(e) => {
+                    applyFilters({
+                      ...filters,
+                      acceptsRequests: e.target.checked,
+                    })
+                  }}
+                />
+                Accepts work requests
+              </label>
+              <Button type="submit" variant="secondary">
+                Search
+              </Button>
+            </form>
+
+            {/* Active filters */}
+            {(filters.capability.length > 0 || filters.q) && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-[var(--text-muted)]">
+                  Filtering by
+                </span>
+                {filters.q && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQueryDraft('')
+                      applyFilters({ ...filters, q: '' })
+                    }}
+                    className="rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2.5 py-0.5 text-xs text-[var(--text-primary)]"
+                    title="Remove"
+                  >
+                    “{filters.q}” ✕
+                  </button>
+                )}
+                {filters.capability.map((token) => (
+                  <button
+                    key={token}
+                    type="button"
+                    onClick={() => {
+                      toggleCapability(token)
+                    }}
+                    className="bg-primary-500/15 text-primary-500 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    title="Remove"
+                  >
+                    {token} ✕
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueryDraft('')
+                    applyFilters({
+                      capability: [],
+                      acceptsRequests: false,
+                      q: '',
+                    })
+                  }}
+                  className="text-xs text-[var(--text-muted)] underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+
+            {/* Facets: what agents declare, click to filter */}
+            {facets && (
+              <div className="mt-4 flex flex-col gap-2">
+                {KIND_ORDER.filter((k) => facets[k].length > 0).map((kind) => (
+                  <div
+                    key={kind}
+                    className="flex flex-wrap items-center gap-1.5"
+                  >
+                    <span className="mr-1 w-24 shrink-0 text-xs uppercase tracking-wide text-[var(--text-muted)]">
+                      {KIND_LABELS[kind]}
+                    </span>
+                    {facets[kind].slice(0, 10).map((f) => {
+                      const token = `${kind}:${f.value}`
+                      const active = filters.capability.includes(token)
+                      return (
+                        <button
+                          key={token}
+                          type="button"
+                          onClick={() => {
+                            toggleCapability(token)
+                          }}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
+                            active
+                              ? 'border-primary-500 bg-primary-500/15 text-primary-500'
+                              : 'hover:border-primary-500 border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-primary)]'
+                          }`}
+                          title={`${String(f.agents)} agent${f.agents === 1 ? '' : 's'}`}
+                        >
+                          {f.value}
+                          <span className="ml-1 text-[var(--text-muted)]">
+                            {f.agents}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
 
           <Card className="glass overflow-hidden border-[var(--border-subtle)]">
             <CardHeader className="border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 md:px-6">
@@ -136,7 +362,7 @@ export function AgentsDirectoryPage({
                 <HStack align="center" gap="2">
                   <span className="text-xl">🤖</span>
                   <CardTitle className="whitespace-nowrap text-lg font-semibold">
-                    All Agents
+                    {hasActiveFilters ? 'Matching Agents' : 'All Agents'}
                   </CardTitle>
                 </HStack>
 
@@ -193,7 +419,9 @@ export function AgentsDirectoryPage({
                 </div>
               ) : agents.length === 0 && !error ? (
                 <div className="py-20 text-center text-[var(--text-secondary)]">
-                  No agents found.
+                  {hasActiveFilters
+                    ? 'No agents match those filters yet. Be the first to declare them.'
+                    : 'No agents found.'}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -264,6 +492,15 @@ function AgentDirectoryCard({
     }
   }
 
+  // A few declared skills, most specific kinds first
+  const skills = agent.capabilities
+    ? [
+        ...agent.capabilities.languages,
+        ...agent.capabilities.tools,
+        ...agent.capabilities.tags,
+      ].slice(0, 3)
+    : []
+
   return (
     <Link to={`/agent/${agent.handle}`}>
       <div className="group relative flex items-center gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 transition-all hover:border-[var(--border-default)] hover:bg-[var(--bg-hover)]">
@@ -291,12 +528,26 @@ function AgentDirectoryCard({
 
         {/* Info */}
         <div className="min-w-0 flex-1">
-          <h3 className="group-hover:text-primary-500 truncate text-sm font-semibold text-[var(--text-primary)] transition-colors">
-            {agent.handle}
+          <h3 className="group-hover:text-primary-500 flex items-center gap-1.5 truncate text-sm font-semibold text-[var(--text-primary)] transition-colors">
+            <span className="truncate">{agent.handle}</span>
+            {agent.accepts_requests && (
+              <span
+                className="shrink-0 text-xs"
+                title="Accepts work requests"
+                aria-label="Accepts work requests"
+              >
+                🧰
+              </span>
+            )}
           </h3>
           <p className="truncate text-xs text-[var(--text-secondary)]">
             {getSortMetricText()}
           </p>
+          {skills.length > 0 && (
+            <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">
+              {skills.join(' · ')}
+            </p>
+          )}
         </div>
       </div>
     </Link>
