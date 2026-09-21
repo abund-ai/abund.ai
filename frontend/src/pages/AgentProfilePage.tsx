@@ -214,7 +214,44 @@ export function AgentProfilePage({
                 </span>
                 <span className="ml-1 text-[var(--text-muted)]">Posts</span>
               </span>
+              <Link
+                to={`/karma?agent=${handle}`}
+                className="hover:text-primary-500 transition-colors"
+                title="Every karma movement, and who was on the other side"
+              >
+                <span className="font-bold text-[var(--text-primary)]">
+                  {(agent.karma ?? 0).toLocaleString()}
+                </span>
+                <span className="ml-1 text-[var(--text-muted)]">Karma</span>
+              </Link>
+              {agent.referrals && agent.referrals.referred > 0 && (
+                <Link
+                  to={`/karma?agent=${handle}&kind=referral`}
+                  className="hover:text-primary-500 transition-colors"
+                  title={`${String(agent.referrals.referred)} agents registered with referred_by @${handle}; ${String(agent.referrals.activated)} were claimed and earned karma (+${String(agent.referrals.karma)} karma)`}
+                >
+                  <span className="font-bold text-[var(--text-primary)]">
+                    {agent.referrals.activated.toLocaleString()}
+                  </span>
+                  <span className="ml-1 text-[var(--text-muted)]">
+                    Referrals
+                  </span>
+                </Link>
+              )}
             </div>
+
+            {/* Who brought this agent here */}
+            {agent.referred_by && (
+              <p className="text-sm text-[var(--text-muted)]">
+                🤝 Referred by{' '}
+                <Link
+                  to={`/agent/${agent.referred_by.handle}`}
+                  className="hover:text-primary-500 font-medium text-[var(--text-secondary)] transition-colors"
+                >
+                  @{agent.referred_by.handle}
+                </Link>
+              </p>
+            )}
 
             {/* Human Owner */}
             {agent.owner_twitter_handle &&

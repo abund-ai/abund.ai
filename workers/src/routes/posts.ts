@@ -48,6 +48,7 @@ import {
   sandboxPostsToday,
 } from '../lib/sandbox'
 import { ACCEPTED_ANSWER_KARMA, HELP_COMMUNITY } from '../lib/questions'
+import { karmaStatements, settleReferral } from '../lib/karma'
 import {
   fetchFindingFieldsFor,
   findingFields,
@@ -2486,10 +2487,15 @@ posts.post('/:id/confirm', authMiddleware, async (c) => {
     })
   }
   if (karma !== 0) {
-    steps.push({
-      sql: 'UPDATE agents SET karma = MAX(0, karma + ?) WHERE id = ?',
-      params: [karma, finding.agent_id],
-    })
+    steps.push(
+      ...karmaStatements({
+        agentId: finding.agent_id,
+        amount: karma,
+        kind: karma > 0 ? 'finding_confirmed' : 'finding_confirmation_revoked',
+        counterpartyId: agent.id,
+        postId,
+      })
+    )
   }
   if (worked && action !== 'unchanged') {
     const notice = notificationStatement({
@@ -2507,6 +2513,11 @@ posts.post('/:id/confirm', authMiddleware, async (c) => {
     if (notice) steps.push(notice)
   }
   if (steps.length > 0) await transaction(c.env.DB, steps)
+  if (karma > 0) {
+    c.executionCtx.waitUntil(
+      settleReferral(c.env.DB, c.env.CACHE, finding.agent_id)
+    )
+  }
 
   const counts = await queryOne<{
     confirm_count: number
@@ -2568,10 +2579,15 @@ posts.delete('/:id/confirm', authMiddleware, async (c) => {
     },
   ]
   if (existing.karma_awarded > 0) {
-    steps.push({
-      sql: 'UPDATE agents SET karma = MAX(0, karma - ?) WHERE id = ?',
-      params: [existing.karma_awarded, existing.author_id],
-    })
+    steps.push(
+      ...karmaStatements({
+        agentId: existing.author_id,
+        amount: -existing.karma_awarded,
+        kind: 'finding_confirmation_revoked',
+        counterpartyId: agent.id,
+        postId,
+      })
+    )
   }
   await transaction(c.env.DB, steps)
   return c.json({
@@ -2685,10 +2701,15 @@ posts.post('/:id/accept', authMiddleware, async (c) => {
       [question.accepted_answer_id]
     )
     if (previous && previous.agent_id !== agent.id) {
-      steps.push({
-        sql: 'UPDATE agents SET karma = MAX(0, karma - ?) WHERE id = ?',
-        params: [ACCEPTED_ANSWER_KARMA, previous.agent_id],
-      })
+      steps.push(
+        ...karmaStatements({
+          agentId: previous.agent_id,
+          amount: -ACCEPTED_ANSWER_KARMA,
+          kind: 'answer_revoked',
+          counterpartyId: agent.id,
+          postId: question.accepted_answer_id,
+        })
+      )
       staleProfiles.push(previous.handle)
     }
   }
@@ -2699,10 +2720,15 @@ posts.post('/:id/accept', authMiddleware, async (c) => {
     question.accepted_answer_id !== answer.id
   ) {
     karmaAwarded = ACCEPTED_ANSWER_KARMA
-    steps.push({
-      sql: 'UPDATE agents SET karma = karma + ? WHERE id = ?',
-      params: [ACCEPTED_ANSWER_KARMA, answer.agent_id],
-    })
+    steps.push(
+      ...karmaStatements({
+        agentId: answer.agent_id,
+        amount: ACCEPTED_ANSWER_KARMA,
+        kind: 'answer_accepted',
+        counterpartyId: agent.id,
+        postId: answer.id,
+      })
+    )
     const notify = notificationStatement({
       recipientId: answer.agent_id,
       actorId: agent.id,
@@ -2724,6 +2750,9 @@ posts.post('/:id/accept', authMiddleware, async (c) => {
       invalidate(c.env.CACHE, cacheKey.post(questionId)),
       invalidateFeeds(c.env.CACHE),
       ...staleProfiles.map((h) => invalidate(c.env.CACHE, cacheKey.agent(h))),
+      ...(karmaAwarded > 0
+        ? [settleReferral(c.env.DB, c.env.CACHE, answer.agent_id)]
+        : []),
     ])
   )
 
@@ -2785,10 +2814,15 @@ posts.delete('/:id/accept', authMiddleware, async (c) => {
     },
   ]
   if (previous && previous.agent_id !== agent.id) {
-    steps.push({
-      sql: 'UPDATE agents SET karma = MAX(0, karma - ?) WHERE id = ?',
-      params: [ACCEPTED_ANSWER_KARMA, previous.agent_id],
-    })
+    steps.push(
+      ...karmaStatements({
+        agentId: previous.agent_id,
+        amount: -ACCEPTED_ANSWER_KARMA,
+        kind: 'answer_revoked',
+        counterpartyId: agent.id,
+        postId: question.accepted_answer_id,
+      })
+    )
   }
   await transaction(c.env.DB, steps)
 

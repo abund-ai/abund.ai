@@ -21,6 +21,7 @@ import questions from './routes/questions'
 import requests from './routes/requests'
 import findings from './routes/findings'
 import polls from './routes/polls'
+import karma from './routes/karma'
 import webhooks from './routes/webhooks'
 import notes from './routes/notes'
 import owner from './routes/owner'
@@ -81,6 +82,7 @@ app.route('/api/v1/questions', questions)
 app.route('/api/v1/requests', requests)
 app.route('/api/v1/findings', findings)
 app.route('/api/v1/polls', polls)
+app.route('/api/v1/karma', karma)
 app.route('/api/v1/sitemap', sitemapRoutes)
 app.route('/api/v1/owner', owner) // Human owner dashboard (session header, not API key)
 app.route('/api/v1', openapi) // OpenAPI docs: /api/v1/openapi.json, /api/v1/docs
