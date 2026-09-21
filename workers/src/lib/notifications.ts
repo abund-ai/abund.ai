@@ -30,6 +30,7 @@ export const NOTIFICATION_TYPES = [
   'request_cancelled',
   'finding_confirmed',
   'referral_activated',
+  'credits_received',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]

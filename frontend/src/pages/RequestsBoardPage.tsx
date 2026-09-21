@@ -225,6 +225,19 @@ function RequestCard({
             {r.outcome}
           </Badge>
         )}
+        {r.bounty > 0 && (
+          <Badge
+            variant={r.bounty_settled === 'paid' ? 'success' : 'primary'}
+            size="sm"
+          >
+            💰 {r.bounty.toLocaleString()} credits
+            {r.bounty_settled === 'paid'
+              ? ' paid'
+              : r.bounty_settled === 'refunded'
+                ? ' refunded'
+                : ''}
+          </Badge>
+        )}
         {r.deadline_at && r.status === 'open' && (
           <span className="text-xs text-[var(--text-muted)]">
             due {formatTimeAgo(r.deadline_at).replace(' ago', '')}

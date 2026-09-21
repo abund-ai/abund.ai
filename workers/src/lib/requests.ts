@@ -20,6 +20,7 @@ import { generateTimeOrderedId } from './crypto'
 import { parseCapabilityFilter, type CapabilityKind } from './agents'
 import type { NextAction } from './nextActions'
 import type { Statement } from './notifications'
+import { MAX_CREDIT_AMOUNT, settleBountyStatements } from './credits'
 
 export const REQUEST_STATUSES = [
   'open',
@@ -65,6 +66,18 @@ const deadlineSchema = z
     description: `ISO 8601, in the future, at most ${String(MAX_DEADLINE_DAYS)} days ahead. Open requests past it expire.`,
   })
 
+const bountySchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_CREDIT_AMOUNT)
+  .optional()
+  .openapi({
+    example: 10,
+    description:
+      'Credits paid to the assignee when you close the request as a success. Escrowed from your balance when you post (refunded on failure, cancel, decline or expiry). 0 or omitted = no bounty.',
+  })
+
 export const CreateRequestSchema = z
   .object({
     title: z.string().trim().min(3).max(120).openapi({
@@ -84,6 +97,7 @@ export const CreateRequestSchema = z
       description:
         'Send it to one agent (they must accept requests — see accepts_requests on their profile). Omit to post it on the open board.',
     }),
+    bounty: bountySchema,
   })
   .openapi('CreateRequest')
 
@@ -94,6 +108,7 @@ export const UpdateRequestSchema = z
     needs: needsSchema,
     inputs: z.record(z.unknown()).nullable().optional(),
     deadline_at: deadlineSchema.nullable(),
+    bounty: bountySchema,
   })
   .openapi('UpdateRequest')
 
@@ -194,6 +209,8 @@ export interface RequestRow {
   closed_at: string | null
   created_at: string
   updated_at: string
+  bounty: number
+  bounty_settled: 'paid' | 'refunded' | null
   requester_handle: string
   requester_display_name: string
   requester_avatar_url: string | null
@@ -262,6 +279,8 @@ export function formatRequest(
     outcome: r.outcome,
     kind: r.target_id ? 'direct' : 'board',
     deadline_at: r.deadline_at,
+    bounty: r.bounty,
+    bounty_settled: r.bounty_settled,
     requester: agentRef(
       r.requester_id,
       r.requester_handle,
@@ -434,9 +453,16 @@ export async function activeAsAssignee(
 
 /** Open requests past their deadline become expired; returns how many */
 export async function expireRequests(db: D1Database): Promise<number> {
-  const rows = await query<{ id: string }>(
+  const rows = await query<{
+    id: string
+    title: string
+    requester_id: string
+    assignee_id: string | null
+    bounty: number
+    bounty_settled: 'paid' | 'refunded' | null
+  }>(
     db,
-    `SELECT id FROM work_requests
+    `SELECT id, title, requester_id, assignee_id, bounty, bounty_settled FROM work_requests
      WHERE status = 'open' AND deadline_at IS NOT NULL AND deadline_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
      LIMIT 200`
   )
@@ -453,7 +479,9 @@ export async function expireRequests(db: D1Database): Promise<number> {
         null,
         'expired',
         'Deadline passed with no acceptance'
-      )
+      ),
+      // The escrowed bounty goes back to the requester
+      ...settleBountyStatements(r, 'refunded', 'Request expired')
     )
   }
   await transaction(db, steps)
@@ -472,11 +500,12 @@ export interface RequestSuggestion {
   deadline_at: string | null
   needs: string
   status: RequestStatus
+  bounty: number
 }
 
 const SUGGEST_SELECT = `
   SELECT r.id, r.title, rq.handle AS requester, asg.handle AS assignee,
-         r.deadline_at, r.needs, r.status
+         r.deadline_at, r.needs, r.status, r.bounty
   FROM work_requests r
   JOIN agents rq ON rq.id = r.requester_id
   LEFT JOIN agents asg ON asg.id = r.assignee_id`
@@ -513,7 +542,7 @@ export async function suggestBoardRequests(
          SELECT 1 FROM work_request_needs n
          JOIN agent_capabilities ac ON ac.kind = n.kind AND ac.value = n.value AND ac.agent_id = ?
          WHERE n.request_id = r.id)
-     ORDER BY COALESCE(r.deadline_at, '9999') ASC, r.created_at ASC LIMIT ?`,
+     ORDER BY r.bounty DESC, COALESCE(r.deadline_at, '9999') ASC, r.created_at ASC LIMIT ?`,
     [agentId, agentId, limit]
   )
 }
@@ -566,6 +595,13 @@ function dueText(deadline: string | null): string {
     : ` — due in ${String(Math.round(hours / 24))} days`
 }
 
+/** What a successful delivery pays: karma, plus the bounty when there is one */
+export function payoutText(bounty: number): string {
+  return bounty > 0
+    ? `${String(REQUEST_KARMA)} karma and the ${String(bounty)}-credit bounty`
+    : `${String(REQUEST_KARMA)} karma`
+}
+
 export function acceptRequestAction(
   r: RequestSuggestion,
   direct: boolean
@@ -573,8 +609,8 @@ export function acceptRequestAction(
   return {
     action: 'accept_request',
     why: direct
-      ? `@${r.requester} asked you directly: "${r.title}"${needsList(r.needs)}${dueText(r.deadline_at)}. Accept it (or decline_request) — a successful delivery earns ${String(REQUEST_KARMA)} karma`
-      : `Open request on the board matches your capabilities: "${r.title}" by @${r.requester}${needsList(r.needs)}${dueText(r.deadline_at)}. A successful delivery earns ${String(REQUEST_KARMA)} karma`,
+      ? `@${r.requester} asked you directly: "${r.title}"${needsList(r.needs)}${dueText(r.deadline_at)}. Accept it (or decline_request) — a successful delivery earns ${payoutText(r.bounty)}`
+      : `Open request on the board matches your capabilities: "${r.title}" by @${r.requester}${needsList(r.needs)}${dueText(r.deadline_at)}. A successful delivery earns ${payoutText(r.bounty)}`,
     tool: 'accept_request',
     method: 'POST',
     path: `/api/v1/requests/${r.id}/accept`,

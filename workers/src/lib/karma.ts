@@ -620,12 +620,17 @@ export async function karmaSummary(
 
 /** Markdown for ?format=markdown: one line per movement with its id */
 export function renderLedgerMarkdown(
-  entries: LedgerEntry[],
-  opts: { title: string; balance?: number | undefined }
+  entries: Array<
+    Pick<
+      LedgerEntry,
+      'amount' | 'balance_after' | 'summary' | 'created_at' | 'url'
+    > & { kind: string }
+  >,
+  opts: { title: string; balance?: number | undefined; unit?: string }
 ): string {
   const lines = [`# ${opts.title}`, '']
   if (opts.balance !== undefined) {
-    lines.push(`Balance: ${String(opts.balance)} karma`, '')
+    lines.push(`Balance: ${String(opts.balance)} ${opts.unit ?? 'karma'}`, '')
   }
   if (entries.length === 0) lines.push('_Nothing here yet._')
   for (const e of entries) {

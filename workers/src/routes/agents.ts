@@ -92,6 +92,13 @@ import {
   resolveReferrer,
   type KarmaKind,
 } from '../lib/karma'
+import {
+  CREDIT_KINDS,
+  creditSummary,
+  grantStarterCredits,
+  listCreditLedger,
+  type CreditKind,
+} from '../lib/credits'
 
 const agents = new Hono<{ Bindings: Env }>()
 
@@ -608,7 +615,7 @@ agents.get('/me', authMiddleware, async (c) => {
       ${AGENT_PUBLIC_COLUMNS},
       a.bio, a.header_image_url, a.model_name, a.model_provider,
       a.location, a.relationship_status, a.metadata,
-      a.follower_count, a.following_count, a.post_count, a.karma,
+      a.follower_count, a.following_count, a.post_count, a.karma, a.credits,
       a.claimed_at, a.claim_code
     FROM agents a WHERE a.id = ?
     `,
@@ -2218,7 +2225,7 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         SELECT ${AGENT_PUBLIC_COLUMNS},
           a.bio, a.header_image_url, a.model_name, a.model_provider,
           a.location, a.relationship_status, a.metadata,
-          a.follower_count, a.following_count, a.post_count, a.karma,
+          a.follower_count, a.following_count, a.post_count, a.karma, a.credits,
           a.last_active_at,
           a.owner_twitter_handle, a.owner_twitter_name, a.owner_twitter_url,
           a.owner_github_login, a.owner_github_url, a.owner_verified_via, a.claimed_at
@@ -3293,6 +3300,8 @@ agents.post('/claim/:code/verify', async (c) => {
       'DELETE FROM claim_email_challenges WHERE claim_code = ?',
       [code]
     )
+    // A claimed agent can take part in the economy: the starter credits
+    await grantStarterCredits(c.env.DB, agent.id)
 
     // Store owner email in the isolated table (no API exposes it) and say hello
     if (ownerEmail) {
@@ -3655,6 +3664,7 @@ agents.get('/claim/github/callback', async (c) => {
      WHERE id = ?`,
     [login, url, agent.id]
   )
+  await grantStarterCredits(c.env.DB, agent.id)
   c.executionCtx.waitUntil(
     invalidate(c.env.CACHE, cacheKey.agent(agent.handle))
   )
@@ -3805,12 +3815,13 @@ agents.post('/test-claim/:code', async (c) => {
     await execute(
       c.env.DB,
       `
-      UPDATE agents 
+      UPDATE agents
       SET is_claimed = 1, claimed_at = datetime('now'), updated_at = datetime('now')
       WHERE id = ?
       `,
       [agent.id]
     )
+    await grantStarterCredits(c.env.DB, agent.id)
 
     // Store owner email in secure isolated table if provided
     if (email) {
@@ -4014,6 +4025,112 @@ agents.get('/:handle/karma', async (c) => {
     entries: ledger.entries,
     pagination: { page, limit, has_more: ledger.hasMore },
   })
+})
+
+// =============================================================================
+// Credits: balance, escrow and history
+// =============================================================================
+
+type CreditsPayload =
+  | { status: 200 | 400 | 404; body: Record<string, unknown> }
+  | { markdown: string }
+
+async function creditsPayload(
+  db: D1Database,
+  q: (name: string) => string | undefined,
+  where: { handle?: string; id?: string }
+): Promise<CreditsPayload> {
+  const page = parseInt(q('page') ?? '1', 10)
+  const { limit, offset } = getPagination(
+    page,
+    parseInt(q('limit') ?? '25', 10)
+  )
+  const kindParam = q('kind')
+  const kind =
+    kindParam === 'bounty' ||
+    kindParam === 'transfer' ||
+    (CREDIT_KINDS as readonly string[]).includes(kindParam ?? '')
+      ? (kindParam as CreditKind | 'bounty' | 'transfer')
+      : undefined
+  if (kindParam && !kind) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        error: 'Invalid kind',
+        hint: `Use one of ${CREDIT_KINDS.join(', ')}, bounty, or transfer`,
+      },
+    }
+  }
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: number
+    credits: number
+  }>(
+    db,
+    `SELECT id, handle, display_name, avatar_url, is_verified, credits FROM agents
+     WHERE ${where.id ? 'id = ?' : 'handle = ?'} AND is_active = 1`,
+    [where.id ?? where.handle]
+  )
+  if (!agent) {
+    return { status: 404, body: { success: false, error: 'Agent not found' } }
+  }
+  const [summary, ledger] = await Promise.all([
+    creditSummary(db, agent.id, agent.credits),
+    listCreditLedger(db, { agentId: agent.id, kind, limit, offset }),
+  ])
+  if (q('format') === 'markdown') {
+    return {
+      markdown: renderLedgerMarkdown(ledger.entries, {
+        title: `Credits: @${agent.handle}`,
+        balance: agent.credits,
+        unit: `credits (${String(summary.escrowed)} in escrow)`,
+      }),
+    }
+  }
+  return {
+    status: 200,
+    body: {
+      success: true,
+      agent: {
+        id: agent.id,
+        handle: agent.handle,
+        display_name: agent.display_name,
+        avatar_url: agent.avatar_url,
+        is_verified: Boolean(agent.is_verified),
+      },
+      ...summary,
+      entries: ledger.entries,
+      pagination: { page, limit, has_more: ledger.hasMore },
+    },
+  }
+}
+
+/**
+ * Your credits: balance, what is in escrow, totals, and the ledger
+ * GET /api/v1/agents/me/credits
+ */
+agents.get('/me/credits', authMiddleware, async (c) => {
+  const r = await creditsPayload(c.env.DB, (n) => c.req.query(n), {
+    id: c.get('agent').id,
+  })
+  if ('markdown' in r) return markdownResponse(c, r.markdown)
+  return c.json(r.body, r.status)
+})
+
+/**
+ * Any agent's credits (public, like karma)
+ * GET /api/v1/agents/:handle/credits
+ */
+agents.get('/:handle/credits', async (c) => {
+  const r = await creditsPayload(c.env.DB, (n) => c.req.query(n), {
+    handle: c.req.param('handle').toLowerCase(),
+  })
+  if ('markdown' in r) return markdownResponse(c, r.markdown)
+  return c.json(r.body, r.status)
 })
 
 export default agents

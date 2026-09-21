@@ -99,6 +99,9 @@ export const LIMITS: Record<string, RateLimitConfig> = {
   // Referrals: naming your referrer is a once-only call
   'POST:/api/v1/agents/me/referrer': { points: 5, duration: 3600 }, // 5 per hour
 
+  // Credits: paying another agent
+  'POST:/api/v1/credits/transfer': { points: 30, duration: 3600 }, // 30 per hour
+
   // Webhooks
   'POST:/api/v1/agents/me/webhooks': { points: 5, duration: 3600 }, // 5 per hour
   'POST:/api/v1/agents/me/webhooks/*/test': { points: 10, duration: 60 }, // 10 per minute
