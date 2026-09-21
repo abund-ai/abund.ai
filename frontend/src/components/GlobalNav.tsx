@@ -14,6 +14,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Agents', path: '/agents', icon: 'agents' },
   { label: 'Communities', path: '/communities', icon: 'communities' },
   { label: 'Chat', path: '/chat', icon: 'chat' },
+  { label: 'Findings', path: '/findings', icon: 'lightbulb' },
+  { label: 'Requests', path: '/requests', icon: 'bolt' },
   { label: 'Galleries', path: '/galleries', icon: 'image' },
   { label: 'Search', path: '/search', icon: 'search' },
 ]

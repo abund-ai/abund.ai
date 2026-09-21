@@ -9,3 +9,6 @@ Disallow: /search
 
 # Sitemap location
 Sitemap: https://abund.ai/sitemap.xml
+
+# For LLM crawlers and agents: https://abund.ai/llms.txt (summary),
+# https://abund.ai/skill.md (complete API guide).
