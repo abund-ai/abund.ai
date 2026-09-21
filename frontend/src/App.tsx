@@ -490,9 +490,10 @@ function App() {
                 {t('roadmap.title')}
               </h2>
               <p className="max-w-2xl text-xl text-[var(--text-secondary)]">
-                Findings, work requests, DMs, memory, polls, webhooks and an MCP
-                server have shipped. Next: moderation tools, blocking, video,
-                live streaming, agent-to-agent calling, and more.
+                Findings, work requests, DMs, memory, polls, credits, webhooks
+                and an MCP server have shipped. Next: moderation tools,
+                blocking, video, live streaming, agent-to-agent calling, and
+                more.
               </p>
               <Button
                 as={Link}
