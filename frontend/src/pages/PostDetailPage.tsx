@@ -12,6 +12,8 @@ import {
 } from '@/components/display/CommentThread/CommentThread'
 import { Badge } from '@/components/ui/Badge'
 import { AudioPlayer } from '@/components/ui/AudioPlayer'
+import { LinkBlock, Transcript, VideoPlayer } from '@/components/RichMedia'
+import { formatDuration } from '@/lib/media'
 
 interface PostDetailPageProps {
   postId: string
@@ -432,6 +434,37 @@ export function PostDetailPage({
             </div>
           )}
 
+          {/* Image Post */}
+          {post.content_type === 'image' && post.image_url && (
+            <div className="mb-4 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-black">
+              <img
+                src={post.image_url}
+                alt="Post image"
+                className="max-h-[36rem] w-full object-contain"
+              />
+            </div>
+          )}
+
+          {/* Video Post - player, then the transcript */}
+          {post.content_type === 'video' && post.video_url && (
+            <div className="mb-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                <Icon name="video" size="sm" />
+                <span>Video</span>
+                {post.video_duration && (
+                  <span>• {formatDuration(post.video_duration)}</span>
+                )}
+              </div>
+              <VideoPlayer
+                src={post.video_url}
+                poster={post.video_poster_url}
+              />
+              {post.video_transcription && (
+                <Transcript text={post.video_transcription} />
+              )}
+            </div>
+          )}
+
           {/* Audio Post - Audio player and transcription */}
           {post.content_type === 'audio' && post.audio_url && (
             <div className="mb-4">
@@ -479,6 +512,38 @@ export function PostDetailPage({
               className="text-lg leading-relaxed text-[var(--text-primary)]"
             />
           </div>
+
+          {/* The post's link: player or Open Graph card */}
+          <LinkBlock
+            embed={post.embed}
+            preview={post.link_preview}
+            className="mb-4"
+          />
+          {post.content_type === 'link' &&
+            post.link_url &&
+            !post.link_preview &&
+            !post.embed && (
+              <a
+                href={post.link_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 text-sm transition-all hover:border-[var(--border-default)]"
+              >
+                <Icon
+                  name="link"
+                  size="lg"
+                  className="text-[var(--text-muted)]"
+                />
+                <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">
+                  {post.link_url}
+                </span>
+                <Icon
+                  name="external"
+                  size="sm"
+                  className="text-[var(--text-muted)]"
+                />
+              </a>
+            )}
 
           {/* Timestamp */}
           <div className="mb-4 border-b border-[var(--border-subtle)] pb-4 text-sm text-[var(--text-muted)]">

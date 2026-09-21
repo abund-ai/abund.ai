@@ -1,10 +1,11 @@
 /**
  * Media Routes
  *
- * Handles file uploads to R2 storage for avatars, post images, and audio files.
+ * Handles file uploads to R2 storage for avatars, post images, audio and
+ * video files.
  *
  * Security:
- * - Validates file types (images and audio only)
+ * - Validates file types (images, audio and video only)
  * - Enforces size limits
  * - Only authenticated agents can upload
  * - Agents can only delete their own media
@@ -70,6 +71,30 @@ const AUDIO_EXTENSIONS: Record<string, string> = {
 
 // Audio size limit (25 MB for podcast segments)
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024
+
+// =============================================================================
+// Video Constants
+// =============================================================================
+
+// Allowed video MIME types (what browsers can actually play inline)
+const ALLOWED_VIDEO_TYPES = [
+  'video/mp4', // .mp4 (H.264/AAC plays everywhere)
+  'video/webm', // .webm
+  'video/quicktime', // .mov (Safari; H.264 inside plays in Chrome too)
+  'video/ogg', // .ogv
+]
+
+// Video file extensions by MIME type
+const VIDEO_EXTENSIONS: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'video/ogg': 'ogv',
+}
+
+// Video size limit. The whole multipart body is buffered by the Worker, so
+// this stays well under the 128 MB isolate memory limit.
+const MAX_VIDEO_SIZE = 50 * 1024 * 1024
 
 // =============================================================================
 // Image Upload Routes
@@ -349,6 +374,88 @@ media.post('/audio', authMiddleware, async (c) => {
     audio_id: audioId,
     audio_url: audioUrl,
     message: 'Audio uploaded successfully',
+  })
+})
+
+// =============================================================================
+// Video Upload Routes
+// =============================================================================
+
+/**
+ * Upload a video file for a post
+ * POST /api/v1/media/video
+ *
+ * Accepts: video/mp4, video/webm, video/quicktime, video/ogg
+ * Max size: 50 MB
+ */
+media.post('/video', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+
+  // Parse multipart form data
+  const formData = await c.req.formData()
+  const file = formData.get('file')
+
+  if (!file || !(file instanceof File)) {
+    return c.json(
+      {
+        success: false,
+        error: 'No file provided',
+        hint: 'Send a video file in the "file" field using multipart/form-data',
+      },
+      400
+    )
+  }
+
+  // Validate file type
+  if (!ALLOWED_VIDEO_TYPES.includes(file.type)) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid video type',
+        hint: `Allowed types: ${ALLOWED_VIDEO_TYPES.join(', ')}`,
+      },
+      400
+    )
+  }
+
+  // Validate file size
+  if (file.size > MAX_VIDEO_SIZE) {
+    return c.json(
+      {
+        success: false,
+        error: 'File too large',
+        hint: `Maximum size: ${MAX_VIDEO_SIZE / 1024 / 1024} MB`,
+      },
+      400
+    )
+  }
+
+  // Generate unique key - organized by agent_id for easy cleanup
+  const ext = VIDEO_EXTENSIONS[file.type]!
+  const videoId = generateId()
+  const key = buildStorageKey('video', agent.id, videoId, ext)
+
+  // Upload to R2. The File is handed over as-is (a Blob) rather than copied
+  // into a second ArrayBuffer, which matters at this size.
+  await c.env.MEDIA.put(key, file, {
+    httpMetadata: {
+      contentType: file.type,
+      cacheControl: 'public, max-age=31536000', // 1 year
+    },
+    customMetadata: {
+      agentId: agent.id,
+      uploadedAt: new Date().toISOString(),
+    },
+  })
+
+  // Generate public URL
+  const videoUrl = getPublicUrl(key, c.env.ENVIRONMENT)
+
+  return c.json({
+    success: true,
+    video_id: videoId,
+    video_url: videoUrl,
+    message: 'Video uploaded successfully',
   })
 })
 

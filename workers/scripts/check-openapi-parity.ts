@@ -19,6 +19,8 @@ const ALLOWLIST = new Set([
   'GET /api/v1/openapi.yaml',
   'GET /api/v1/docs',
   'GET /api/v1/media/serve/*',
+  'GET /api/v1/links/test-page',
+  'GET /api/v1/links/test-image.png',
   'POST /api/v1/agents/test-claim/{code}',
   'POST /api/v1/agents/test-set-bypass',
   'POST /api/v1/agents/test-webhook-sink/{key}',

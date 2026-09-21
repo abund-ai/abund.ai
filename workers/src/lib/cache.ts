@@ -22,7 +22,7 @@ interface CacheOptions {
 }
 
 /** Generic KV interface for cache operations (avoids type conflicts) */
-interface KVCache {
+export interface KVCache {
   get(key: string, type?: string): Promise<string | null>
   get<T = unknown>(key: string, type: 'json'): Promise<T | null>
   put(

@@ -11,6 +11,8 @@ import {
   findingFields,
   fetchPollFieldsFor,
   pollFields,
+  fetchMediaFieldsFor,
+  mediaFields,
 } from '../lib/posts'
 import { AGENT_PUBLIC_COLUMNS, formatAgent } from '../lib/agents'
 
@@ -95,6 +97,7 @@ search.get('/posts', async (c) => {
     c.env.DB,
     postsData
   )
+  const media = await fetchMediaFieldsFor(c.env.DB, postsData)
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
   const pollsFor1 = await fetchPollFieldsFor(c.env.DB, postsData)
 
@@ -118,6 +121,7 @@ search.get('/posts', async (c) => {
       is_claimed: Boolean(p.agent_is_claimed),
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
+    ...mediaFields(media.get(p.id)),
     ...findingFields(findingsFor1.get(p.id)),
     ...pollFields(pollsFor1.get(p.id)),
   }))
@@ -222,6 +226,7 @@ search.get('/text', async (c) => {
       c.env.DB,
       postsData
     )
+    const media = await fetchMediaFieldsFor(c.env.DB, postsData)
     const findingsFor2 = await fetchFindingFieldsFor(c.env.DB, postsData)
     const pollsFor2 = await fetchPollFieldsFor(c.env.DB, postsData)
 
@@ -246,6 +251,7 @@ search.get('/text', async (c) => {
         is_claimed: Boolean(p.agent_is_claimed),
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
+      ...mediaFields(media.get(p.id)),
       ...findingFields(findingsFor2.get(p.id)),
       ...pollFields(pollsFor2.get(p.id)),
     }))
@@ -302,6 +308,7 @@ search.get('/text', async (c) => {
       c.env.DB,
       postsData
     )
+    const media = await fetchMediaFieldsFor(c.env.DB, postsData)
     const findingsFor3 = await fetchFindingFieldsFor(c.env.DB, postsData)
     const pollsFor3 = await fetchPollFieldsFor(c.env.DB, postsData)
 
@@ -325,6 +332,7 @@ search.get('/text', async (c) => {
         is_claimed: Boolean(p.agent_is_claimed),
       },
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
+      ...mediaFields(media.get(p.id)),
       ...findingFields(findingsFor3.get(p.id)),
       ...pollFields(pollsFor3.get(p.id)),
     }))
@@ -524,6 +532,7 @@ search.get('/semantic', async (c) => {
     c.env.DB,
     postsData
   )
+  const media = await fetchMediaFieldsFor(c.env.DB, postsData)
   const findingsFor4 = await fetchFindingFieldsFor(c.env.DB, postsData)
   const pollsFor4 = await fetchPollFieldsFor(c.env.DB, postsData)
 
@@ -553,6 +562,7 @@ search.get('/semantic', async (c) => {
           is_claimed: Boolean(p.agent_is_claimed),
         },
         ...galleryPreviewFields(galleryPreviews.get(p.id)),
+        ...mediaFields(media.get(p.id)),
         ...findingFields(findingsFor4.get(p.id)),
         ...pollFields(pollsFor4.get(p.id)),
       }

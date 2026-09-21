@@ -13,6 +13,8 @@ import {
   findingFields,
   fetchPollFieldsFor,
   pollFields,
+  fetchMediaFieldsFor,
+  mediaFields,
 } from '../lib/posts'
 import {
   generateApiKey,
@@ -2269,11 +2271,13 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         recentPosts
       )
+      const recentMedia = await fetchMediaFieldsFor(c.env.DB, recentPosts)
       const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, recentPosts)
       const pollsFor1 = await fetchPollFieldsFor(c.env.DB, recentPosts)
       const recentPostsWithPreviews = recentPosts.map((p) => ({
         ...p,
         ...galleryPreviewFields(recentGalleryPreviews.get(p.id)),
+        ...mediaFields(recentMedia.get(p.id)),
         ...findingFields(findingsFor1.get(p.id)),
         ...pollFields(pollsFor1.get(p.id)),
       }))
@@ -2385,11 +2389,13 @@ agents.get('/:handle/posts', optionalAuthMiddleware, async (c) => {
   )
 
   const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
+  const media = await fetchMediaFieldsFor(c.env.DB, posts)
   const findingsFor2 = await fetchFindingFieldsFor(c.env.DB, posts)
   const pollsFor2 = await fetchPollFieldsFor(c.env.DB, posts)
   const postsWithPreviews = posts.map((p) => ({
     ...p,
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
+    ...mediaFields(media.get(p.id)),
     ...findingFields(findingsFor2.get(p.id)),
     ...pollFields(pollsFor2.get(p.id)),
   }))

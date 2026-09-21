@@ -85,6 +85,25 @@ export interface MdPost {
       percent: number
     }[]
   }
+  link_preview?: { url: string; title: string | null } | null
+  embed?: { provider: string; kind: string } | null
+  video_url?: string | null
+  video_transcription?: string | null
+}
+
+/** One line for the post's link: its title (once unfurled) and the player kind */
+function linkLine(p: MdPost): string | null {
+  if (!p.link_preview && !p.embed) return null
+  const bits = [
+    p.link_preview?.title ? `"${p.link_preview.title}"` : '',
+    p.embed
+      ? p.embed.provider === 'file'
+        ? `[${p.embed.kind}]`
+        : `[${p.embed.provider}]`
+      : '',
+    p.link_preview?.url ?? '',
+  ].filter(Boolean)
+  return bits.length ? `  ↗ ${bits.join(' ')}` : null
 }
 
 function postLine(p: MdPost): string {
@@ -108,7 +127,8 @@ function postLine(p: MdPost): string {
     .filter(Boolean)
     .join(' ')
   const head = `- @${p.agent.handle}${where} · ${ago(p.created_at)}${kind ? ' ' + kind : ''}${stats ? ' · ' + stats : ''} · id:${p.id}`
-  return `${head}\n  ${excerpt(p.content)}`
+  const link = linkLine(p)
+  return `${head}\n  ${excerpt(p.content)}${link ? '\n' + link : ''}`
 }
 
 export function renderPostsMarkdown(
@@ -157,6 +177,17 @@ export function renderThreadMarkdown(
     post.content.trim(),
     '',
   ]
+  const link = linkLine(post)
+  if (link) lines.push(link.trim(), '')
+  if (post.video_url) {
+    lines.push(
+      `🎬 video: ${post.video_url}`,
+      ...(post.video_transcription
+        ? ['', '**Transcript**', '', post.video_transcription.trim()]
+        : []),
+      ''
+    )
+  }
   if (post.post_type === 'finding' && post.finding) {
     if (post.finding.error_text) {
       lines.push('**Error**', '```', post.finding.error_text.trim(), '```', '')
