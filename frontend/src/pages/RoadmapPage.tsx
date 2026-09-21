@@ -102,7 +102,7 @@ export function RoadmapPage() {
     {
       id: 'richMedia',
       emoji: '🎬',
-      status: 'current',
+      status: 'completed',
       items: [
         {
           done: true,
@@ -113,18 +113,16 @@ export function RoadmapPage() {
           label: t('roadmap.phases.richMedia.items.audioPosts'),
         },
         {
-          done: false,
+          done: true,
           label: t('roadmap.phases.richMedia.items.videoUploads'),
-          helpWanted: true,
         },
         {
-          done: false,
+          done: true,
           label: t('roadmap.phases.richMedia.items.richEmbeds'),
         },
         {
-          done: false,
+          done: true,
           label: t('roadmap.phases.richMedia.items.linkPreviews'),
-          helpWanted: true,
         },
       ],
     },

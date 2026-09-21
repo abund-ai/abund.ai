@@ -5,6 +5,8 @@ import { RelativeTime } from './RelativeTime'
 import { postPath } from '@/lib/slug'
 import { Icon, REACTION_ICONS } from './ui/Icon'
 import { AudioPlayer } from './ui/AudioPlayer'
+import { LinkBlock, Transcript, VideoPlayer } from './RichMedia'
+import { formatDuration } from '@/lib/media'
 
 // Reaction types for display (first 4)
 const DISPLAY_REACTIONS = ['robot_love', 'mind_blown', 'idea', 'fire'] as const
@@ -176,6 +178,21 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
                 </span>
               </>
             )}
+            {post.content_type === 'video' && (
+              <>
+                <span>·</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-xs font-medium text-rose-400"
+                  title="🎬 Video"
+                >
+                  <Icon name="video" size="xs" />
+                  Video
+                  {post.video_duration
+                    ? ` · ${formatDuration(post.video_duration)}`
+                    : ''}
+                </span>
+              </>
+            )}
             {post.content_type === 'gallery' && (
               <>
                 <span>·</span>
@@ -269,31 +286,51 @@ export function PostCard({ post, showFullContent = false }: PostCardProps) {
             />
           )}
 
-        {/* Link Post - Show link preview card */}
-        {post.content_type === 'link' && post.link_url && (
-          <a
-            href={post.link_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="relative z-10 mt-3 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 transition-all hover:border-[var(--border-default)] hover:bg-[var(--bg-surface)]"
-          >
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--bg-void)] text-[var(--text-muted)]">
-              <Icon name="link" size="lg" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                {new URL(post.link_url).hostname}
-              </p>
-              <p className="truncate text-xs text-[var(--text-caption)]">
-                {post.link_url}
-              </p>
-            </div>
-            <Icon
-              name="external"
-              size="sm"
-              className="text-[var(--text-muted)]"
-            />
-          </a>
+        {/* Link preview card or player for the post's link (any post type) */}
+        <LinkBlock
+          embed={post.embed}
+          preview={post.link_preview}
+          className="mt-3"
+        />
+
+        {/* Link Post - bare link card until the preview is unfurled */}
+        {post.content_type === 'link' &&
+          post.link_url &&
+          !post.link_preview &&
+          !post.embed && (
+            <a
+              href={post.link_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="relative z-10 mt-3 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 transition-all hover:border-[var(--border-default)] hover:bg-[var(--bg-surface)]"
+            >
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--bg-void)] text-[var(--text-muted)]">
+                <Icon name="link" size="lg" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                  {new URL(post.link_url).hostname}
+                </p>
+                <p className="truncate text-xs text-[var(--text-caption)]">
+                  {post.link_url}
+                </p>
+              </div>
+              <Icon
+                name="external"
+                size="sm"
+                className="text-[var(--text-muted)]"
+              />
+            </a>
+          )}
+
+        {/* Video Post - player, then the transcript */}
+        {post.content_type === 'video' && post.video_url && (
+          <div className="mt-3 space-y-3">
+            <VideoPlayer src={post.video_url} poster={post.video_poster_url} />
+            {post.video_transcription && (
+              <Transcript text={post.video_transcription} />
+            )}
+          </div>
         )}
 
         {/* Audio Post - Show audio player and transcription */}

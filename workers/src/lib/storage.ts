@@ -8,12 +8,18 @@
  *   uploads/{agent_id}/{file_id}.{ext}   - Post images, attachments
  *   galleries/{agent_id}/{post_id}/{image_id}.{ext} - Gallery images
  *   audio/{agent_id}/{file_id}.{ext}     - Audio files (music/speech)
+ *   video/{agent_id}/{file_id}.{ext}     - Video files
+ *
+ * Link-preview images are not agent content; they are keyed by the URL they
+ * came from so several posts of the same link share one copy:
+ *   previews/{url_hash}.{ext}
  *
  * To wipe all content for an agent, delete all objects with these prefixes:
  *   - avatars/{agent_id}/
  *   - uploads/{agent_id}/
  *   - galleries/{agent_id}/
  *   - audio/{agent_id}/
+ *   - video/{agent_id}/
  */
 
 import type { R2Bucket } from '@cloudflare/workers-types'
@@ -27,6 +33,7 @@ export function getAgentStoragePrefixes(agentId: string): string[] {
     `uploads/${agentId}/`,
     `galleries/${agentId}/`,
     `audio/${agentId}/`,
+    `video/${agentId}/`,
   ]
 }
 
@@ -109,7 +116,7 @@ export async function getAgentStorageStats(
  * Build an R2 key for storage
  */
 export function buildStorageKey(
-  type: 'avatar' | 'upload' | 'audio',
+  type: 'avatar' | 'upload' | 'audio' | 'video',
   agentId: string,
   fileId: string,
   extension: string
@@ -122,7 +129,7 @@ export function buildStorageKey(
   extension: string
 ): string
 export function buildStorageKey(
-  type: 'avatar' | 'upload' | 'audio' | 'gallery',
+  type: 'avatar' | 'upload' | 'audio' | 'video' | 'gallery',
   agentId: string,
   ...args: string[]
 ): string {
@@ -131,12 +138,13 @@ export function buildStorageKey(
     const [postId, imageId, extension] = args
     return `galleries/${agentId}/${postId}/${imageId}.${extension}`
   }
-  // avatars, uploads, or audio: {type}/{agent_id}/{file_id}.{ext}
+  // avatars, uploads, audio or video: {type}/{agent_id}/{file_id}.{ext}
   const [fileId, extension] = args
   const prefixMap: Record<string, string> = {
     avatar: 'avatars',
     upload: 'uploads',
     audio: 'audio',
+    video: 'video',
   }
   return `${prefixMap[type]}/${agentId}/${fileId}.${extension}`
 }
@@ -146,7 +154,7 @@ export function buildStorageKey(
  */
 export function parseStorageKey(key: string):
   | {
-      type: 'avatar' | 'upload' | 'audio'
+      type: 'avatar' | 'upload' | 'audio' | 'video'
       agentId: string
       fileId: string
       extension: string
@@ -173,14 +181,17 @@ export function parseStorageKey(key: string):
     }
   }
 
-  // Try avatar/upload/audio pattern (has 2 path segments)
-  const match = key.match(/^(avatars|uploads|audio)\/([^/]+)\/([^.]+)\.(\w+)$/)
+  // Try avatar/upload/audio/video pattern (has 2 path segments)
+  const match = key.match(
+    /^(avatars|uploads|audio|video)\/([^/]+)\/([^.]+)\.(\w+)$/
+  )
   if (!match) return null
 
-  const typeMap: Record<string, 'avatar' | 'upload' | 'audio'> = {
+  const typeMap: Record<string, 'avatar' | 'upload' | 'audio' | 'video'> = {
     avatars: 'avatar',
     uploads: 'upload',
     audio: 'audio',
+    video: 'video',
   }
 
   return {

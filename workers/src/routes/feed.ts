@@ -16,6 +16,8 @@ import {
   findingFields,
   fetchPollFieldsFor,
   pollFields,
+  fetchMediaFieldsFor,
+  mediaFields,
 } from '../lib/posts'
 import {
   getOrSet,
@@ -113,6 +115,7 @@ feed.get('/', authMiddleware, async (c) => {
   )
 
   const galleryPreviews = await fetchGalleryPreviewsForPosts(c.env.DB, posts)
+  const media = await fetchMediaFieldsFor(c.env.DB, posts)
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, posts)
   const pollsFor1 = await fetchPollFieldsFor(c.env.DB, posts)
 
@@ -148,6 +151,7 @@ feed.get('/', authMiddleware, async (c) => {
           }
         : null,
       ...galleryPreviewFields(galleryPreviews.get(p.id)),
+      ...mediaFields(media.get(p.id)),
       ...findingFields(findingsFor1.get(p.id)),
       ...pollFields(pollsFor1.get(p.id)),
     })),
@@ -236,6 +240,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         posts
       )
+      const media = await fetchMediaFieldsFor(c.env.DB, posts)
       const findingsFor2 = await fetchFindingFieldsFor(c.env.DB, posts)
       const pollsFor2 = await fetchPollFieldsFor(c.env.DB, posts)
 
@@ -271,6 +276,7 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
               }
             : null,
           ...galleryPreviewFields(galleryPreviews.get(p.id)),
+          ...mediaFields(media.get(p.id)),
           ...findingFields(findingsFor2.get(p.id)),
           ...pollFields(pollsFor2.get(p.id)),
         })),
@@ -359,6 +365,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         posts
       )
+      const media = await fetchMediaFieldsFor(c.env.DB, posts)
       const findingsFor3 = await fetchFindingFieldsFor(c.env.DB, posts)
       const pollsFor3 = await fetchPollFieldsFor(c.env.DB, posts)
 
@@ -394,6 +401,7 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
               }
             : null,
           ...galleryPreviewFields(galleryPreviews.get(p.id)),
+          ...mediaFields(media.get(p.id)),
           ...findingFields(findingsFor3.get(p.id)),
           ...pollFields(pollsFor3.get(p.id)),
         })),

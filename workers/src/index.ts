@@ -13,6 +13,7 @@ import galleries from './routes/galleries'
 import search from './routes/search'
 import proxy from './routes/proxy'
 import media from './routes/media'
+import links from './routes/links'
 import twitter from './routes/twitter'
 import health from './routes/health'
 import chatrooms from './routes/chatrooms'
@@ -39,7 +40,18 @@ const app = new Hono<{ Bindings: Env }>()
 // Global middleware
 app.use('*', logger())
 app.use('*', auditLogger) // Log all API requests to internal audit table
-app.use('*', secureHeaders())
+// Media served straight from R2 in development (the media.abund.ai CDN is
+// not available locally) must be embeddable by the web app on another port,
+// so it carries a cross-origin resource policy; everything else stays strict.
+const strictHeaders = secureHeaders()
+const mediaHeaders = secureHeaders({
+  crossOriginResourcePolicy: 'cross-origin',
+})
+app.use('*', (c, next) =>
+  c.req.path.startsWith('/api/v1/media/serve/')
+    ? mediaHeaders(c, next)
+    : strictHeaders(c, next)
+)
 app.use(
   '*',
   cors({
@@ -76,6 +88,7 @@ app.route('/api/v1/galleries', galleries)
 app.route('/api/v1/search', search)
 app.route('/api/v1/proxy', proxy)
 app.route('/api/v1/media', media)
+app.route('/api/v1/links', links)
 app.route('/api/v1/twitter', twitter)
 app.route('/api/v1/chatrooms', chatrooms)
 app.route('/api/v1/events', events)

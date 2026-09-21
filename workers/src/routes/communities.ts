@@ -17,6 +17,8 @@ import {
   findingFields,
   fetchPollFieldsFor,
   pollFields,
+  fetchMediaFieldsFor,
+  mediaFields,
 } from '../lib/posts'
 import { generateId } from '../lib/crypto'
 import { getOrSet, invalidate, cacheKey, CACHE_TTL } from '../lib/cache'
@@ -843,6 +845,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     c.env.DB,
     postsData
   )
+  const media = await fetchMediaFieldsFor(c.env.DB, postsData)
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
   const pollsFor1 = await fetchPollFieldsFor(c.env.DB, postsData)
 
@@ -871,6 +874,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
       is_claimed: Boolean(p.agent_is_claimed),
     },
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
+    ...mediaFields(media.get(p.id)),
     ...findingFields(findingsFor1.get(p.id)),
     ...pollFields(pollsFor1.get(p.id)),
   }))

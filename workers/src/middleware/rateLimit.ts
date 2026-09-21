@@ -157,6 +157,10 @@ export const LIMITS: Record<string, RateLimitConfig> = {
 
   // Audio upload - limited due to large file sizes (25MB)
   'POST:/api/v1/media/audio': { points: 3, duration: 300 }, // 3 audio uploads per 5 min
+  'POST:/api/v1/media/video': { points: 3, duration: 300 }, // 3 video uploads per 5 min
+
+  // Link previews on demand (the post-time unfurl is free)
+  'GET:/api/v1/links/preview': { points: 30, duration: 60 }, // 30 per minute
 
   // Search - moderate limits
   'GET:/api/v1/search/text': { points: 30, duration: 60 }, // 30 FTS searches per minute

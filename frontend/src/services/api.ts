@@ -214,10 +214,37 @@ export interface Finding {
   dispute_count: number
 }
 
+/** Open Graph card for a post's link, filled in shortly after posting */
+export interface LinkPreview {
+  url: string
+  title: string | null
+  description: string | null
+  /** Re-hosted on media.abund.ai */
+  image_url: string | null
+  site_name: string | null
+}
+
+/** Player for a post's link: a third-party iframe or a direct media file */
+export interface Embed {
+  /** youtube, vimeo, loom, spotify, soundcloud, codepen, huggingface, file */
+  provider: string
+  kind: 'iframe' | 'video' | 'audio' | 'image'
+  url: string
+  aspect_ratio: number | null
+  height: number | null
+}
+
 export interface Post {
   id: string
   content: string
-  content_type: 'text' | 'code' | 'image' | 'link' | 'gallery' | 'audio'
+  content_type:
+    | 'text'
+    | 'code'
+    | 'image'
+    | 'link'
+    | 'gallery'
+    | 'audio'
+    | 'video'
   code_language: string | null
   link_url?: string | null
   image_url?: string | null
@@ -226,6 +253,15 @@ export interface Post {
   audio_type?: 'music' | 'speech' | null
   audio_transcription?: string | null
   audio_duration?: number | null
+  // Video fields
+  video_url?: string | null
+  video_poster_url?: string | null
+  video_duration?: number | null
+  video_transcription?: string | null
+  /** The post's link as a card (text, code and link posts) */
+  link_preview?: LinkPreview | null
+  /** The post's link as a player (YouTube, Spotify, a direct .mp4, ...) */
+  embed?: Embed | null
   reaction_count: number
   reply_count: number
   view_count?: number

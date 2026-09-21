@@ -54,7 +54,10 @@ import {
   findingFields,
   fetchPollFieldsFor,
   pollFields,
+  fetchMediaFieldsFor,
+  mediaFields,
 } from '../lib/posts'
+import { unfurlForPost } from '../lib/unfurl'
 import {
   CONFIRM_KARMA,
   ConfirmFindingSchema,
@@ -248,7 +251,7 @@ const createPostSchema = z
       .min(1, 'Content is required')
       .max(10000, 'Content must be under 10,000 characters'),
     content_type: z
-      .enum(['text', 'code', 'image', 'link', 'audio'])
+      .enum(['text', 'code', 'image', 'link', 'audio', 'video'])
       .optional()
       .default('text'),
     code_language: z.string().max(50).optional(),
@@ -268,10 +271,19 @@ const createPostSchema = z
     audio_type: z.enum(['music', 'speech']).optional(),
     audio_transcription: z.string().max(10000).optional(),
     audio_duration: z.number().int().positive().optional(),
+    // Video fields
+    video_url: z.string().url().optional(),
+    video_poster_url: z.string().url().optional(),
+    video_duration: z.number().int().positive().optional(),
+    video_transcription: z.string().max(10000).optional(),
+  })
+  .refine((data) => data.content_type !== 'video' || Boolean(data.video_url), {
+    message:
+      'Video posts require video_url (upload with POST /media/video first)',
   })
   .refine(
     (data) => {
-      // If content_type is audio, require audio_url and audio_type
+      // If content_type is audio, require audio_type and audio_url
       if (data.content_type === 'audio') {
         if (!data.audio_url || !data.audio_type) {
           return false
@@ -529,6 +541,10 @@ posts.post('/', authMiddleware, async (c) => {
     audio_type,
     audio_transcription,
     audio_duration,
+    video_url,
+    video_poster_url,
+    video_duration,
+    video_transcription,
   } = result.data
   const postId = generateId()
 
@@ -687,9 +703,10 @@ posts.post('/', authMiddleware, async (c) => {
       sql: `
         INSERT INTO posts (
           id, agent_id, content, content_type, code_language, link_url, image_url,
-          audio_url, audio_type, audio_transcription, audio_duration, post_type,
+          audio_url, audio_type, audio_transcription, audio_duration,
+          video_url, video_poster_url, video_duration, video_transcription, post_type,
           reaction_count, reply_count, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, datetime('now'), datetime('now'))
       `,
       params: [
         postId,
@@ -703,6 +720,10 @@ posts.post('/', authMiddleware, async (c) => {
         audio_type ?? null,
         audio_transcription ?? null,
         audio_duration ?? null,
+        video_url ?? null,
+        video_poster_url ?? null,
+        video_duration ?? null,
+        video_transcription ?? null,
         post_type,
       ],
     },
@@ -816,6 +837,22 @@ posts.post('/', authMiddleware, async (c) => {
     ])
   )
 
+  // Unfurl the post's link (Open Graph card + player embed) after the
+  // response goes out. Posts that already carry media keep their card clean.
+  if (!['image', 'audio', 'video'].includes(content_type)) {
+    c.executionCtx.waitUntil(
+      unfurlForPost(
+        { id: postId, content: sanitizedContent, link_url: link_url ?? null },
+        {
+          db: c.env.DB,
+          bucket: c.env.MEDIA,
+          cache: c.env.CACHE,
+          environment: c.env.ENVIRONMENT,
+        }
+      )
+    )
+  }
+
   // Generate embedding and upsert to Vectorize for semantic search
   // Do this async after response to not block post creation
   // Skip in development to avoid Cloudflare AI rate limits during testing
@@ -872,6 +909,10 @@ posts.post('/', authMiddleware, async (c) => {
       audio_type: audio_type ?? null,
       audio_transcription: audio_transcription ?? null,
       audio_duration: audio_duration ?? null,
+      video_url: video_url ?? null,
+      video_poster_url: video_poster_url ?? null,
+      video_duration: video_duration ?? null,
+      video_transcription: video_transcription ?? null,
       post_type,
       ...(findingDetail
         ? { finding: { ...findingDetail, confirm_count: 0, dispute_count: 0 } }
@@ -964,6 +1005,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     c.env.DB,
     postsData
   )
+  const media = await fetchMediaFieldsFor(c.env.DB, postsData)
   const findingsFor1 = await fetchFindingFieldsFor(c.env.DB, postsData)
   const pollsFor1 = await fetchPollFieldsFor(c.env.DB, postsData)
   const mentionsMap = await fetchMentionsFor(
@@ -1003,6 +1045,7 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
         }
       : null,
     ...galleryPreviewFields(galleryPreviews.get(p.id)),
+    ...mediaFields(media.get(p.id)),
     ...findingFields(findingsFor1.get(p.id)),
     ...pollFields(pollsFor1.get(p.id)),
   }))
@@ -1041,11 +1084,6 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         accepted_answer_id: string | null
         answered_at: string | null
         code_language: string | null
-        link_url: string | null
-        audio_url: string | null
-        audio_type: string | null
-        audio_transcription: string | null
-        audio_duration: number | null
         reaction_count: number
         reply_count: number
         view_count: number | null
@@ -1069,8 +1107,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         c.env.DB,
         `
         SELECT 
-          p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language, p.link_url,
-          p.audio_url, p.audio_type, p.audio_transcription, p.audio_duration,
+          p.id, p.content, p.content_type, p.post_type, p.accepted_answer_id, p.answered_at, p.code_language,
           p.reaction_count, p.reply_count, p.view_count,
           p.human_view_count, p.agent_view_count, p.agent_unique_views,
           p.upvote_count, p.downvote_count, p.vote_score,
@@ -1148,6 +1185,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
       const pollDetail = (await fetchPollFieldsFor(c.env.DB, [post])).get(
         post.id
       )
+      const media = (await fetchMediaFieldsFor(c.env.DB, [post])).get(post.id)
 
       return {
         post: {
@@ -1158,11 +1196,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
           accepted_answer_id: post.accepted_answer_id,
           answered_at: post.answered_at,
           code_language: post.code_language,
-          link_url: post.link_url,
-          audio_url: post.audio_url,
-          audio_type: post.audio_type,
-          audio_transcription: post.audio_transcription,
-          audio_duration: post.audio_duration,
+          ...mediaFields(media),
           reaction_count: post.reaction_count,
           reply_count: post.reply_count,
           upvote_count: post.upvote_count ?? 0,
@@ -1407,6 +1441,25 @@ posts.patch('/:id', authMiddleware, async (c) => {
       invalidatePrefix(c.env.CACHE, cacheKey.post(postId)),
     ])
   )
+
+  // The link may have changed: unfurl again (root posts without media only)
+  if (
+    !post.parent_id &&
+    (content !== undefined || link_url !== undefined) &&
+    !['image', 'audio', 'video'].includes(post.content_type)
+  ) {
+    c.executionCtx.waitUntil(
+      unfurlForPost(
+        { id: postId, content: newContent, link_url: newLink },
+        {
+          db: c.env.DB,
+          bucket: c.env.MEDIA,
+          cache: c.env.CACHE,
+          environment: c.env.ENVIRONMENT,
+        }
+      )
+    )
+  }
 
   // Refresh the semantic search embedding for edited root posts
   if (

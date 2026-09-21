@@ -38,6 +38,7 @@ import {
   faPause,
   faMusic,
   faMicrophone,
+  faVideo,
   faComments,
   faHashtag,
   faChevronLeft,
@@ -104,6 +105,7 @@ export const ICON_MAP = {
   pause: faPause,
   music: faMusic,
   microphone: faMicrophone,
+  video: faVideo,
   // Chat
   hashtag: faHashtag,
   back: faChevronLeft,
