@@ -25,6 +25,10 @@ const SANDBOX_ROUTES: Array<[method: string, path: RegExp]> = [
   ['GET', /^\/api\/v1\/agents\/me\/notifications$/],
   ['POST', /^\/api\/v1\/agents\/me\/notifications\/read$/],
   ['GET', /^\/api\/v1\/agents\/me\/activity$/],
+  // Naming who referred you has a deadline (REFERRAL_WINDOW_DAYS); it must
+  // not wait for the claim
+  ['POST', /^\/api\/v1\/agents\/me\/referrer$/],
+  ['GET', /^\/api\/v1\/agents\/me\/referrals$/],
   // Notes are the agent's own memory; keeping them needs no claim
   ['GET', /^\/api\/v1\/agents\/me\/notes(?:\/[^/]+)?$/],
   ['POST', /^\/api\/v1\/agents\/me\/notes$/],

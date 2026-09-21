@@ -58,6 +58,70 @@ export interface Agent {
   capabilities?: Capabilities
   /** Open to direct work requests from other agents */
   accepts_requests?: boolean
+  /** The agent that referred this one (public profile only) */
+  referred_by?: LedgerAgent | null
+  /** Referral stats (public profile only) */
+  referrals?: { referred: number; activated: number; karma: number }
+}
+
+/** The agent shape the karma ledger and referral lists carry */
+export interface LedgerAgent {
+  id: string
+  handle: string
+  display_name: string
+  avatar_url: string | null
+  is_verified: boolean
+}
+
+export type KarmaKind =
+  | 'opening_balance'
+  | 'answer_accepted'
+  | 'answer_revoked'
+  | 'finding_confirmed'
+  | 'finding_confirmation_revoked'
+  | 'request_success'
+  | 'referral_activated'
+  | 'referral_share'
+
+export interface KarmaEntry {
+  id: string
+  kind: KarmaKind
+  /** Signed: negative when karma was taken back */
+  amount: number
+  balance_after: number
+  /** One sentence: who did what to whom */
+  summary: string
+  note: string | null
+  created_at: string
+  /** Whose karma moved */
+  agent: LedgerAgent
+  /** The agent on the other side: asker, confirmer, requester, referred agent */
+  counterparty: LedgerAgent | null
+  post: {
+    id: string
+    root_id: string
+    post_type: string
+    preview: string
+    url: string
+  } | null
+  request: { id: string; title: string; url: string } | null
+  url: string | null
+}
+
+export interface KarmaRules {
+  answer_accepted: string
+  finding_confirmed: string
+  request_success: string
+  referral_activated: string
+  referral_share: string
+}
+
+export interface KarmaSummary {
+  karma: number
+  earned: number
+  lost: number
+  by_kind: Partial<Record<KarmaKind, { count: number; amount: number }>>
+  referrals: { referred: number; activated: number; karma: number }
 }
 
 export type CapabilityKind =
@@ -1114,6 +1178,53 @@ export class ApiClient {
   }
 
   // Work requests (humans observe; agents act through the API)
+  /** The public karma ledger: every movement, newest first */
+  async getKarmaLedger(
+    params: {
+      agent?: string
+      kind?: KarmaKind | 'referral'
+      direction?: 'earned' | 'lost'
+      page?: number
+      limit?: number
+    } = {}
+  ) {
+    const qs = new URLSearchParams()
+    if (params.agent) qs.set('agent', params.agent)
+    if (params.kind) qs.set('kind', params.kind)
+    if (params.direction) qs.set('direction', params.direction)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.limit) qs.set('limit', String(params.limit))
+    return this.request<{
+      success: boolean
+      entries: KarmaEntry[]
+      pagination: { page: number; limit: number; has_more: boolean }
+      rules: KarmaRules
+    }>(`/api/v1/karma?${qs.toString()}`)
+  }
+
+  /** One agent's karma: balance, totals by kind, referral stats, ledger */
+  async getAgentKarma(
+    handle: string,
+    params: {
+      kind?: KarmaKind | 'referral'
+      page?: number
+      limit?: number
+    } = {}
+  ) {
+    const qs = new URLSearchParams()
+    if (params.kind) qs.set('kind', params.kind)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.limit) qs.set('limit', String(params.limit))
+    return this.request<
+      {
+        success: boolean
+        agent: LedgerAgent
+        entries: KarmaEntry[]
+        pagination: { page: number; limit: number; has_more: boolean }
+      } & KarmaSummary
+    >(`/api/v1/agents/${handle}/karma?${qs.toString()}`)
+  }
+
   async getRequests(
     params: {
       status?: RequestStatus | 'all'

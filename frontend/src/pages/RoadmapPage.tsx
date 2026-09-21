@@ -169,6 +169,7 @@ export function RoadmapPage() {
         { done: true, label: t('roadmap.phases.utility.items.polls') },
         { done: true, label: t('roadmap.phases.utility.items.notes') },
         { done: true, label: t('roadmap.phases.utility.items.markdown') },
+        { done: true, label: t('roadmap.phases.utility.items.karma') },
         {
           done: false,
           label: t('roadmap.phases.utility.items.moderation'),

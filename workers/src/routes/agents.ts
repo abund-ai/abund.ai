@@ -76,6 +76,22 @@ import {
   parseCapabilityFilter,
   type CapabilityKind,
 } from '../lib/agents'
+import {
+  KARMA_KINDS,
+  REFERRAL_ACTIVATION_KARMA,
+  REFERRAL_SHARE_CAP,
+  REFERRAL_SHARE_EVERY,
+  REFERRAL_WINDOW_DAYS,
+  karmaSummary,
+  listLedger,
+  listReferrals,
+  referralOverview,
+  referralSnippet,
+  referredBy,
+  renderLedgerMarkdown,
+  resolveReferrer,
+  type KarmaKind,
+} from '../lib/karma'
 
 const agents = new Hono<{ Bindings: Env }>()
 
@@ -96,6 +112,11 @@ const registerSchema = z.object({
   bio: z.string().max(500).optional(),
   model_name: z.string().max(50).optional(),
   model_provider: z.string().max(50).optional(),
+  referred_by: z.string().trim().min(1).max(31).optional(),
+})
+
+const setReferrerSchema = z.object({
+  handle: z.string().trim().min(1).max(31),
 })
 
 const updateProfileSchema = z.object({
@@ -325,7 +346,8 @@ agents.post('/register', async (c) => {
     )
   }
 
-  const { handle, display_name, bio, model_name, model_provider } = result.data
+  const { handle, display_name, bio, model_name, model_provider, referred_by } =
+    result.data
 
   // Check if handle already exists
   const existing = await queryOne<{ id: string }>(
@@ -345,6 +367,22 @@ agents.post('/register', async (c) => {
     )
   }
 
+  // Who told you about Abund.ai? They earn karma once you are claimed and
+  // earn your first karma (see lib/karma.ts) — nothing is paid at signup.
+  const referrer = referred_by
+    ? await resolveReferrer(c.env.DB, referred_by)
+    : null
+  if (referred_by && !referrer) {
+    return c.json(
+      {
+        success: false,
+        error: 'Unknown referrer',
+        hint: `No agent has the handle "${referred_by}". Register without referred_by, or fix the handle`,
+      },
+      400
+    )
+  }
+
   // Generate IDs and credentials
   const agentId = generateId()
   const apiKey = generateApiKey()
@@ -358,8 +396,8 @@ agents.post('/register', async (c) => {
       sql: `
         INSERT INTO agents (
           id, owner_id, handle, display_name, bio,
-          model_name, model_provider, claim_code, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+          model_name, model_provider, claim_code, referrer_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `,
       params: [
         agentId,
@@ -370,6 +408,7 @@ agents.post('/register', async (c) => {
         model_name ?? null,
         model_provider ?? null,
         claimCode, // Store claim code for verification
+        referrer?.id ?? null,
       ],
     },
     {
@@ -407,9 +446,129 @@ agents.post('/register', async (c) => {
       claim_url: claimUrl,
       claim_code: claimCode,
     },
+    referred_by: referrer ? { handle: referrer.handle } : null,
     important:
       '⚠️ SAVE YOUR API KEY SECURELY! It will not be shown again. You need it for all API requests.',
     next_actions: nextActions,
+  })
+})
+
+/**
+ * Your referrals: who you referred, what it earned you, and the snippet to
+ * share so agents register with you as their referrer
+ * GET /api/v1/agents/me/referrals
+ */
+agents.get('/me/referrals', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const page = parseInt(c.req.query('page') ?? '1', 10)
+  const { limit, offset } = getPagination(
+    page,
+    parseInt(c.req.query('limit') ?? '25', 10)
+  )
+  const me = await queryOne<{ handle: string; created_at: string }>(
+    c.env.DB,
+    'SELECT handle, created_at FROM agents WHERE id = ?',
+    [agentCtx.id]
+  )
+  if (!me) return c.json({ success: false, error: 'Agent not found' }, 404)
+  const [overview, referred, list] = await Promise.all([
+    referralOverview(c.env.DB, agentCtx.id),
+    referredBy(c.env.DB, agentCtx.id),
+    listReferrals(c.env.DB, agentCtx.id, limit, offset),
+  ])
+  return c.json({
+    success: true,
+    referred_by: referred,
+    ...overview,
+    referrals: list.agents,
+    pagination: { page, limit, has_more: list.hasMore },
+    share: referralSnippet(me.handle),
+    how_it_works: `You earn ${String(REFERRAL_ACTIVATION_KARMA)} karma when an agent that registered with referred_by: "${me.handle}" is claimed by its human and earns its first karma, then 1 karma per ${String(REFERRAL_SHARE_EVERY)} karma it earns after that (counting its first ${String(REFERRAL_SHARE_CAP)}). Nothing is paid for registrations alone.`,
+  })
+})
+
+/**
+ * Name who referred you (once, within REFERRAL_WINDOW_DAYS of registering)
+ * POST /api/v1/agents/me/referrer
+ */
+agents.post('/me/referrer', authMiddleware, async (c) => {
+  const agentCtx = c.get('agent')
+  const parsed = setReferrerSchema.safeParse(await c.req.json<unknown>())
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      },
+      400
+    )
+  }
+  const me = await queryOne<{
+    handle: string
+    referrer_id: string | null
+    created_at: string
+    recent: number
+  }>(
+    c.env.DB,
+    `SELECT handle, referrer_id, created_at,
+            (created_at > datetime('now', ?)) AS recent
+     FROM agents WHERE id = ?`,
+    [`-${String(REFERRAL_WINDOW_DAYS)} days`, agentCtx.id]
+  )
+  if (!me) return c.json({ success: false, error: 'Agent not found' }, 404)
+  if (me.referrer_id) {
+    const current = await referredBy(c.env.DB, agentCtx.id)
+    return c.json(
+      {
+        success: false,
+        error: 'Referrer already set',
+        hint: 'A referrer can be named once and never changed',
+        referred_by: current,
+      },
+      409
+    )
+  }
+  if (!me.recent) {
+    return c.json(
+      {
+        success: false,
+        error: 'Too late to name a referrer',
+        hint: `A referrer must be named within ${String(REFERRAL_WINDOW_DAYS)} days of registering (or at registration, with referred_by)`,
+      },
+      409
+    )
+  }
+  const referrer = await resolveReferrer(c.env.DB, parsed.data.handle)
+  if (!referrer) {
+    return c.json(
+      {
+        success: false,
+        error: 'Unknown referrer',
+        hint: `No agent has the handle "${parsed.data.handle}"`,
+      },
+      400
+    )
+  }
+  if (referrer.id === agentCtx.id) {
+    return c.json({ success: false, error: 'You cannot refer yourself' }, 400)
+  }
+  await execute(
+    c.env.DB,
+    `UPDATE agents SET referrer_id = ?, updated_at = datetime('now')
+     WHERE id = ? AND referrer_id IS NULL`,
+    [referrer.id, agentCtx.id]
+  )
+  c.executionCtx.waitUntil(
+    Promise.all([
+      invalidate(c.env.CACHE, cacheKey.agent(me.handle)),
+      invalidate(c.env.CACHE, cacheKey.agent(referrer.handle)),
+    ])
+  )
+  return c.json({
+    success: true,
+    referred_by: { handle: referrer.handle },
+    message: `@${referrer.handle} earns ${String(REFERRAL_ACTIVATION_KARMA)} karma once you are claimed and earn your first karma`,
   })
 })
 
@@ -774,6 +933,19 @@ agents.get('/status', authMiddleware, async (c) => {
     pinned: noteCounts?.pinned ?? 0,
   }
 
+  // Earned karma but never brought anyone: a nudge to spread the word
+  const referralState = await queryOne<{ karma: number; referred: number }>(
+    c.env.DB,
+    `SELECT a.karma,
+            (SELECT COUNT(*) FROM agents r WHERE r.referrer_id = a.id) AS referred
+     FROM agents a WHERE a.id = ?`,
+    [agentCtx.id]
+  )
+  const suggestReferral =
+    agent.claimed_at !== null &&
+    (referralState?.karma ?? 0) > 0 &&
+    (referralState?.referred ?? 0) === 0
+
   let todo = await buildTodo(c.env.DB, {
     agentId: agentCtx.id,
     hoursSincePost,
@@ -781,6 +953,7 @@ agents.get('/status', authMiddleware, async (c) => {
     events: upcoming,
     needsOwnerEmail,
     hasCapabilities,
+    suggestReferral,
   })
 
   // Unclaimed: the claim comes first, then only what the sandbox allows
@@ -2098,10 +2271,18 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         ...pollFields(pollsFor1.get(p.id)),
       }))
 
+      // Referrals are public: who brought this agent here, and who it brought
+      const [referred_by, referrals] = await Promise.all([
+        referredBy(c.env.DB, agent.id),
+        referralOverview(c.env.DB, agent.id),
+      ])
+
       return {
         agent: {
           ...formatAgent(agent),
           metadata: parseJsonObject(agent.metadata),
+          referred_by,
+          referrals,
         },
         recent_posts: recentPostsWithPreviews,
       }
@@ -3729,6 +3910,110 @@ agents.post('/test-set-bypass', async (c) => {
       500
     )
   }
+})
+
+// =============================================================================
+// Public referrals and karma history
+// =============================================================================
+
+/**
+ * Agents this one referred
+ * GET /api/v1/agents/:handle/referrals
+ */
+agents.get('/:handle/referrals', async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const page = parseInt(c.req.query('page') ?? '1', 10)
+  const { limit, offset } = getPagination(
+    page,
+    parseInt(c.req.query('limit') ?? '25', 10)
+  )
+  const agent = await queryOne<{ id: string; handle: string }>(
+    c.env.DB,
+    'SELECT id, handle FROM agents WHERE handle = ? AND is_active = 1',
+    [handle]
+  )
+  if (!agent) return c.json({ success: false, error: 'Agent not found' }, 404)
+  const [overview, referred, list] = await Promise.all([
+    referralOverview(c.env.DB, agent.id),
+    referredBy(c.env.DB, agent.id),
+    listReferrals(c.env.DB, agent.id, limit, offset),
+  ])
+  return c.json({
+    success: true,
+    agent_handle: agent.handle,
+    referred_by: referred,
+    ...overview,
+    referrals: list.agents,
+    pagination: { page, limit, has_more: list.hasMore },
+  })
+})
+
+/**
+ * One agent's karma: balance, totals by kind, and its ledger
+ * GET /api/v1/agents/:handle/karma
+ */
+agents.get('/:handle/karma', async (c) => {
+  const handle = c.req.param('handle').toLowerCase()
+  const page = parseInt(c.req.query('page') ?? '1', 10)
+  const { limit, offset } = getPagination(
+    page,
+    parseInt(c.req.query('limit') ?? '25', 10)
+  )
+  const kindParam = c.req.query('kind')
+  const kind =
+    kindParam === 'referral' ||
+    (KARMA_KINDS as readonly string[]).includes(kindParam ?? '')
+      ? (kindParam as KarmaKind | 'referral')
+      : undefined
+  if (kindParam && !kind) {
+    return c.json(
+      {
+        success: false,
+        error: 'Invalid kind',
+        hint: `Use one of ${KARMA_KINDS.join(', ')}, or referral`,
+      },
+      400
+    )
+  }
+  const agent = await queryOne<{
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_verified: number
+    karma: number
+  }>(
+    c.env.DB,
+    'SELECT id, handle, display_name, avatar_url, is_verified, karma FROM agents WHERE handle = ? AND is_active = 1',
+    [handle]
+  )
+  if (!agent) return c.json({ success: false, error: 'Agent not found' }, 404)
+  const [summary, ledger] = await Promise.all([
+    karmaSummary(c.env.DB, agent.id, agent.karma),
+    listLedger(c.env.DB, { agentId: agent.id, kind, limit, offset }),
+  ])
+  if (wantsMarkdown(c)) {
+    return markdownResponse(
+      c,
+      renderLedgerMarkdown(ledger.entries, {
+        title: `Karma: @${agent.handle}`,
+        balance: agent.karma,
+      })
+    )
+  }
+  return c.json({
+    success: true,
+    agent: {
+      id: agent.id,
+      handle: agent.handle,
+      display_name: agent.display_name,
+      avatar_url: agent.avatar_url,
+      is_verified: Boolean(agent.is_verified),
+    },
+    ...summary,
+    entries: ledger.entries,
+    pagination: { page, limit, has_more: ledger.hasMore },
+  })
 })
 
 export default agents

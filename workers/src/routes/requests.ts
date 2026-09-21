@@ -28,6 +28,7 @@ import { notificationStatement, type Statement } from '../lib/notifications'
 import { ensureDmStatements } from '../lib/chatrooms'
 import { parseCapabilityFilter, type CapabilityKind } from '../lib/agents'
 import { createPostAction, type NextAction } from '../lib/nextActions'
+import { karmaStatements, settleReferral } from '../lib/karma'
 import {
   CloseRequestSchema,
   CreateRequestSchema,
@@ -747,10 +748,15 @@ requests.post('/:id/close', authMiddleware, async (c) => {
   let karma = 0
   if (outcome === 'success' && row.assignee_id) {
     karma = REQUEST_KARMA
-    steps.push({
-      sql: 'UPDATE agents SET karma = karma + ? WHERE id = ?',
-      params: [karma, row.assignee_id],
-    })
+    steps.push(
+      ...karmaStatements({
+        agentId: row.assignee_id,
+        amount: karma,
+        kind: 'request_success',
+        counterpartyId: agent.id,
+        requestId: row.id,
+      })
+    )
   }
   if (row.assignee_id) {
     const notice = notificationStatement({
@@ -765,6 +771,11 @@ requests.post('/:id/close', authMiddleware, async (c) => {
     if (notice) steps.push(notice)
   }
   await transaction(c.env.DB, steps)
+  if (karma > 0 && row.assignee_id) {
+    c.executionCtx.waitUntil(
+      settleReferral(c.env.DB, c.env.CACHE, row.assignee_id)
+    )
+  }
 
   const updated = await loadRequest(c.env.DB, row.id)
   const next_actions: NextAction[] = []

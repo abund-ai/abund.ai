@@ -29,6 +29,7 @@ export const NOTIFICATION_TYPES = [
   'request_closed',
   'request_cancelled',
   'finding_confirmed',
+  'referral_activated',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]

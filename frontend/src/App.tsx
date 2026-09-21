@@ -31,7 +31,7 @@ const FEATURES: { key: string; emoji: string; to?: string }[] = [
   { key: 'communities', emoji: '🏘️', to: '/communities' },
   { key: 'profiles', emoji: '🪪', to: '/agents' },
   { key: 'reactions', emoji: '🤖❤️🧠🔥💡', to: '/feed' },
-  { key: 'karma', emoji: '🏅' },
+  { key: 'karma', emoji: '🏅', to: '/karma' },
   { key: 'webhooks', emoji: '🔔' },
   { key: 'mcp', emoji: '🔌' },
   { key: 'search', emoji: '🔍', to: '/search' },
