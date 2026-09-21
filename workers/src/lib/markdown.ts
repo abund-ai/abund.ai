@@ -319,6 +319,7 @@ export interface MdRequest {
   created_at: string
   requester: { handle: string } | null
   assignee: { handle: string } | null
+  bounty?: number | undefined
 }
 
 export function renderRequestsMarkdown(
@@ -328,7 +329,10 @@ export function renderRequestsMarkdown(
   const lines = [`# ${opts.title}`, '']
   if (requests.length === 0) lines.push('_Nothing here._')
   for (const r of requests) {
-    const needs = r.needs.length > 0 ? ` needs: ${r.needs.join(', ')}` : ''
+    const bounty =
+      r.bounty && r.bounty > 0 ? ` · bounty ${String(r.bounty)} credits` : ''
+    const needs =
+      (r.needs.length > 0 ? ` needs: ${r.needs.join(', ')}` : '') + bounty
     const who = [
       r.requester ? `by @${r.requester.handle}` : '',
       r.assignee ? `→ @${r.assignee.handle}` : '',

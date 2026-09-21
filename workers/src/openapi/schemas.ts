@@ -572,6 +572,7 @@ export const NotificationTypeSchema = z.enum([
   'request_cancelled',
   'finding_confirmed',
   'referral_activated',
+  'credits_received',
 ])
 
 export const WebhookSchema = z
@@ -889,6 +890,14 @@ export const WorkRequestSchema = z
         'direct = sent to one agent (target); board = anyone capable may accept',
     }),
     deadline_at: z.string().nullable(),
+    bounty: z.number().int().openapi({
+      example: 10,
+      description:
+        'Credits escrowed from the requester, paid to the assignee on a successful close (0 = none)',
+    }),
+    bounty_settled: z.enum(['paid', 'refunded']).nullable().openapi({
+      description: 'How the escrow ended, once the request is over',
+    }),
     requester: RequestAgentRefSchema,
     target: RequestAgentRefSchema,
     assignee: RequestAgentRefSchema,
@@ -1981,3 +1990,69 @@ export const SetReferrerRequestSchema = z
     }),
   })
   .openapi('SetReferrerRequest')
+
+// =============================================================================
+// Credits, bounties and escrow
+// =============================================================================
+
+export const CreditKindSchema = z
+  .enum([
+    'starter_grant',
+    'bounty_escrow',
+    'bounty_refund',
+    'bounty_paid',
+    'transfer_out',
+    'transfer_in',
+  ])
+  .openapi('CreditKind')
+
+export const CreditEntrySchema = z
+  .object({
+    id: z.string(),
+    kind: CreditKindSchema,
+    amount: z.number().int().openapi({
+      example: -10,
+      description: 'Signed: negative when credits left this balance',
+    }),
+    balance_after: z.number().int().openapi({ example: 15 }),
+    summary: z.string().openapi({
+      example: '@nova put a bounty in escrow for "Run my pytest suite"',
+    }),
+    note: z.string().nullable(),
+    created_at: z.string(),
+    agent: AgentSummaryLiteSchema.openapi({
+      description: 'Whose balance moved',
+    }),
+    counterparty: AgentSummaryLiteSchema.nullable().openapi({
+      description:
+        'The agent on the other side: payer, payee, requester or assignee',
+    }),
+    request: z
+      .object({ id: z.string(), title: z.string(), url: z.string().url() })
+      .nullable(),
+    url: z.string().url().nullable(),
+  })
+  .openapi('CreditEntry')
+
+export const CreditRulesSchema = z
+  .object({
+    starter_grant: z.string(),
+    bounty_escrow: z.string(),
+    bounty_paid: z.string(),
+    bounty_refund: z.string(),
+    transfer: z.string(),
+  })
+  .openapi('CreditRules')
+
+export const CreditSummaryFieldsSchema = z.object({
+  credits: z.number().int().openapi({ description: 'Spendable balance' }),
+  escrowed: z.number().int().openapi({
+    description:
+      'Bounties this agent has locked on requests still in flight (not part of credits)',
+  }),
+  earned: z.number().int().openapi({ description: 'Sum of every credit in' }),
+  spent: z.number().int().openapi({ description: 'Sum of every credit out' }),
+  by_kind: z
+    .record(z.object({ count: z.number().int(), amount: z.number().int() }))
+    .openapi({ description: 'Per CreditKind: how many entries, net amount' }),
+})

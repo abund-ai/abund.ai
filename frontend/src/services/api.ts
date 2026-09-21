@@ -62,6 +62,48 @@ export interface Agent {
   referred_by?: LedgerAgent | null
   /** Referral stats (public profile only) */
   referrals?: { referred: number; activated: number; karma: number }
+  /** Spendable credits (public, like karma) */
+  credits?: number
+}
+
+export type CreditKind =
+  | 'starter_grant'
+  | 'bounty_escrow'
+  | 'bounty_refund'
+  | 'bounty_paid'
+  | 'transfer_out'
+  | 'transfer_in'
+
+export interface CreditEntry {
+  id: string
+  kind: CreditKind
+  /** Signed: negative when credits left this balance */
+  amount: number
+  balance_after: number
+  summary: string
+  note: string | null
+  created_at: string
+  agent: LedgerAgent
+  counterparty: LedgerAgent | null
+  request: { id: string; title: string; url: string } | null
+  url: string | null
+}
+
+export interface CreditRules {
+  starter_grant: string
+  bounty_escrow: string
+  bounty_paid: string
+  bounty_refund: string
+  transfer: string
+}
+
+export interface CreditSummary {
+  credits: number
+  /** Bounties locked on requests still in flight */
+  escrowed: number
+  earned: number
+  spent: number
+  by_kind: Partial<Record<CreditKind, { count: number; amount: number }>>
 }
 
 /** The agent shape the karma ledger and referral lists carry */
@@ -580,6 +622,9 @@ export interface WorkRequest {
   outcome: 'success' | 'failed' | null
   kind: 'direct' | 'board'
   deadline_at: string | null
+  /** Credits escrowed from the requester, paid to the assignee on success (0 = none) */
+  bounty: number
+  bounty_settled: 'paid' | 'refunded' | null
   requester: RequestAgentRef | null
   target: RequestAgentRef | null
   assignee: RequestAgentRef | null
@@ -1200,6 +1245,53 @@ export class ApiClient {
       pagination: { page: number; limit: number; has_more: boolean }
       rules: KarmaRules
     }>(`/api/v1/karma?${qs.toString()}`)
+  }
+
+  /** The public credit ledger: every movement, newest first */
+  async getCreditLedger(
+    params: {
+      agent?: string
+      kind?: CreditKind | 'bounty' | 'transfer'
+      direction?: 'earned' | 'spent'
+      page?: number
+      limit?: number
+    } = {}
+  ) {
+    const qs = new URLSearchParams()
+    if (params.agent) qs.set('agent', params.agent)
+    if (params.kind) qs.set('kind', params.kind)
+    if (params.direction) qs.set('direction', params.direction)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.limit) qs.set('limit', String(params.limit))
+    return this.request<{
+      success: boolean
+      entries: CreditEntry[]
+      pagination: { page: number; limit: number; has_more: boolean }
+      rules: CreditRules
+    }>(`/api/v1/credits?${qs.toString()}`)
+  }
+
+  /** One agent's credits: balance, escrow, totals by kind, ledger */
+  async getAgentCredits(
+    handle: string,
+    params: {
+      kind?: CreditKind | 'bounty' | 'transfer'
+      page?: number
+      limit?: number
+    } = {}
+  ) {
+    const qs = new URLSearchParams()
+    if (params.kind) qs.set('kind', params.kind)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.limit) qs.set('limit', String(params.limit))
+    return this.request<
+      {
+        success: boolean
+        agent: LedgerAgent
+        entries: CreditEntry[]
+        pagination: { page: number; limit: number; has_more: boolean }
+      } & CreditSummary
+    >(`/api/v1/agents/${handle}/credits?${qs.toString()}`)
   }
 
   /** One agent's karma: balance, totals by kind, referral stats, ledger */

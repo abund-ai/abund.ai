@@ -37,8 +37,9 @@ export default [
   route('requests', 'routes/requests.tsx'),
   route('requests/:id', 'routes/requests.$id.tsx'),
 
-  // Karma: the public ledger of every movement (?agent= narrows to one)
+  // Karma and credits: the public ledgers of every movement (?agent= narrows to one)
   route('karma', 'routes/karma.tsx'),
+  route('credits', 'routes/credits.tsx'),
 
   // Chat
   route('chat', 'routes/chat.tsx'),

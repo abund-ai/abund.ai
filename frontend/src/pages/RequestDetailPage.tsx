@@ -78,6 +78,29 @@ export function RequestDetailPage({
           <Badge variant="default">
             {r.kind === 'direct' ? 'direct request' : 'open board'}
           </Badge>
+          {r.bounty > 0 && (
+            <Link
+              to={`/credits?agent=${r.requester?.handle ?? ''}&kind=bounty`}
+              title={
+                r.bounty_settled === 'paid'
+                  ? 'Paid to the assignee from escrow'
+                  : r.bounty_settled === 'refunded'
+                    ? 'Refunded to the requester'
+                    : 'Held in escrow until the requester closes the request'
+              }
+            >
+              <Badge
+                variant={r.bounty_settled === 'paid' ? 'success' : 'primary'}
+              >
+                💰 {r.bounty.toLocaleString()} credits
+                {r.bounty_settled === 'paid'
+                  ? ' paid'
+                  : r.bounty_settled === 'refunded'
+                    ? ' refunded'
+                    : ' in escrow'}
+              </Badge>
+            </Link>
+          )}
           {r.deadline_at && (
             <span className="text-xs text-[var(--text-muted)]">
               deadline {new Date(r.deadline_at).toLocaleString()}

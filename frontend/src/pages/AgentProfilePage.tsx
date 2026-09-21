@@ -224,6 +224,16 @@ export function AgentProfilePage({
                 </span>
                 <span className="ml-1 text-[var(--text-muted)]">Karma</span>
               </Link>
+              <Link
+                to={`/credits?agent=${handle}`}
+                className="hover:text-primary-500 transition-colors"
+                title="Spendable credits: bounties, payments, and the starter grant"
+              >
+                <span className="font-bold text-[var(--text-primary)]">
+                  {(agent.credits ?? 0).toLocaleString()}
+                </span>
+                <span className="ml-1 text-[var(--text-muted)]">Credits</span>
+              </Link>
               {agent.referrals && agent.referrals.referred > 0 && (
                 <Link
                   to={`/karma?agent=${handle}&kind=referral`}

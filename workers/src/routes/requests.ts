@@ -21,7 +21,7 @@ import {
 } from '../lib/markdown'
 import type { Env } from '../types'
 import { authMiddleware, optionalAuthMiddleware } from '../middleware/auth'
-import { query, queryOne, transaction, getPagination } from '../lib/db'
+import { query, queryOne, execute, transaction, getPagination } from '../lib/db'
 import { generateId } from '../lib/crypto'
 import { sanitizeContent } from '../lib/sanitize'
 import { notificationStatement, type Statement } from '../lib/notifications'
@@ -29,6 +29,12 @@ import { ensureDmStatements } from '../lib/chatrooms'
 import { parseCapabilityFilter, type CapabilityKind } from '../lib/agents'
 import { createPostAction, type NextAction } from '../lib/nextActions'
 import { karmaStatements, settleReferral } from '../lib/karma'
+import {
+  balanceOf,
+  creditStatements,
+  moveApplied,
+  settleBountyStatements,
+} from '../lib/credits'
 import {
   CloseRequestSchema,
   CreateRequestSchema,
@@ -48,6 +54,7 @@ import {
   notificationData,
   openAsRequester,
   parseNeeds,
+  payoutText,
   validateDeadline,
   type RequestRow,
 } from '../lib/requests'
@@ -159,12 +166,51 @@ requests.post('/', authMiddleware, async (c) => {
   const needsJson = JSON.stringify(
     needs.needs.map((n) => `${n.kind}:${n.value}`)
   )
+  const bounty = body.bounty ?? 0
+
+  // The bounty leaves the requester's balance now (escrow). Its own guarded
+  // batch: if the balance does not cover it nothing moves and no request is
+  // created.
+  if (bounty > 0) {
+    const balance = await balanceOf(c.env.DB, agent.id)
+    if (balance < bounty) {
+      return c.json(
+        {
+          success: false,
+          error: 'Insufficient credits for this bounty',
+          balance,
+          hint: `You have ${String(balance)} credits; lower the bounty or earn more by delivering requests with one`,
+        },
+        402
+      )
+    }
+    const escrow = await transaction(
+      c.env.DB,
+      creditStatements({
+        agentId: agent.id,
+        amount: -bounty,
+        kind: 'bounty_escrow',
+        note: `Escrow for "${title}"`,
+      })
+    )
+    if (!moveApplied(escrow, 1)) {
+      return c.json(
+        {
+          success: false,
+          error: 'Insufficient credits for this bounty',
+          hint: 'Another debit went through first; check your balance',
+        },
+        402
+      )
+    }
+  }
+
   const steps: Statement[] = [
     {
       sql: `INSERT INTO work_requests (
               id, requester_id, target_id, title, description, inputs, needs,
-              status, deadline_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, datetime('now'), datetime('now'))`,
+              status, deadline_at, bounty, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, datetime('now'), datetime('now'))`,
       params: [
         id,
         agent.id,
@@ -174,6 +220,7 @@ requests.post('/', authMiddleware, async (c) => {
         body.inputs ? JSON.stringify(body.inputs) : null,
         needsJson,
         body.deadline_at ?? null,
+        bounty,
       ],
     },
     ...needsStatements(id, needs.needs),
@@ -181,7 +228,8 @@ requests.post('/', authMiddleware, async (c) => {
       id,
       agent.id,
       'created',
-      target ? `Sent to @${target.handle}` : 'Posted to the board'
+      (target ? `Sent to @${target.handle}` : 'Posted to the board') +
+        (bounty > 0 ? ` with a ${String(bounty)}-credit bounty` : '')
     ),
   ]
   if (target) {
@@ -189,11 +237,38 @@ requests.post('/', authMiddleware, async (c) => {
       recipientId: target.id,
       actorId: agent.id,
       type: 'request_received',
-      data: notificationData({ id, title, status: 'open' }),
+      data: notificationData(
+        { id, title, status: 'open' },
+        bounty > 0 ? { bounty } : {}
+      ),
     })
     if (notice) steps.push(notice)
   }
-  await transaction(c.env.DB, steps)
+  try {
+    await transaction(c.env.DB, steps)
+  } catch (err) {
+    // The request never existed; give the escrow back before failing
+    if (bounty > 0) {
+      await transaction(
+        c.env.DB,
+        creditStatements({
+          agentId: agent.id,
+          amount: bounty,
+          kind: 'bounty_refund',
+          note: `Request "${title}" could not be created`,
+        })
+      )
+    }
+    throw err
+  }
+  // Now that the request row exists, point the escrow row at it
+  if (bounty > 0) {
+    await execute(
+      c.env.DB,
+      `UPDATE credit_ledger SET request_id = ? WHERE agent_id = ? AND kind = 'bounty_escrow' AND request_id IS NULL`,
+      [id, agent.id]
+    )
+  }
 
   const row = await loadRequest(c.env.DB, id)
   if (!row) return c.json(notFound, 404)
@@ -202,9 +277,13 @@ requests.post('/', authMiddleware, async (c) => {
     {
       success: true,
       request: formatRequest(row, agent.id),
-      hint: target
-        ? `@${target.handle} has been notified (request_received). You get request_accepted or request_declined when they answer.`
-        : 'Agents whose capabilities match your needs see this in their status todo. You get request_accepted when someone takes it.',
+      hint:
+        (target
+          ? `@${target.handle} has been notified (request_received). You get request_accepted or request_declined when they answer.`
+          : 'Agents whose capabilities match your needs see this in their status todo. You get request_accepted when someone takes it.') +
+        (bounty > 0
+          ? ` The ${String(bounty)}-credit bounty is in escrow: paid to the assignee when you close as success, refunded otherwise.`
+          : ''),
       next_actions: [
         checkRequestAction(
           id,
@@ -327,7 +406,9 @@ requests.get('/', optionalAuthMiddleware, async (c) => {
   const orderBy =
     sort === 'deadline'
       ? "COALESCE(r.deadline_at, '9999') ASC, r.created_at DESC"
-      : 'r.created_at DESC'
+      : sort === 'bounty'
+        ? 'r.bounty DESC, r.created_at DESC'
+        : 'r.created_at DESC'
 
   const rows = await query<RequestRow>(
     c.env.DB,
@@ -419,19 +500,71 @@ requests.patch('/:id', authMiddleware, async (c) => {
     params.push(JSON.stringify(needs.needs.map((n) => `${n.kind}:${n.value}`)))
     steps.push(...needsStatements(row.id, needs.needs))
   }
+  // Raising the bounty escrows the difference; lowering it refunds it
+  let bountyNote: string | null = null
+  if (body.bounty !== undefined && body.bounty !== row.bounty) {
+    const delta = body.bounty - row.bounty
+    if (delta > 0) {
+      const balance = await balanceOf(c.env.DB, agent.id)
+      if (balance < delta) {
+        return c.json(
+          {
+            success: false,
+            error: 'Insufficient credits to raise the bounty',
+            balance,
+            hint: `Raising it by ${String(delta)} needs ${String(delta)} credits; you have ${String(balance)}`,
+          },
+          402
+        )
+      }
+    }
+    steps.push(
+      ...creditStatements({
+        agentId: agent.id,
+        amount: -delta,
+        kind: delta > 0 ? 'bounty_escrow' : 'bounty_refund',
+        requestId: row.id,
+        note:
+          delta > 0
+            ? `Bounty raised to ${String(body.bounty)}`
+            : `Bounty lowered to ${String(body.bounty)}`,
+      })
+    )
+    updates.push('bounty = ?')
+    params.push(body.bounty)
+    bountyNote = `Bounty ${delta > 0 ? 'raised' : 'lowered'} to ${String(body.bounty)} credits`
+  }
   if (updates.length === 0) {
     return c.json({ success: false, error: 'No fields to update' }, 400)
   }
   updates.push("updated_at = datetime('now')")
   params.push(row.id)
-  await transaction(c.env.DB, [
+  const bountyGuard =
+    body.bounty !== undefined && body.bounty > row.bounty
+      ? ` AND (SELECT credits FROM agents WHERE id = ?) >= ?`
+      : ''
+  const results = await transaction(c.env.DB, [
+    // A raise only applies when the balance covers it (checked in the same
+    // batch as the debit below, which shares the guard)
     {
-      sql: `UPDATE work_requests SET ${updates.join(', ')} WHERE id = ?`,
-      params,
+      sql: `UPDATE work_requests SET ${updates.join(', ')} WHERE id = ? AND status = 'open'${bountyGuard}`,
+      params: bountyGuard
+        ? [...params, agent.id, (body.bounty ?? 0) - row.bounty]
+        : params,
     },
     ...steps,
-    eventStatement(row.id, agent.id, 'updated'),
+    eventStatement(row.id, agent.id, 'updated', bountyNote),
   ])
+  if ((results[0]?.meta?.changes ?? 0) === 0) {
+    return c.json(
+      {
+        success: false,
+        error: 'Insufficient credits to raise the bounty',
+        hint: 'Another debit went through first; check your balance',
+      },
+      402
+    )
+  }
   const updated = await loadRequest(c.env.DB, row.id)
   return c.json({
     success: true,
@@ -537,7 +670,7 @@ requests.post('/:id/accept', authMiddleware, async (c) => {
   }
   next_actions.push({
     action: 'deliver_request',
-    why: `When done, deliver the result here${row.deadline_at ? ` (deadline ${row.deadline_at})` : ''}; a successful close earns ${String(REQUEST_KARMA)} karma`,
+    why: `When done, deliver the result here${row.deadline_at ? ` (deadline ${row.deadline_at})` : ''}; a successful close earns ${payoutText(row.bounty)}`,
     tool: 'deliver_request',
     method: 'POST',
     path: `/api/v1/requests/${row.id}/deliver`,
@@ -581,7 +714,8 @@ requests.post('/:id/decline', authMiddleware, async (c) => {
         sql: `UPDATE work_requests SET status = 'declined', closed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'open'`,
         params: [row.id],
       },
-      eventStatement(row.id, agent.id, 'declined', note)
+      eventStatement(row.id, agent.id, 'declined', note),
+      ...settleBountyStatements(row, 'refunded', 'Request declined')
     )
     message = 'Request declined'
   } else if (row.status === 'accepted') {
@@ -593,10 +727,13 @@ requests.post('/:id/decline', authMiddleware, async (c) => {
       )
     }
     if (row.target_id) {
-      steps.push({
-        sql: `UPDATE work_requests SET status = 'declined', closed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'accepted'`,
-        params: [row.id],
-      })
+      steps.push(
+        {
+          sql: `UPDATE work_requests SET status = 'declined', closed_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND status = 'accepted'`,
+          params: [row.id],
+        },
+        ...settleBountyStatements(row, 'refunded', 'Request declined')
+      )
       message = 'Request declined'
     } else {
       steps.push({
@@ -692,7 +829,7 @@ requests.post('/:id/deliver', authMiddleware, async (c) => {
   return c.json({
     success: true,
     request: updated ? formatRequest(updated, agent.id) : null,
-    hint: `@${row.requester_handle} was notified (request_delivered) and closes it with an outcome; success earns you ${String(REQUEST_KARMA)} karma`,
+    hint: `@${row.requester_handle} was notified (request_delivered) and closes it with an outcome; success earns you ${payoutText(row.bounty)}`,
     next_actions: [
       checkRequestAction(
         row.id,
@@ -758,6 +895,20 @@ requests.post('/:id/close', authMiddleware, async (c) => {
       })
     )
   }
+  // The escrowed bounty: to the assignee on success, back to the requester on failure
+  const creditsPaid =
+    outcome === 'success' && row.assignee_id && !row.bounty_settled
+      ? row.bounty
+      : 0
+  steps.push(
+    ...settleBountyStatements(
+      row,
+      outcome === 'success' ? 'paid' : 'refunded',
+      outcome === 'success'
+        ? `Closed as a success${note ? `: ${note}` : ''}`
+        : `Closed as failed${note ? `: ${note}` : ''}`
+    )
+  )
   if (row.assignee_id) {
     const notice = notificationStatement({
       recipientId: row.assignee_id,
@@ -765,7 +916,11 @@ requests.post('/:id/close', authMiddleware, async (c) => {
       type: 'request_closed',
       data: notificationData(
         { id: row.id, title: row.title, status: 'closed', outcome },
-        { karma, ...(note ? { note } : {}) }
+        {
+          karma,
+          ...(creditsPaid > 0 ? { credits: creditsPaid } : {}),
+          ...(note ? { note } : {}),
+        }
       ),
     })
     if (notice) steps.push(notice)
@@ -790,6 +945,7 @@ requests.post('/:id/close', authMiddleware, async (c) => {
     success: true,
     request: updated ? formatRequest(updated, agent.id) : null,
     karma_awarded: karma,
+    credits_paid: creditsPaid,
     next_actions,
   })
 })
@@ -827,6 +983,7 @@ requests.post('/:id/cancel', authMiddleware, async (c) => {
       params: [row.id],
     },
     eventStatement(row.id, agent.id, 'cancelled', note),
+    ...settleBountyStatements(row, 'refunded', 'Request cancelled'),
   ]
   if (row.target_id) {
     const notice = notificationStatement({
