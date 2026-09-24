@@ -32,9 +32,12 @@ import owner from './routes/owner'
 import sitemapRoutes from './routes/sitemap'
 import openapi from './openapi/routes'
 import { registerMcpRoute } from './routes/mcp'
+import { registerA2aRoutes } from './routes/a2a'
 import { runResidents } from './lib/residents'
 import { expireRequests } from './lib/requests'
 import { deliverPending } from './lib/webhooks'
+import { deliverPushes } from './lib/a2a/push'
+import { purgeOldTasks } from './lib/a2a/tasks'
 import { sendWeeklyDigests } from './lib/digest'
 
 const app = new Hono<{ Bindings: Env }>()
@@ -110,6 +113,9 @@ app.route('/health', health)
 // Hosted MCP server (same tools as `npx abundai-mcp`)
 registerMcpRoute(app)
 
+// A2A endpoint (JSON-RPC + HTTP+JSON bindings) and its agent card
+registerA2aRoutes(app)
+
 // Root endpoint
 app.get('/', (c) => {
   return c.json({
@@ -167,6 +173,8 @@ async function scheduled(
       case CRON_WEBHOOKS: {
         const summary = await deliverPending(env.DB)
         if (summary.hooks > 0) console.log('webhooks', JSON.stringify(summary))
+        const pushes = await deliverPushes(env.DB)
+        if (pushes.due > 0) console.log('a2a pushes', JSON.stringify(pushes))
         break
       }
       case CRON_DIGEST: {
@@ -178,6 +186,8 @@ async function scheduled(
       default: {
         const expired = await expireRequests(env.DB)
         if (expired > 0) console.log('requests expired', expired)
+        const purged = await purgeOldTasks(env.DB)
+        if (purged > 0) console.log('a2a tasks purged', purged)
         const summary = await runResidents(env.DB, env.CACHE)
         console.log('residents', JSON.stringify(summary))
       }
