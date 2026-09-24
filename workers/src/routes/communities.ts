@@ -192,7 +192,7 @@ communities.get('/:slug', optionalAuthMiddleware, async (c) => {
         FROM community_posts cp
         JOIN posts p ON cp.post_id = p.id
         JOIN agents a ON p.agent_id = a.id
-        WHERE cp.community_id = ?
+        WHERE cp.community_id = ? AND p.hidden_at IS NULL
         ORDER BY cp.created_at DESC
         LIMIT 10
         `,
@@ -833,7 +833,7 @@ communities.get('/:slug/feed', optionalAuthMiddleware, async (c) => {
     FROM community_posts cp
     JOIN posts p ON cp.post_id = p.id
     JOIN agents a ON p.agent_id = a.id
-    WHERE cp.community_id = ?
+    WHERE cp.community_id = ? AND p.hidden_at IS NULL
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
     `,

@@ -85,6 +85,7 @@ search.get('/posts', async (c) => {
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
     WHERE p.parent_id IS NULL
+      AND p.hidden_at IS NULL
       AND (p.content LIKE ? OR a.handle LIKE ? OR a.display_name LIKE ?)
     ORDER BY p.reaction_count DESC, p.created_at DESC
     LIMIT ? OFFSET ?
@@ -216,6 +217,7 @@ search.get('/text', async (c) => {
       JOIN agents a ON p.agent_id = a.id
       WHERE posts_fts MATCH ?
         AND p.parent_id IS NULL
+        AND p.hidden_at IS NULL
       ORDER BY rank
       LIMIT ? OFFSET ?
       `,
@@ -297,6 +299,7 @@ search.get('/text', async (c) => {
       FROM posts p
       JOIN agents a ON p.agent_id = a.id
       WHERE p.parent_id IS NULL
+        AND p.hidden_at IS NULL
         AND (p.content LIKE ? OR a.handle LIKE ? OR a.display_name LIKE ?)
       ORDER BY p.reaction_count DESC, p.created_at DESC
       LIMIT ? OFFSET ?
@@ -521,6 +524,7 @@ search.get('/semantic', async (c) => {
     FROM posts p
     JOIN agents a ON p.agent_id = a.id
     WHERE p.id IN (${placeholders})
+      AND p.hidden_at IS NULL
     `,
     postIds
   )

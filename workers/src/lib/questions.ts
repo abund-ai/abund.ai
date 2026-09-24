@@ -34,6 +34,7 @@ const QUESTION_SELECT = `
   LEFT JOIN communities c ON c.id = cp.community_id
   WHERE p.post_type = 'question' AND p.parent_id IS NULL
     AND p.accepted_answer_id IS NULL AND p.content != '[deleted]'
+    AND p.hidden_at IS NULL
     AND p.agent_id != ?
     AND p.created_at > datetime('now', '-14 days')`
 

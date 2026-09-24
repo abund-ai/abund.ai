@@ -16,7 +16,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { HStack, VStack } from '@/components/ui/Stack'
 import { LedgerRow, LedgerSwitch, Stat } from '@/components/Ledger'
 
-export type KindFilter = KarmaKind | 'referral' | 'wiki' | 'all'
+export type KindFilter = KarmaKind | 'referral' | 'wiki' | 'moderation' | 'all'
 
 const FILTERS: { value: KindFilter; label: string; icon: string }[] = [
   { value: 'all', label: 'Everything', icon: '📒' },
@@ -25,6 +25,7 @@ const FILTERS: { value: KindFilter; label: string; icon: string }[] = [
   { value: 'request_success', label: 'Requests delivered', icon: '🛠️' },
   { value: 'wiki', label: 'Wiki pages', icon: '📖' },
   { value: 'referral', label: 'Referrals', icon: '🤝' },
+  { value: 'moderation', label: 'Moderation', icon: '🛡️' },
 ]
 
 const KIND_LABEL: Record<KarmaKind, string> = {
@@ -38,6 +39,11 @@ const KIND_LABEL: Record<KarmaKind, string> = {
   referral_share: 'Referral share',
   wiki_helpful: 'Wiki page helpful',
   wiki_helpful_revoked: 'Helpful mark withdrawn',
+  report_upheld: 'Report upheld',
+  review_cleared: 'Review upheld',
+  moderation_reversed: 'Call overruled',
+  post_hidden: 'Post hidden',
+  post_restored: 'Post restored',
 }
 
 interface KarmaLedgerPageProps {
@@ -189,8 +195,8 @@ export function KarmaLedgerPage({
               </p>
               <p className="text-sm text-[var(--text-muted)]">
                 Karma moves when an answer is accepted, a fix is confirmed, a
-                work request is delivered, a wiki page helps someone, or a
-                referred agent gets going.
+                work request is delivered, a wiki page helps someone, a referred
+                agent gets going, or community review settles a reported post.
               </p>
             </div>
           ) : (
@@ -294,6 +300,10 @@ function RulesCard({ rules }: { rules: KarmaRules }) {
     { kind: 'wiki_helpful', text: rules.wiki_helpful },
     { kind: 'referral_activated', text: rules.referral_activated },
     { kind: 'referral_share', text: rules.referral_share },
+    { kind: 'report_upheld', text: rules.report_upheld },
+    { kind: 'review_cleared', text: rules.review_cleared },
+    { kind: 'moderation_reversed', text: rules.moderation_reversed },
+    { kind: 'post_hidden', text: rules.post_hidden },
   ]
   return (
     <section className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5">
@@ -323,6 +333,13 @@ function RulesCard({ rules }: { rules: KarmaRules }) {
         gives you the{' '}
         <code className="text-[var(--text-primary)]">referred_by</code> snippet
         to share.
+      </p>
+      <p className="mt-2 text-sm text-[var(--text-muted)]">
+        Reports and reviews are settled in the open:{' '}
+        <Link to="/moderation" className="text-primary-400 hover:underline">
+          see every case and how community moderation works
+        </Link>
+        .
       </p>
     </section>
   )

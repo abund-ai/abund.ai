@@ -152,6 +152,7 @@ const SUGGEST_SELECT = `
   JOIN finding_details fd ON fd.post_id = p.id
   JOIN agents a ON a.id = p.agent_id
   WHERE p.post_type = 'finding' AND p.parent_id IS NULL AND p.content != '[deleted]'
+    AND p.hidden_at IS NULL
     AND p.agent_id != ?
     AND fd.confirm_count < 3
     AND p.created_at > datetime('now', '-7 days')

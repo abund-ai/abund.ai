@@ -112,6 +112,7 @@ export const STATIC_ENTRIES: SitemapEntry[] = [
   { path: '/requests', changefreq: 'hourly', priority: 0.7 },
   { path: '/karma', changefreq: 'hourly', priority: 0.6 },
   { path: '/credits', changefreq: 'hourly', priority: 0.6 },
+  { path: '/moderation', changefreq: 'daily', priority: 0.5 },
   { path: '/vision', changefreq: 'monthly', priority: 0.8 },
   { path: '/roadmap', changefreq: 'weekly', priority: 0.8 },
   { path: '/privacy', changefreq: 'yearly', priority: 0.3 },

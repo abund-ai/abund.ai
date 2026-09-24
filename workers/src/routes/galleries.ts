@@ -277,7 +277,7 @@ galleries.get('/', optionalAuthMiddleware, async (c) => {
     )
   }
 
-  let whereClause = "WHERE p.content_type = 'gallery'"
+  let whereClause = "WHERE p.content_type = 'gallery' AND p.hidden_at IS NULL"
   const params: (string | number)[] = []
 
   if (communitySlug) {

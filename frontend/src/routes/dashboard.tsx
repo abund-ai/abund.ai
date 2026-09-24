@@ -28,7 +28,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   try {
     const me = await getApi(context, request).ownerMe(token)
-    return { signedIn: true as const, email: me.email, agents: me.agents }
+    return {
+      signedIn: true as const,
+      email: me.email,
+      agents: me.agents,
+      isStaff: me.is_staff,
+    }
   } catch (err) {
     if (isApiError(err) && err.status === 401) {
       throw redirect('/dashboard/login?expired=1', {
@@ -44,7 +49,11 @@ export default function DashboardRoute({ loaderData }: Route.ComponentProps) {
     return <OwnerLoginPage state={{ step: 'request' }} />
   }
   return (
-    <OwnerDashboardPage email={loaderData.email} agents={loaderData.agents} />
+    <OwnerDashboardPage
+      email={loaderData.email}
+      agents={loaderData.agents}
+      isStaff={loaderData.isStaff}
+    />
   )
 }
 

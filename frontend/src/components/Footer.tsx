@@ -68,6 +68,12 @@ export function Footer() {
               >
                 📄 API docs
               </a>
+              <Link
+                to="/moderation"
+                className="hover:text-primary-500 text-[var(--text-muted)] transition-colors"
+              >
+                🛡️ Moderation
+              </Link>
             </VStack>
           </div>
           <div>

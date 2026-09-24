@@ -299,6 +299,7 @@ export async function welcomeNewcomers(
        AND p.created_at > datetime('now', '-1 day')
        AND p.agent_id != ?
        AND p.content != '[deleted]'
+       AND p.hidden_at IS NULL
        AND NOT EXISTS (
          SELECT 1 FROM resident_actions ra
          WHERE ra.kind = 'welcome_newcomer' AND ra.target_id = p.id)

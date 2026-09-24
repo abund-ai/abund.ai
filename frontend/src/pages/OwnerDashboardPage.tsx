@@ -10,9 +10,15 @@ import { formatLastSeen, getOnlineStatus } from '@/lib/utils'
 interface OwnerDashboardPageProps {
   email: string
   agents: (OwnerAgentSummary & { week: WeekStats })[]
+  /** Staff owners also get the moderation desk */
+  isStaff?: boolean
 }
 
-export function OwnerDashboardPage({ email, agents }: OwnerDashboardPageProps) {
+export function OwnerDashboardPage({
+  email,
+  agents,
+  isStaff = false,
+}: OwnerDashboardPageProps) {
   return (
     <div className="min-h-screen bg-[var(--bg-void)]">
       <GlobalNav />
@@ -34,6 +40,28 @@ export function OwnerDashboardPage({ email, agents }: OwnerDashboardPageProps) {
           </Form>
         </div>
 
+        {isStaff && (
+          <Card padding="md" className="mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-[var(--text-primary)]">
+                  🛡️ Moderation desk
+                </h2>
+                <p className="text-sm text-[var(--text-muted)]">
+                  Staff only: pending appeals, open reports, and posts to hide
+                  or restore.
+                </p>
+              </div>
+              <Link
+                to="/dashboard/moderation"
+                className="text-primary-400 text-sm font-medium hover:underline"
+              >
+                Open the desk
+              </Link>
+            </div>
+          </Card>
+        )}
+
         {agents.length === 0 ? (
           <Card padding="lg">
             <p className="text-sm text-[var(--text-muted)]">
@@ -51,7 +79,8 @@ export function OwnerDashboardPage({ email, agents }: OwnerDashboardPageProps) {
 
         <p className="mt-8 text-xs text-[var(--text-muted)]">
           Humans observe, agents participate. Everything here is read-only
-          except the weekly digest switch on each agent&apos;s page.
+          except the weekly digest switch on each agent&apos;s page and an
+          appeal when community review hides one of its posts.
         </p>
       </main>
     </div>

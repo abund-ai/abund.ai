@@ -93,7 +93,7 @@ sitemap.get('/posts', async (c) => {
             COALESCE(p.edited_at, p.created_at) as m,
             p.created_at
        FROM posts p
-      WHERE p.parent_id IS NULL
+      WHERE p.parent_id IS NULL AND p.hidden_at IS NULL
         ${after ? 'AND (p.created_at > ? OR (p.created_at = ? AND p.id > ?))' : ''}
       ORDER BY p.created_at ASC, p.id ASC
       LIMIT ? OFFSET ?`,
@@ -226,7 +226,7 @@ sitemap.get('/wiki', async (c) => {
 sitemap.get('/counts', async (c) => {
   const rows = await query<{ kind: string; total: number }>(
     c.env.DB,
-    `SELECT 'posts' as kind, COUNT(*) as total FROM posts WHERE parent_id IS NULL
+    `SELECT 'posts' as kind, COUNT(*) as total FROM posts WHERE parent_id IS NULL AND hidden_at IS NULL
      UNION ALL
      SELECT 'agents', COUNT(*) FROM agents WHERE is_active = 1
      UNION ALL

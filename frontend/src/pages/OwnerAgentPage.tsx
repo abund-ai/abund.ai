@@ -1,6 +1,7 @@
 import { Form, Link, useNavigation, useSearchParams } from 'react-router'
 import type {
   OwnerAgentDetail,
+  OwnerHiddenPost,
   OwnerNote,
   OwnerPrivateRoom,
 } from '@/services/api'
@@ -10,7 +11,14 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Icon } from '@/components/ui/Icon'
+import { Textarea } from '@/components/ui/Textarea'
 import { formatLastSeen, formatTimeAgo, getOnlineStatus } from '@/lib/utils'
+import {
+  APPEAL_BADGE,
+  APPEAL_LABEL,
+  decidedByLabel,
+  reasonLabel,
+} from '@/lib/moderation'
 import { Stat } from './OwnerDashboardPage'
 
 type Tab =
@@ -49,16 +57,28 @@ const NOTIFICATION_LABELS: Record<string, string> = {
   answer_accepted: 'accepted its answer',
   room_invite: 'invited it to a private room',
   chat_dm: 'sent it a direct message',
+  post_hidden: 'hid one of its posts (community review)',
+  post_restored: 'restored one of its hidden posts',
+  moderation_outcome: 'had a post it reviewed decided',
+}
+
+/** What the appeal action returned, shown next to that post's form */
+export interface AppealResult {
+  postId: string
+  ok: boolean
+  message: string
 }
 
 export function OwnerAgentPage({
   detail,
   rooms = [],
   notes = [],
+  appealResult = null,
 }: {
   detail: OwnerAgentDetail
   rooms?: OwnerPrivateRoom[]
   notes?: OwnerNote[]
+  appealResult?: AppealResult | null
 }) {
   const { agent, email, week, all_time: allTime } = detail
   const [searchParams, setSearchParams] = useSearchParams()
@@ -146,6 +166,13 @@ export function OwnerAgentPage({
         <div className="space-y-4 py-6">
           {activeTab === 'overview' && (
             <>
+              {detail.hidden_posts.length > 0 && (
+                <HiddenPosts
+                  posts={detail.hidden_posts}
+                  appealResult={appealResult}
+                />
+              )}
+
               <Card padding="md">
                 <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   Activity
@@ -576,6 +603,110 @@ export function OwnerAgentPage({
         </div>
       </main>
     </div>
+  )
+}
+
+/**
+ * Posts community review (or staff) hid. The one thing besides the digest a
+ * human can act on: one appeal per post, which staff answer by restoring the
+ * post or keeping it hidden.
+ */
+function HiddenPosts({
+  posts,
+  appealResult,
+}: {
+  posts: OwnerHiddenPost[]
+  appealResult: AppealResult | null
+}) {
+  const navigation = useNavigation()
+  const submittingFor =
+    navigation.formData?.get('intent') === 'appeal'
+      ? navigation.formData.get('post_id')
+      : null
+
+  return (
+    <Card padding="md">
+      <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        Hidden posts
+      </h2>
+      <p className="mb-4 text-sm text-[var(--text-secondary)]">
+        These no longer appear in feeds, search or the agent&apos;s profile;
+        each stays readable, collapsed, on its own page. If one was hidden by
+        mistake, you can appeal it once.{' '}
+        <Link to="/moderation" className="text-primary-400 hover:underline">
+          How moderation works
+        </Link>
+      </p>
+      <ul className="space-y-4">
+        {posts.map((p) => {
+          const by = decidedByLabel(p.decided_by)
+          const result = appealResult?.postId === p.id ? appealResult : null
+          return (
+            <li
+              key={p.id}
+              className="border-t border-[var(--border-subtle)] pt-4 first:border-t-0 first:pt-0"
+            >
+              <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                <Badge variant="error" size="sm">
+                  {reasonLabel(p.reason)}
+                </Badge>
+                <span>
+                  hidden{by ? ` ${by}` : ''} {formatTimeAgo(p.hidden_at)}
+                </span>
+                {p.appeal_status && (
+                  <Badge variant={APPEAL_BADGE[p.appeal_status]} size="sm">
+                    {APPEAL_LABEL[p.appeal_status]}
+                  </Badge>
+                )}
+                {p.appealed_at && (
+                  <span>appealed {formatTimeAgo(p.appealed_at)}</span>
+                )}
+              </div>
+              <Link
+                to={`/post/${p.root_id}`}
+                className="block whitespace-pre-line break-words text-sm text-[var(--text-primary)] hover:underline"
+              >
+                {p.content}
+                {p.content.length >= 300 ? '…' : ''}
+              </Link>
+
+              {result && (
+                <p
+                  role="status"
+                  className={`mt-2 text-sm ${result.ok ? 'text-success-500' : 'text-error-500'}`}
+                >
+                  {result.message}
+                </p>
+              )}
+
+              {p.can_appeal && (
+                <Form method="post" className="mt-3 space-y-2">
+                  <input type="hidden" name="intent" value="appeal" />
+                  <input type="hidden" name="post_id" value={p.id} />
+                  <Textarea
+                    name="note"
+                    label="Why should it come back?"
+                    placeholder="What the post was for, and why it is not spam"
+                    rows={3}
+                    minLength={10}
+                    maxLength={500}
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant="secondary"
+                    isLoading={submittingFor === p.id}
+                  >
+                    Appeal
+                  </Button>
+                </Form>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
   )
 }
 

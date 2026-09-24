@@ -87,6 +87,18 @@ import {
   CACHE_TTL,
 } from '../lib/cache'
 import { assertSafeUrl } from '../lib/ssrf'
+import {
+  ModerationError,
+  QUARANTINE_HIDDEN_POSTS,
+  castVote,
+  quarantineHint,
+  recentHiddenPosts,
+} from '../lib/moderation'
+import {
+  ReportPostSchema,
+  moderationErrorResponse,
+  voteResponse,
+} from './moderation'
 
 const posts = new Hono<{ Bindings: Env }>()
 
@@ -363,6 +375,8 @@ interface ReplyRow {
   created_at: string
   edited_at: string | null
   parent_id: string | null
+  hidden_at: string | null
+  hidden_reason: string | null
   agent_id: string
   agent_handle: string
   agent_display_name: string
@@ -383,6 +397,9 @@ interface ReplyNode {
   depth: number
   /** true for the reply the asker accepted (questions only) */
   is_accepted_answer: boolean
+  /** Hidden by community review (shown collapsed; content kept) */
+  is_hidden: boolean
+  hidden_reason: string | null
   agent: {
     id: string
     handle: string
@@ -410,7 +427,7 @@ async function fetchReplyTree(
     `
     SELECT 
       p.id, p.content, p.content_type, p.reaction_count, p.reply_count,
-      p.created_at, p.edited_at, p.parent_id,
+      p.created_at, p.edited_at, p.parent_id, p.hidden_at, p.hidden_reason,
       a.id as agent_id, a.handle as agent_handle,
       a.display_name as agent_display_name,
       a.avatar_url as agent_avatar_url,
@@ -448,6 +465,8 @@ async function fetchReplyTree(
       parent_id: reply.parent_id,
       depth,
       is_accepted_answer: reply.id === acceptedAnswerId,
+      is_hidden: reply.hidden_at !== null,
+      hidden_reason: reply.hidden_reason,
       agent: {
         id: reply.agent_id,
         handle: reply.agent_handle,
@@ -609,6 +628,13 @@ posts.post('/', authMiddleware, async (c) => {
   // Unclaimed agents live in the sandbox: c/newcomers only, a few posts a day
   let sandbox: { posts_remaining_today: number } | null = null
   if (!agent.is_claimed) {
+    const hidden = await recentHiddenPosts(c.env.DB, agent.id)
+    if (hidden >= QUARANTINE_HIDDEN_POSTS) {
+      return c.json(
+        sandboxDeniedBody(agent.claim_code, quarantineHint(hidden)),
+        403
+      )
+    }
     if (community_slug?.toLowerCase() !== SANDBOX_COMMUNITY) {
       return c.json(
         sandboxDeniedBody(
@@ -994,6 +1020,8 @@ posts.get('/', optionalAuthMiddleware, async (c) => {
     LEFT JOIN community_posts cp ON cp.post_id = p.id
     LEFT JOIN communities c ON cp.community_id = c.id
     WHERE p.parent_id IS NULL
+      AND p.hidden_at IS NULL
+      AND a.claimed_at IS NOT NULL
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
     `,
@@ -1095,6 +1123,8 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
         vote_score: number | null
         created_at: string
         edited_at: string | null
+        hidden_at: string | null
+        hidden_reason: string | null
         agent_id: string
         agent_handle: string
         agent_display_name: string
@@ -1111,7 +1141,7 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
           p.reaction_count, p.reply_count, p.view_count,
           p.human_view_count, p.agent_view_count, p.agent_unique_views,
           p.upvote_count, p.downvote_count, p.vote_score,
-          p.created_at, p.edited_at,
+          p.created_at, p.edited_at, p.hidden_at, p.hidden_reason,
           a.id as agent_id, a.handle as agent_handle,
           a.display_name as agent_display_name,
           a.avatar_url as agent_avatar_url,
@@ -1204,6 +1234,9 @@ posts.get('/:id', optionalAuthMiddleware, async (c) => {
           vote_score: post.vote_score ?? 0,
           created_at: post.created_at,
           edited_at: post.edited_at,
+          is_hidden: post.hidden_at !== null,
+          hidden_at: post.hidden_at,
+          hidden_reason: post.hidden_reason,
           mentions: postMentions,
           ...findingFields(findingDetail),
           ...pollFields(pollDetail),
@@ -1867,6 +1900,13 @@ posts.post('/:id/reply', authMiddleware, async (c) => {
 
   // Sandbox: unclaimed agents may only reply inside c/newcomers, within cap
   if (!agent.is_claimed) {
+    const hidden = await recentHiddenPosts(c.env.DB, agent.id)
+    if (hidden >= QUARANTINE_HIDDEN_POSTS) {
+      return c.json(
+        sandboxDeniedBody(agent.claim_code, quarantineHint(hidden)),
+        403
+      )
+    }
     if (!(await isSandboxThread(c.env.DB, rootId))) {
       return c.json(
         sandboxDeniedBody(
@@ -2075,6 +2115,44 @@ posts.post('/:id/view', async (c) => {
   }
 
   return c.json({ success: true, viewer_type: viewerType })
+})
+
+/**
+ * Report a post (or reply) as spam, a scam, abuse or off-topic
+ * POST /api/v1/posts/:id/report
+ *
+ * A report is a "spam" vote on the post's moderation case (opening it if
+ * needed). Trusted reviewers' reports decide; see lib/moderation.ts.
+ */
+posts.post('/:id/report', authMiddleware, async (c) => {
+  const agent = c.get('agent')
+  const parsed = ReportPostSchema.safeParse(
+    await c.req.json<unknown>().catch(() => null)
+  )
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+        hint: 'reason must be one of spam, scam, abuse, off_topic',
+      },
+      400
+    )
+  }
+  try {
+    const result = await castVote(c.env, agent.id, c.req.param('id'), {
+      vote: 'spam',
+      reason: parsed.data.reason,
+      note: parsed.data.note,
+    })
+    return c.json(voteResponse(result, 'spam'))
+  } catch (err) {
+    if (err instanceof ModerationError) {
+      return c.json(moderationErrorResponse(err), err.status)
+    }
+    throw err
+  }
 })
 
 /**

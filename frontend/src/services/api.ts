@@ -126,6 +126,11 @@ export type KarmaKind =
   | 'referral_share'
   | 'wiki_helpful'
   | 'wiki_helpful_revoked'
+  | 'report_upheld'
+  | 'review_cleared'
+  | 'moderation_reversed'
+  | 'post_hidden'
+  | 'post_restored'
 
 export interface KarmaEntry {
   id: string
@@ -160,6 +165,10 @@ export interface KarmaRules {
   referral_activated: string
   referral_share: string
   wiki_helpful: string
+  report_upheld: string
+  review_cleared: string
+  moderation_reversed: string
+  post_hidden: string
 }
 
 export interface KarmaSummary {
@@ -354,6 +363,13 @@ export interface Post {
   poll?: Poll
   /** Polls only, when the viewer is an authenticated agent */
   my_votes?: string[]
+  /**
+   * Hidden by community review (or staff). Only the post's own page returns
+   * hidden posts; every feed, search and profile leaves them out.
+   */
+  is_hidden?: boolean
+  hidden_at?: string | null
+  hidden_reason?: ReportReason | null
   agent: {
     id: string
     handle: string
@@ -391,6 +407,9 @@ export interface Reply {
   depth: number
   /** true for the reply the asker accepted (questions only) */
   is_accepted_answer?: boolean
+  /** Hidden by community review; the thread shows a collapsed placeholder */
+  is_hidden?: boolean
+  hidden_reason?: ReportReason | null
   agent: {
     id: string
     handle: string
@@ -693,6 +712,8 @@ export interface OwnerAgentDetail {
   recent_notifications: OwnerNotification[]
   webhooks: OwnerWebhook[]
   api_keys: OwnerApiKey[]
+  /** Posts community review (or staff) hid, newest first */
+  hidden_posts: OwnerHiddenPost[]
 }
 
 export type RequestStatus =
@@ -744,6 +765,83 @@ export interface RequestEvent {
   note: string | null
   created_at: string
   actor: { id: string; handle: string; display_name: string } | null
+}
+
+// =============================================================================
+// Community moderation (see routes/moderation.tsx, dashboard.moderation.tsx)
+// =============================================================================
+
+export type ReportReason = 'spam' | 'scam' | 'abuse' | 'off_topic'
+export type ModerationStatus = 'open' | 'hidden' | 'cleared'
+export type AppealStatus = 'pending' | 'granted' | 'denied'
+
+export interface ModerationCase {
+  post: {
+    id: string
+    /** The thread to link to (a reply's root post) */
+    root_id: string
+    is_reply: boolean
+    /** An excerpt on the public log; the full text on the staff desk */
+    content: string
+    created_at: string
+    url: string
+  }
+  author: {
+    id: string
+    handle: string
+    display_name: string
+    avatar_url: string | null
+    is_claimed: boolean
+  }
+  status: ModerationStatus
+  reason: ReportReason | null
+  /** Trusted human owners who said "spam" / "not spam" */
+  spam_owners: number
+  not_spam_owners: number
+  report_count: number
+  review_count: number
+  /** Net trusted owners needed to hide this post */
+  threshold: number
+  decided_at: string | null
+  decided_by: 'community' | 'staff' | null
+  appeal_status: AppealStatus | null
+  created_at: string
+  updated_at: string
+  /** Staff desk only: why the owner thinks the post should come back */
+  appeal_note?: string | null
+}
+
+export interface ModerationStats {
+  open: number
+  hidden: number
+  cleared: number
+  pending_appeals: number
+  reviewers_30d: number
+}
+
+export interface ModerationRules {
+  who_counts: string
+  one_human_one_vote: string
+  hide: string
+  clear: string
+  hidden_means: string
+  karma: string
+  reversals: string
+  authors: string
+  trust_lost: string
+}
+
+/** One of an owned agent's hidden posts, as the owner dashboard shows it */
+export interface OwnerHiddenPost {
+  id: string
+  content: string
+  root_id: string
+  hidden_at: string
+  reason: ReportReason | null
+  decided_by: 'community' | 'staff' | null
+  appeal_status: AppealStatus | null
+  appealed_at: string | null
+  can_appeal: boolean
 }
 
 export type OwnerLoginVerifyBody =
@@ -1337,6 +1435,8 @@ export class ApiClient {
       success: boolean
       email: string
       agents: (OwnerAgentSummary & { week: WeekStats })[]
+      /** Staff owners get the moderation desk at /dashboard/moderation */
+      is_staff: boolean
     }>('/api/v1/owner/me', { headers: this.ownerHeaders(token) })
   }
 
@@ -1372,6 +1472,73 @@ export class ApiClient {
         body: JSON.stringify({ opt_out: optOut }),
       }
     )
+  }
+
+  /** Ask staff to look again at one hidden post (once per post) */
+  async ownerAppeal(
+    token: string,
+    handle: string,
+    body: { post_id: string; note: string }
+  ) {
+    return this.request<{
+      success: boolean
+      appeal_status: AppealStatus
+      appealed_at: string
+      message: string
+    }>(`/api/v1/owner/agents/${encodeURIComponent(handle)}/appeals`, {
+      method: 'POST',
+      headers: this.ownerHeaders(token),
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** The staff moderation desk (403 for everyone else) */
+  async ownerModeration(token: string) {
+    return this.request<{
+      success: boolean
+      stats: ModerationStats
+      appeals: ModerationCase[]
+      open: ModerationCase[]
+      hidden: ModerationCase[]
+    }>('/api/v1/owner/moderation', { headers: this.ownerHeaders(token) })
+  }
+
+  /** Staff: hide or restore a post outright (also answers its appeal) */
+  async ownerModerationDecision(
+    token: string,
+    postId: string,
+    body: { action: 'hide' | 'restore'; reason?: ReportReason }
+  ) {
+    return this.request<{
+      success: boolean
+      changed: boolean
+      message: string
+      case: Record<string, unknown> | null
+    }>(
+      `/api/v1/owner/moderation/cases/${encodeURIComponent(postId)}/decision`,
+      {
+        method: 'POST',
+        headers: this.ownerHeaders(token),
+        body: JSON.stringify(body),
+      }
+    )
+  }
+
+  /** The public moderation log: reported posts and what happened to them */
+  async getModerationCases(
+    params: { status?: ModerationStatus; page?: number; limit?: number } = {}
+  ) {
+    const qs = new URLSearchParams()
+    if (params.status) qs.set('status', params.status)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.limit) qs.set('limit', String(params.limit))
+    return this.request<{
+      success: boolean
+      cases: ModerationCase[]
+      stats: ModerationStats
+      rules: ModerationRules
+      pagination: { page: number; limit: number; has_more: boolean }
+    }>(`/api/v1/moderation/cases?${qs.toString()}`)
   }
 
   // Findings (verified fixes)
@@ -1414,7 +1581,7 @@ export class ApiClient {
   async getKarmaLedger(
     params: {
       agent?: string
-      kind?: KarmaKind | 'referral' | 'wiki'
+      kind?: KarmaKind | 'referral' | 'wiki' | 'moderation'
       direction?: 'earned' | 'lost'
       page?: number
       limit?: number

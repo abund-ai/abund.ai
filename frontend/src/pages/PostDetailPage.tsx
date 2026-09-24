@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router'
-import { api, type Post, type Reply } from '../services/api'
-import { parseUTCDate, cn } from '@/lib/utils'
+import { api, type Post, type Reply, type ReportReason } from '../services/api'
+import { parseUTCDate, cn, formatTimeAgo } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
 import { FindingBlock, PollBlock } from '@/components/PostCard'
 import { GlobalNav } from '@/components/GlobalNav'
@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/Badge'
 import { AudioPlayer } from '@/components/ui/AudioPlayer'
 import { LinkBlock, Transcript, VideoPlayer } from '@/components/RichMedia'
 import { formatDuration } from '@/lib/media'
+import { reasonLabel } from '@/lib/moderation'
 
 interface PostDetailPageProps {
   postId: string
@@ -88,6 +89,9 @@ function replyToComment(reply: Reply): Comment {
     upvotes: reply.reaction_count,
     downvotes: 0,
     isAccepted: reply.is_accepted_answer === true,
+    ...(reply.is_hidden
+      ? { hidden: { reason: reasonLabel(reply.hidden_reason) } }
+      : {}),
     replies: reply.replies.map(replyToComment),
   }
 }
@@ -101,6 +105,9 @@ export function PostDetailPage({
   const [selectedImage, setSelectedImage] = useState(0)
   const [showPrompts, setShowPrompts] = useState(false)
   const [showAllReactions, setShowAllReactions] = useState(false)
+  // A hidden post stays readable, but only after the reader asks for it
+  const [showHidden, setShowHidden] = useState(false)
+  const collapsed = post.is_hidden === true && !showHidden
 
   // Track view (fire-and-forget, no error handling needed)
   useEffect(() => {
@@ -279,271 +286,289 @@ export function PostDetailPage({
             </div>
           </div>
 
-          {/* Poll: options with tallies */}
-          {post.post_type === 'poll' && post.poll && (
-            <div className="mb-4">
-              <PollBlock poll={post.poll} myVotes={post.my_votes} />
-            </div>
+          {post.is_hidden && (
+            <HiddenBanner
+              reason={post.hidden_reason ?? null}
+              hiddenAt={post.hidden_at ?? null}
+              shown={showHidden}
+              onToggle={() => {
+                setShowHidden(!showHidden)
+              }}
+            />
           )}
-
-          {/* Finding: the structured fix */}
-          {post.post_type === 'finding' && post.finding && (
-            <div className="mb-4">
-              <FindingBlock finding={post.finding} />
-            </div>
-          )}
-
-          {/* Gallery Images */}
-          {gallery && gallery.images.length > 0 && (
-            <div className="mb-4">
-              {/* Main Image */}
-              <div className="relative mb-3 overflow-hidden rounded-lg bg-black">
-                <img
-                  src={currentImage?.image_url}
-                  alt={currentImage?.caption || 'Gallery image'}
-                  className="w-full object-contain"
-                  style={{ maxHeight: '500px' }}
-                />
-                {/* Caption overlay */}
-                {currentImage?.caption && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-8">
-                    <p className="font-medium text-white">
-                      {currentImage.caption}
-                    </p>
-                  </div>
-                )}
-                {/* Image count badge */}
-                <div className="absolute right-3 top-3">
-                  <Badge
-                    variant="default"
-                    size="sm"
-                    className="bg-black/60 backdrop-blur-sm"
-                  >
-                    🖼️ {selectedImage + 1} / {gallery.images.length}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Thumbnail strip */}
-              {gallery.images.length > 1 && (
-                <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
-                  {gallery.images.map((img, idx) => (
-                    <button
-                      key={img.id}
-                      onClick={() => {
-                        setSelectedImage(idx)
-                      }}
-                      className={cn(
-                        'relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border-2 transition-all',
-                        selectedImage === idx
-                          ? 'border-primary-500 ring-primary-500/30 ring-2'
-                          : 'border-transparent opacity-70 hover:opacity-100'
-                      )}
-                    >
-                      <img
-                        src={img.thumbnail_url || img.image_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    </button>
-                  ))}
+          {!collapsed && (
+            <>
+              {/* Poll: options with tallies */}
+              {post.post_type === 'poll' && post.poll && (
+                <div className="mb-4">
+                  <PollBlock poll={post.poll} myVotes={post.my_votes} />
                 </div>
               )}
 
-              {/* Generation Metadata */}
-              <div className="mb-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  {(currentImage?.metadata.model_name ||
-                    gallery.defaults.model_name) && (
-                    <Badge variant="info" size="sm">
-                      🎨{' '}
-                      {currentImage?.metadata.model_name ||
-                        gallery.defaults.model_name}
-                    </Badge>
-                  )}
-                  {(currentImage?.metadata.base_model ||
-                    gallery.defaults.base_model) && (
-                    <Badge variant="info" size="sm">
-                      {currentImage?.metadata.base_model ||
-                        gallery.defaults.base_model}
-                    </Badge>
-                  )}
-                  {currentImage?.metadata.sampler && (
-                    <Badge variant="default" size="sm">
-                      {currentImage.metadata.sampler}
-                    </Badge>
-                  )}
-                  {currentImage?.metadata.steps && (
-                    <Badge variant="default" size="sm">
-                      {currentImage.metadata.steps} steps
-                    </Badge>
-                  )}
-                  {currentImage?.metadata.cfg_scale && (
-                    <Badge variant="default" size="sm">
-                      CFG {currentImage.metadata.cfg_scale}
-                    </Badge>
-                  )}
-                  {currentImage?.metadata.seed && (
-                    <Badge variant="default" size="sm">
-                      Seed: {currentImage.metadata.seed}
-                    </Badge>
-                  )}
+              {/* Finding: the structured fix */}
+              {post.post_type === 'finding' && post.finding && (
+                <div className="mb-4">
+                  <FindingBlock finding={post.finding} />
                 </div>
+              )}
 
-                {/* Expandable prompts */}
-                {(currentImage?.metadata.positive_prompt ||
-                  currentImage?.metadata.negative_prompt) && (
-                  <div>
-                    <button
-                      onClick={() => {
-                        setShowPrompts(!showPrompts)
-                      }}
-                      className="mb-2 flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                    >
-                      <span>{showPrompts ? '▼' : '▶'}</span>
-                      <span>Show generation prompts</span>
-                    </button>
-                    {showPrompts && (
-                      <div className="space-y-3 text-sm">
-                        {currentImage.metadata.positive_prompt && (
-                          <div>
-                            <div className="text-success-500 mb-1 font-medium">
-                              ✓ Positive Prompt
-                            </div>
-                            <div className="rounded bg-[var(--bg-surface)] p-2 text-[var(--text-secondary)]">
-                              {currentImage.metadata.positive_prompt}
-                            </div>
-                          </div>
-                        )}
-                        {currentImage.metadata.negative_prompt && (
-                          <div>
-                            <div className="text-error-500 mb-1 font-medium">
-                              ✗ Negative Prompt
-                            </div>
-                            <div className="rounded bg-[var(--bg-surface)] p-2 text-[var(--text-secondary)]">
-                              {currentImage.metadata.negative_prompt}
-                            </div>
+              {/* Gallery Images */}
+              {gallery && gallery.images.length > 0 && (
+                <div className="mb-4">
+                  {/* Main Image */}
+                  <div className="relative mb-3 overflow-hidden rounded-lg bg-black">
+                    <img
+                      src={currentImage?.image_url}
+                      alt={currentImage?.caption || 'Gallery image'}
+                      className="w-full object-contain"
+                      style={{ maxHeight: '500px' }}
+                    />
+                    {/* Caption overlay */}
+                    {currentImage?.caption && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-8">
+                        <p className="font-medium text-white">
+                          {currentImage.caption}
+                        </p>
+                      </div>
+                    )}
+                    {/* Image count badge */}
+                    <div className="absolute right-3 top-3">
+                      <Badge
+                        variant="default"
+                        size="sm"
+                        className="bg-black/60 backdrop-blur-sm"
+                      >
+                        🖼️ {selectedImage + 1} / {gallery.images.length}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Thumbnail strip */}
+                  {gallery.images.length > 1 && (
+                    <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
+                      {gallery.images.map((img, idx) => (
+                        <button
+                          key={img.id}
+                          onClick={() => {
+                            setSelectedImage(idx)
+                          }}
+                          className={cn(
+                            'relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border-2 transition-all',
+                            selectedImage === idx
+                              ? 'border-primary-500 ring-primary-500/30 ring-2'
+                              : 'border-transparent opacity-70 hover:opacity-100'
+                          )}
+                        >
+                          <img
+                            src={img.thumbnail_url || img.image_url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Generation Metadata */}
+                  <div className="mb-4 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-4">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      {(currentImage?.metadata.model_name ||
+                        gallery.defaults.model_name) && (
+                        <Badge variant="info" size="sm">
+                          🎨{' '}
+                          {currentImage?.metadata.model_name ||
+                            gallery.defaults.model_name}
+                        </Badge>
+                      )}
+                      {(currentImage?.metadata.base_model ||
+                        gallery.defaults.base_model) && (
+                        <Badge variant="info" size="sm">
+                          {currentImage?.metadata.base_model ||
+                            gallery.defaults.base_model}
+                        </Badge>
+                      )}
+                      {currentImage?.metadata.sampler && (
+                        <Badge variant="default" size="sm">
+                          {currentImage.metadata.sampler}
+                        </Badge>
+                      )}
+                      {currentImage?.metadata.steps && (
+                        <Badge variant="default" size="sm">
+                          {currentImage.metadata.steps} steps
+                        </Badge>
+                      )}
+                      {currentImage?.metadata.cfg_scale && (
+                        <Badge variant="default" size="sm">
+                          CFG {currentImage.metadata.cfg_scale}
+                        </Badge>
+                      )}
+                      {currentImage?.metadata.seed && (
+                        <Badge variant="default" size="sm">
+                          Seed: {currentImage.metadata.seed}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Expandable prompts */}
+                    {(currentImage?.metadata.positive_prompt ||
+                      currentImage?.metadata.negative_prompt) && (
+                      <div>
+                        <button
+                          onClick={() => {
+                            setShowPrompts(!showPrompts)
+                          }}
+                          className="mb-2 flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        >
+                          <span>{showPrompts ? '▼' : '▶'}</span>
+                          <span>Show generation prompts</span>
+                        </button>
+                        {showPrompts && (
+                          <div className="space-y-3 text-sm">
+                            {currentImage.metadata.positive_prompt && (
+                              <div>
+                                <div className="text-success-500 mb-1 font-medium">
+                                  ✓ Positive Prompt
+                                </div>
+                                <div className="rounded bg-[var(--bg-surface)] p-2 text-[var(--text-secondary)]">
+                                  {currentImage.metadata.positive_prompt}
+                                </div>
+                              </div>
+                            )}
+                            {currentImage.metadata.negative_prompt && (
+                              <div>
+                                <div className="text-error-500 mb-1 font-medium">
+                                  ✗ Negative Prompt
+                                </div>
+                                <div className="rounded bg-[var(--bg-surface)] p-2 text-[var(--text-secondary)]">
+                                  {currentImage.metadata.negative_prompt}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Image Post */}
-          {post.content_type === 'image' && post.image_url && (
-            <div className="mb-4 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-black">
-              <img
-                src={post.image_url}
-                alt="Post image"
-                className="max-h-[36rem] w-full object-contain"
-              />
-            </div>
-          )}
-
-          {/* Video Post - player, then the transcript */}
-          {post.content_type === 'video' && post.video_url && (
-            <div className="mb-4 space-y-3">
-              <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                <Icon name="video" size="sm" />
-                <span>Video</span>
-                {post.video_duration && (
-                  <span>• {formatDuration(post.video_duration)}</span>
-                )}
-              </div>
-              <VideoPlayer
-                src={post.video_url}
-                poster={post.video_poster_url}
-              />
-              {post.video_transcription && (
-                <Transcript text={post.video_transcription} />
+                </div>
               )}
-            </div>
-          )}
 
-          {/* Audio Post - Audio player and transcription */}
-          {post.content_type === 'audio' && post.audio_url && (
-            <div className="mb-4">
-              {/* Audio type indicator */}
-              <div className="mb-3 flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                <Icon
-                  name={post.audio_type === 'music' ? 'music' : 'microphone'}
-                  size="sm"
-                />
-                <span className="capitalize">{post.audio_type ?? 'audio'}</span>
-                {post.audio_duration && (
-                  <span>
-                    • {Math.floor(post.audio_duration / 60)}:
-                    {String(post.audio_duration % 60).padStart(2, '0')}
-                  </span>
-                )}
-              </div>
+              {/* Image Post */}
+              {post.content_type === 'image' && post.image_url && (
+                <div className="mb-4 overflow-hidden rounded-lg border border-[var(--border-subtle)] bg-black">
+                  <img
+                    src={post.image_url}
+                    alt="Post image"
+                    className="max-h-[36rem] w-full object-contain"
+                  />
+                </div>
+              )}
 
-              {/* Audio Player */}
-              <AudioPlayer
-                src={post.audio_url}
-                duration={post.audio_duration ?? undefined}
-                className="mb-3"
-              />
-
-              {/* Transcription for speech */}
-              {post.audio_type === 'speech' && post.audio_transcription && (
-                <details className="group rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)]">
-                  <summary className="flex cursor-pointer items-center gap-2 p-3 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-                    <Icon name="comment" size="sm" />
-                    <span>Transcription</span>
-                  </summary>
-                  <div className="px-3 pb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
-                    {post.audio_transcription}
+              {/* Video Post - player, then the transcript */}
+              {post.content_type === 'video' && post.video_url && (
+                <div className="mb-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                    <Icon name="video" size="sm" />
+                    <span>Video</span>
+                    {post.video_duration && (
+                      <span>• {formatDuration(post.video_duration)}</span>
+                    )}
                   </div>
-                </details>
+                  <VideoPlayer
+                    src={post.video_url}
+                    poster={post.video_poster_url}
+                  />
+                  {post.video_transcription && (
+                    <Transcript text={post.video_transcription} />
+                  )}
+                </div>
               )}
-            </div>
+
+              {/* Audio Post - Audio player and transcription */}
+              {post.content_type === 'audio' && post.audio_url && (
+                <div className="mb-4">
+                  {/* Audio type indicator */}
+                  <div className="mb-3 flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                    <Icon
+                      name={
+                        post.audio_type === 'music' ? 'music' : 'microphone'
+                      }
+                      size="sm"
+                    />
+                    <span className="capitalize">
+                      {post.audio_type ?? 'audio'}
+                    </span>
+                    {post.audio_duration && (
+                      <span>
+                        • {Math.floor(post.audio_duration / 60)}:
+                        {String(post.audio_duration % 60).padStart(2, '0')}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Audio Player */}
+                  <AudioPlayer
+                    src={post.audio_url}
+                    duration={post.audio_duration ?? undefined}
+                    className="mb-3"
+                  />
+
+                  {/* Transcription for speech */}
+                  {post.audio_type === 'speech' && post.audio_transcription && (
+                    <details className="group rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)]">
+                      <summary className="flex cursor-pointer items-center gap-2 p-3 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                        <Icon name="comment" size="sm" />
+                        <span>Transcription</span>
+                      </summary>
+                      <div className="px-3 pb-3 text-sm leading-relaxed text-[var(--text-secondary)]">
+                        {post.audio_transcription}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
+
+              {/* Content */}
+              <div className="mb-4">
+                <SafeMarkdown
+                  content={post.content}
+                  className="text-lg leading-relaxed text-[var(--text-primary)]"
+                />
+              </div>
+
+              {/* The post's link: player or Open Graph card */}
+              <LinkBlock
+                embed={post.embed}
+                preview={post.link_preview}
+                className="mb-4"
+              />
+              {post.content_type === 'link' &&
+                post.link_url &&
+                !post.link_preview &&
+                !post.embed && (
+                  <a
+                    href={post.link_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 text-sm transition-all hover:border-[var(--border-default)]"
+                  >
+                    <Icon
+                      name="link"
+                      size="lg"
+                      className="text-[var(--text-muted)]"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">
+                      {post.link_url}
+                    </span>
+                    <Icon
+                      name="external"
+                      size="sm"
+                      className="text-[var(--text-muted)]"
+                    />
+                  </a>
+                )}
+            </>
           )}
-
-          {/* Content */}
-          <div className="mb-4">
-            <SafeMarkdown
-              content={post.content}
-              className="text-lg leading-relaxed text-[var(--text-primary)]"
-            />
-          </div>
-
-          {/* The post's link: player or Open Graph card */}
-          <LinkBlock
-            embed={post.embed}
-            preview={post.link_preview}
-            className="mb-4"
-          />
-          {post.content_type === 'link' &&
-            post.link_url &&
-            !post.link_preview &&
-            !post.embed && (
-              <a
-                href={post.link_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-hover)] p-3 text-sm transition-all hover:border-[var(--border-default)]"
-              >
-                <Icon
-                  name="link"
-                  size="lg"
-                  className="text-[var(--text-muted)]"
-                />
-                <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">
-                  {post.link_url}
-                </span>
-                <Icon
-                  name="external"
-                  size="sm"
-                  className="text-[var(--text-muted)]"
-                />
-              </a>
-            )}
 
           {/* Timestamp */}
           <div className="mb-4 border-b border-[var(--border-subtle)] pb-4 text-sm text-[var(--text-muted)]">
@@ -742,6 +767,46 @@ export function PostDetailPage({
           </div>
         )}
       </main>
+    </div>
+  )
+}
+
+/**
+ * Community review hid this post: it is gone from feeds, search and profiles,
+ * but its own page still answers, collapsed, so the call can be checked.
+ */
+function HiddenBanner({
+  reason,
+  hiddenAt,
+  shown,
+  onToggle,
+}: {
+  reason: ReportReason | null
+  hiddenAt: string | null
+  shown: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className="border-warning-500/30 bg-warning-500/10 mb-4 rounded-lg border p-4 text-sm">
+      <p className="font-semibold text-[var(--text-primary)]">
+        🛡️ Hidden by community review · {reasonLabel(reason)}
+      </p>
+      <p className="mt-1 text-[var(--text-secondary)]">
+        This post was reported and hidden
+        {hiddenAt ? ` ${formatTimeAgo(hiddenAt)}` : ''}, so it no longer appears
+        in feeds, search or profiles. Nothing was deleted.{' '}
+        <Link to="/moderation" className="text-primary-400 hover:underline">
+          How community moderation works
+        </Link>
+      </p>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={shown}
+        className="text-primary-400 mt-3 text-sm font-medium hover:underline"
+      >
+        {shown ? 'Hide it again' : 'Show anyway'}
+      </button>
     </div>
   )
 }

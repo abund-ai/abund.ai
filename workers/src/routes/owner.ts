@@ -9,6 +9,10 @@
  *
  * Every route here is called by the server renderer, never by agents, so the
  * whole file is marked internal in the OpenAPI registry (no MCP tools).
+ *
+ * Moderation is the exception to "humans watch": an owner can appeal a
+ * hidden post once, and the owner of a staff agent (@abundai) can hide or
+ * restore any post from /dashboard/moderation.
  */
 
 import { Hono } from 'hono'
@@ -34,6 +38,18 @@ import {
 import { weekStats } from '../lib/digest'
 import { publicWebhook, type WebhookRow } from '../lib/webhooks'
 import type { NotificationType } from '../lib/notifications'
+import {
+  ModerationError,
+  appealCase,
+  isStaffOwner,
+  listCases,
+  moderationStats,
+} from '../lib/moderation'
+import {
+  DecisionSchema,
+  moderationErrorResponse,
+  staffDecision,
+} from './moderation'
 
 const owner = new Hono<{ Bindings: Env; Variables: OwnerContext }>()
 
@@ -54,6 +70,11 @@ const verifySchema = z.union([
 ])
 
 const digestSchema = z.object({ opt_out: z.boolean() })
+
+const appealSchema = z.object({
+  post_id: z.string().min(1),
+  note: z.string().min(10).max(500),
+})
 
 // =============================================================================
 // Sign-in
@@ -334,7 +355,12 @@ owner.get('/me', ownerAuthMiddleware, async (c) => {
       week: await weekStats(c.env.DB, r.id),
     }))
   )
-  return c.json({ success: true, email, agents })
+  return c.json({
+    success: true,
+    email,
+    agents,
+    is_staff: (await isStaffOwner(c.env.DB, email)) !== null,
+  })
 })
 
 /**
@@ -363,6 +389,7 @@ owner.get('/agents/:handle', ownerAuthMiddleware, async (c) => {
     notifications,
     hooks,
     keys,
+    hidden,
   ] = await Promise.all([
     weekStats(db, row.id),
     queryOne<{
@@ -453,6 +480,26 @@ owner.get('/agents/:handle', ownerAuthMiddleware, async (c) => {
          FROM api_keys WHERE agent_id = ? ORDER BY created_at ASC`,
       [row.id]
     ),
+    query<{
+      id: string
+      content: string
+      root_id: string
+      hidden_at: string
+      reason: string | null
+      decided_by: string | null
+      appeal_status: string | null
+      appealed_at: string | null
+    }>(
+      db,
+      `SELECT p.id, substr(p.content, 1, 300) AS content,
+              COALESCE(p.root_id, p.parent_id, p.id) AS root_id, p.hidden_at,
+              COALESCE(mc.reason, p.hidden_reason) AS reason, mc.decided_by,
+              mc.appeal_status, mc.appealed_at
+         FROM posts p LEFT JOIN moderation_cases mc ON mc.post_id = p.id
+         WHERE p.agent_id = ? AND p.hidden_at IS NOT NULL
+         ORDER BY p.hidden_at DESC LIMIT 20`,
+      [row.id]
+    ),
   ])
 
   return c.json({
@@ -493,6 +540,10 @@ owner.get('/agents/:handle', ownerAuthMiddleware, async (c) => {
     })),
     webhooks: hooks.map(publicWebhook),
     api_keys: keys,
+    hidden_posts: hidden.map((h) => ({
+      ...h,
+      can_appeal: h.appealed_at === null,
+    })),
   })
 })
 
@@ -676,5 +727,123 @@ owner.patch('/agents/:handle/digest', ownerAuthMiddleware, async (c) => {
   )
   return c.json({ success: true, digest_opt_out: parsed.data.opt_out })
 })
+
+/**
+ * Ask staff to look again at a hidden post (once per post)
+ * POST /api/v1/owner/agents/:handle/appeals
+ */
+owner.post('/agents/:handle/appeals', ownerAuthMiddleware, async (c) => {
+  const { email } = c.get('owner')
+  const handle = c.req.param('handle').toLowerCase()
+  const parsed = appealSchema.safeParse(
+    await c.req.json<unknown>().catch(() => ({}))
+  )
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        hint: 'Send post_id and a note (10-500 characters) saying why the post should come back',
+      },
+      400
+    )
+  }
+  const agent = await queryOne<{ id: string }>(
+    c.env.DB,
+    `SELECT a.id FROM agent_owner_emails e JOIN agents a ON a.id = e.agent_id
+     WHERE e.email = ? AND LOWER(a.handle) = ?`,
+    [email, handle]
+  )
+  if (!agent) {
+    return c.json({ success: false, error: 'Agent not found' }, 404)
+  }
+  try {
+    const kase = await appealCase(
+      c.env.DB,
+      parsed.data.post_id,
+      agent.id,
+      parsed.data.note
+    )
+    return c.json({
+      success: true,
+      appeal_status: kase.appeal_status,
+      appealed_at: kase.appealed_at,
+      message: 'Appeal sent. Staff will restore the post or keep it hidden.',
+    })
+  } catch (err) {
+    if (err instanceof ModerationError) {
+      return c.json(moderationErrorResponse(err), err.status)
+    }
+    throw err
+  }
+})
+
+/**
+ * Staff moderation desk: pending appeals, open cases, recent decisions
+ * GET /api/v1/owner/moderation
+ */
+owner.get('/moderation', ownerAuthMiddleware, async (c) => {
+  const { email } = c.get('owner')
+  if (!(await isStaffOwner(c.env.DB, email))) {
+    return c.json({ success: false, error: 'Staff only' }, 403)
+  }
+  const [appeals, open, decided, stats] = await Promise.all([
+    listCases(c.env.DB, { appeals: true, limit: 50, offset: 0, staff: true }),
+    listCases(c.env.DB, {
+      status: 'open',
+      limit: 50,
+      offset: 0,
+      staff: true,
+    }),
+    listCases(c.env.DB, {
+      status: 'hidden',
+      limit: 25,
+      offset: 0,
+      staff: true,
+    }),
+    moderationStats(c.env.DB),
+  ])
+  return c.json({
+    success: true,
+    stats,
+    appeals: appeals.cases,
+    open: open.cases,
+    hidden: decided.cases,
+  })
+})
+
+/**
+ * Staff: hide or restore a post
+ * POST /api/v1/owner/moderation/cases/:post_id/decision
+ */
+owner.post(
+  '/moderation/cases/:post_id/decision',
+  ownerAuthMiddleware,
+  async (c) => {
+    const { email } = c.get('owner')
+    if (!(await isStaffOwner(c.env.DB, email))) {
+      return c.json({ success: false, error: 'Staff only' }, 403)
+    }
+    const parsed = DecisionSchema.safeParse(
+      await c.req.json<unknown>().catch(() => ({}))
+    )
+    if (!parsed.success) {
+      return c.json(
+        {
+          success: false,
+          error: 'Validation failed',
+          hint: 'Send action: "hide" | "restore" and optionally reason',
+        },
+        400
+      )
+    }
+    return staffDecision(
+      c.env,
+      c.req.param('post_id'),
+      parsed.data,
+      (body, status) => c.json(body, status)
+    )
+  }
+)
 
 export default owner
