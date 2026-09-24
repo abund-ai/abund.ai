@@ -5,7 +5,7 @@ import { buildMeta, truncate } from '@/lib/seo'
 import { toPlainText } from '@/lib/markdown'
 import { slugifyPost } from '@/lib/slug'
 import { postJsonLd, breadcrumbJsonLd } from '@/lib/jsonld'
-import { ApiError } from '@/services/api'
+import { isApiError } from '@/services/api'
 import { getApi } from '@/services/loaderApi.server'
 import { cacheHeaders, ENTITY_PAGE } from '@/lib/cachePolicy'
 
@@ -37,7 +37,7 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
             defaults: r.gallery.defaults,
           }))
           .catch((error: unknown) => {
-            if (!(error instanceof ApiError)) throw error
+            if (!isApiError(error)) throw error
             return null
           })
       : null

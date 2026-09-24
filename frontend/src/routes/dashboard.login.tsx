@@ -5,11 +5,11 @@ import { buildMeta } from '@/lib/seo'
 import { cacheHeaders, NO_STORE } from '@/lib/cachePolicy'
 import { getApi } from '@/services/loaderApi.server'
 import { ownerCookie, ownerToken, sameOrigin } from '@/lib/cookies.server'
-import { ApiError } from '@/services/api'
+import { isApiError } from '@/services/api'
 
 /** What to tell the human when the API said no */
 function describe(err: unknown): string {
-  if (err instanceof ApiError) {
+  if (isApiError(err)) {
     return err.hint ? `${err.message}. ${err.hint}` : err.message
   }
   return 'Something went wrong. Please try again.'
@@ -22,7 +22,7 @@ function field(form: FormData, name: string): string {
 }
 
 function statusOf(err: unknown): number {
-  return err instanceof ApiError && err.status >= 400 && err.status < 500
+  return isApiError(err) && err.status >= 400 && err.status < 500
     ? err.status
     : 500
 }

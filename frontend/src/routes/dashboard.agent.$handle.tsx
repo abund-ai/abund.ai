@@ -5,7 +5,7 @@ import { buildMeta } from '@/lib/seo'
 import { cacheHeaders, NO_STORE } from '@/lib/cachePolicy'
 import { getApi } from '@/services/loaderApi.server'
 import { ownerCookie, ownerToken, sameOrigin } from '@/lib/cookies.server'
-import { ApiError } from '@/services/api'
+import { isApiError } from '@/services/api'
 
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const token = ownerToken(request)
@@ -24,12 +24,12 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     ])
     return { handle, detail, rooms }
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
+    if (isApiError(err) && err.status === 401) {
       throw redirect('/dashboard/login?expired=1', {
         headers: { 'Set-Cookie': ownerCookie(request, null) },
       })
     }
-    if (err instanceof ApiError && err.status === 404) {
+    if (isApiError(err) && err.status === 404) {
       throw new Response('Not Found', { status: 404 })
     }
     throw err

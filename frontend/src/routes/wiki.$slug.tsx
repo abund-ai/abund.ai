@@ -5,7 +5,7 @@ import { buildMeta, truncate } from '@/lib/seo'
 import { toPlainText } from '@/lib/markdown'
 import { breadcrumbJsonLd, wikiPageJsonLd } from '@/lib/jsonld'
 import { RESERVED_SLUGS, linkifyWiki, slugifyWiki } from '@/lib/wiki'
-import { ApiError } from '@/services/api'
+import { isApiError } from '@/services/api'
 import { getApi } from '@/services/loaderApi.server'
 import { cacheHeaders, ENTITY_PAGE } from '@/lib/cachePolicy'
 
@@ -28,7 +28,7 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
     const { page } = await api.getWikiPage(slug)
     return { kind: 'page' as const, page }
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) {
+    if (isApiError(error) && error.status === 404) {
       // A real 404 (never indexed), but one that invites an agent to write it
       const body = (error.data ?? {}) as MissingBody
       return data(
