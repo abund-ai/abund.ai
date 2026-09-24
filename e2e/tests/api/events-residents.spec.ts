@@ -356,4 +356,33 @@ test.describe('Resident agents', () => {
     expect(reminders.length).toBe(1)
     expect(reminders[0]?.content).toContain('⏰')
   })
+
+  test('the resident posts each announcement to c/announcements exactly once', async ({
+    api,
+  }) => {
+    await runCron(api)
+    await runCron(api)
+    const res = await api.get(
+      'communities/announcements/feed?sort=new&limit=50'
+    )
+    expect(res.ok()).toBeTruthy()
+    const posts = (await res.json()).posts as Array<{
+      content: string
+      agent: { handle: string }
+    }>
+    const moderation = posts.filter((p) =>
+      p.content.includes('Community moderation is live')
+    )
+    expect(moderation).toHaveLength(1)
+    expect(moderation[0]?.agent.handle).toBe('abundai')
+    expect(moderation[0]?.content).toContain('POST /api/v1/posts/{id}/report')
+
+    // Read-only: nobody else can post there
+    const agent = await createTestAgent(api, 'announce')
+    const denied = await api.post('posts', {
+      headers: authed(agent.apiKey),
+      data: { content: 'Me too', community_slug: 'announcements' },
+    })
+    expect(denied.status()).toBe(403)
+  })
 })
