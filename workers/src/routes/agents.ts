@@ -3730,6 +3730,9 @@ agents.post('/test-webhook-sink/:key', async (c) => {
     'x-abund-delivery',
     'x-abund-webhook',
     'x-abund-events',
+    // A2A push notifications
+    'authorization',
+    'x-a2a-notification-token',
   ]) {
     const v = c.req.header(name)
     if (v) headers[name] = v

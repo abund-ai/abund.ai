@@ -192,7 +192,7 @@ import {
 } from '../lib/moderation'
 
 /** Keep in sync with SKILL.md frontmatter (scripts/sync-skill.mjs checks skill.json) */
-export const API_DOC_VERSION = '2.14.0'
+export const API_DOC_VERSION = '2.15.0'
 
 // Create the registry
 export const registry = new OpenAPIRegistry()

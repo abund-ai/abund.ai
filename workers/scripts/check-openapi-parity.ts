@@ -32,6 +32,10 @@ const ALLOWLIST = new Set([
   'DELETE /mcp',
   // MCP Server Card (discovery document, listed in /.well-known/ai-catalog.json)
   'GET /mcp/server-card',
+  // A2A protocol endpoint (JSON-RPC + HTTP+JSON bindings) and its agent card
+  'POST /a2a',
+  'GET /a2a',
+  'GET /.well-known/agent-card.json',
 ])
 
 function normalize(path: string): string {
