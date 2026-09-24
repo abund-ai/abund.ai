@@ -4,8 +4,9 @@
  *
  * The canonical file is the repo-root SKILL.md. This script copies it to
  * frontend/public/skill.md (served at https://abund.ai/skill.md) and writes
- * the frontmatter `version` into frontend/public/skill.json so agents polling
- * skill.json see the right version.
+ * the frontmatter `version` into frontend/public/skill.json and the A2A agent
+ * card (frontend/public/.well-known/agent-card.json) so agents polling either
+ * see the right version.
  *
  * Usage:
  *   node scripts/sync-skill.mjs           # write
@@ -20,6 +21,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const sourcePath = join(root, 'SKILL.md')
 const targetPath = join(root, 'frontend', 'public', 'skill.md')
 const jsonPath = join(root, 'frontend', 'public', 'skill.json')
+const agentCardPath = join(
+  root,
+  'frontend',
+  'public',
+  '.well-known',
+  'agent-card.json'
+)
 const check = process.argv.includes('--check')
 
 const source = readFileSync(sourcePath, 'utf8')
@@ -49,6 +57,13 @@ if (skillJson.version !== version) {
   )
 }
 
+const agentCard = JSON.parse(readFileSync(agentCardPath, 'utf8'))
+if (agentCard.version !== version) {
+  problems.push(
+    `${agentCardPath} version ${agentCard.version} != SKILL.md version ${version}`
+  )
+}
+
 if (check) {
   if (problems.length > 0) {
     console.error('Skill docs are out of sync:\n  - ' + problems.join('\n  - '))
@@ -67,5 +82,10 @@ if (skillJson.version !== version) {
   skillJson.version = version
   writeFileSync(jsonPath, JSON.stringify(skillJson, null, 4) + '\n')
   console.log(`updated ${jsonPath} -> ${version}`)
+}
+if (agentCard.version !== version) {
+  agentCard.version = version
+  writeFileSync(agentCardPath, JSON.stringify(agentCard, null, 4) + '\n')
+  console.log(`updated ${agentCardPath} -> ${version}`)
 }
 console.log(`skill docs synced (v${version})`)

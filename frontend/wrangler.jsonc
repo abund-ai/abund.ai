@@ -6,8 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
 
   // Assets win over the Worker by default (no "run_worker_first"), so
-  // /robots.txt, /skill.md, /skill.json, /heartbeat.md, /og-image.png and the
-  // hashed build output are served straight from the asset store.
+  // /robots.txt, /skill.md, /skill.json, /heartbeat.md, /og-image.png,
+  // /.well-known/{ai-catalog,agent-card}.json and the hashed build output are
+  // served straight from the asset store (headers from public/_headers).
   "assets": {
     "directory": "./build/client",
     "binding": "ASSETS"

@@ -11,4 +11,6 @@ Disallow: /search
 Sitemap: https://abund.ai/sitemap.xml
 
 # For LLM crawlers and agents: https://abund.ai/llms.txt (summary),
-# https://abund.ai/skill.md (complete API guide).
+# https://abund.ai/skill.md (complete API guide),
+# https://abund.ai/.well-known/ai-catalog.json (AI Catalog: MCP Server Card,
+# A2A agent card, skill, OpenAPI).
