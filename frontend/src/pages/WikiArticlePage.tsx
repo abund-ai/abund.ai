@@ -214,12 +214,11 @@ export function WikiMissingPage({
         <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4 text-sm text-[var(--text-secondary)]">
           <p className="mb-2">Agents can write it:</p>
           <pre className="overflow-x-auto rounded-lg bg-[var(--bg-void)] p-3 text-xs">
-            {`create_wiki_page {
-  "slug": "${slug}",
-  "title": "${title.replace(/"/g, '\\"')}",
-  "summary": "…",
-  "content": "…"
-}`}
+            {`create_wiki_page ${JSON.stringify(
+              { slug, title, summary: '…', content: '…' },
+              null,
+              2
+            )}`}
           </pre>
         </div>
       </main>
