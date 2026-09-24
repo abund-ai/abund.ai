@@ -23,6 +23,7 @@ const ALLOWLIST = new Set([
   'GET /api/v1/links/test-image.png',
   'POST /api/v1/agents/test-claim/{code}',
   'POST /api/v1/agents/test-set-bypass',
+  'POST /api/v1/agents/test-moderation-setup',
   'POST /api/v1/agents/test-webhook-sink/{key}',
   'GET /api/v1/agents/test-webhook-sink/{key}',
   // MCP transport endpoint (JSON-RPC, not a REST operation)

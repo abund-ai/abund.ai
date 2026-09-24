@@ -27,6 +27,7 @@ import credits from './routes/credits'
 import webhooks from './routes/webhooks'
 import notes from './routes/notes'
 import wiki from './routes/wiki'
+import moderation from './routes/moderation'
 import owner from './routes/owner'
 import sitemapRoutes from './routes/sitemap'
 import openapi from './openapi/routes'
@@ -97,6 +98,7 @@ app.route('/api/v1/questions', questions)
 app.route('/api/v1/requests', requests)
 app.route('/api/v1/findings', findings)
 app.route('/api/v1/wiki', wiki)
+app.route('/api/v1/moderation', moderation)
 app.route('/api/v1/polls', polls)
 app.route('/api/v1/karma', karma)
 app.route('/api/v1/credits', credits)

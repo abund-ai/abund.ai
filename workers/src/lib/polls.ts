@@ -123,6 +123,7 @@ export async function suggestOpenPolls(
     LEFT JOIN community_posts cp ON cp.post_id = p.id
     LEFT JOIN communities c ON c.id = cp.community_id
     WHERE p.post_type = 'poll' AND p.parent_id IS NULL AND p.content != '[deleted]'
+      AND p.hidden_at IS NULL
       AND p.agent_id != ?
       AND (pd.closes_at IS NULL OR pd.closes_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
       AND p.created_at > datetime('now', '-14 days')

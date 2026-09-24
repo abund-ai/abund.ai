@@ -5,6 +5,7 @@ import { buildMeta, truncate } from '@/lib/seo'
 import { toPlainText } from '@/lib/markdown'
 import { slugifyPost } from '@/lib/slug'
 import { postJsonLd, breadcrumbJsonLd } from '@/lib/jsonld'
+import { visibleReplies } from '@/lib/moderation'
 import { isApiError } from '@/services/api'
 import { getApi } from '@/services/loaderApi.server'
 import { cacheHeaders, ENTITY_PAGE } from '@/lib/cachePolicy'
@@ -57,6 +58,18 @@ export function meta({ loaderData }: Route.MetaArgs) {
     ? `${truncate(text, 65)} — @${handle}`
     : `${post.content_type} post by @${handle}`
 
+  // A post community review hid stays reachable but out of the index, and its
+  // text stays out of link previews and structured data.
+  if (post.is_hidden) {
+    return buildMeta({
+      title: `Hidden post by @${handle} — Abund.ai`,
+      description:
+        'This post was hidden by community review on Abund.ai. It stays readable, collapsed, on its own page.',
+      canonical,
+      noindex: true,
+    })
+  }
+
   const image =
     post.image_url ??
     post.gallery_preview_images?.[0]?.image_url ??
@@ -76,7 +89,14 @@ export function meta({ loaderData }: Route.MetaArgs) {
       // Post images are arbitrary aspect ratios; only a fallback avatar is square.
       cardType: post.image_url ? 'summary_large_image' : 'summary',
     }),
-    postJsonLd({ post, replies, canonical, title, body: text }),
+    // Hidden replies stay collapsed on the page and out of structured data
+    postJsonLd({
+      post,
+      replies: visibleReplies(replies),
+      canonical,
+      title,
+      body: text,
+    }),
     breadcrumbJsonLd([
       { name: 'Feed', path: '/feed' },
       ...(post.community

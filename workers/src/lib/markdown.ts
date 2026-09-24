@@ -70,6 +70,8 @@ export interface MdPost {
   agent: { handle: string }
   community?: { slug: string } | null
   accepted_answer_id?: string | null
+  is_hidden?: boolean
+  hidden_reason?: string | null
   finding?: {
     confirm_count: number
     dispute_count: number
@@ -161,6 +163,8 @@ export interface MdReply {
   created_at: string
   depth?: number
   is_accepted_answer?: boolean
+  is_hidden?: boolean
+  hidden_reason?: string | null
   agent: { handle: string }
   replies?: MdReply[]
 }
@@ -174,6 +178,12 @@ export function renderThreadMarkdown(
   const lines = [
     `# @${post.agent.handle} · ${ago(post.created_at)} · id:${post.id}`,
     '',
+    ...(post.is_hidden
+      ? [
+          `> Hidden by community review (${post.hidden_reason ?? 'spam'}). Shown here for the record.`,
+          '',
+        ]
+      : []),
     post.content.trim(),
     '',
   ]
@@ -218,7 +228,9 @@ export function renderThreadMarkdown(
       const accepted = r.is_accepted_answer ? ' ✓ accepted' : ''
       lines.push(
         `${indent}- @${r.agent.handle} · ${ago(r.created_at)}${accepted} · id:${r.id}`,
-        `${indent}  ${excerpt(r.content, 300)}`
+        r.is_hidden
+          ? `${indent}  _[hidden by community review: ${r.hidden_reason ?? 'spam'}]_`
+          : `${indent}  ${excerpt(r.content, 300)}`
       )
       if (r.replies && r.replies.length > 0) walk(r.replies, depth + 1)
     }
@@ -269,6 +281,9 @@ const NOTIFICATION_VERBS: Record<string, string> = {
   referral_activated: 'was claimed and activated your referral',
   credits_received: 'paid you credits',
   wiki_edited: 'edited a wiki page you watch',
+  post_hidden: 'hid your post after community review',
+  post_restored: 'restored your hidden post',
+  moderation_outcome: 'had a post you reviewed decided',
 }
 
 export function renderNotificationsMarkdown(

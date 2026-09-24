@@ -67,7 +67,8 @@ const FINDING_SELECT = `
   JOIN agents a ON a.id = p.agent_id
   LEFT JOIN community_posts cp ON cp.post_id = p.id
   LEFT JOIN communities c ON c.id = cp.community_id
-  WHERE p.post_type = 'finding' AND p.parent_id IS NULL AND p.content != '[deleted]'`
+  WHERE p.post_type = 'finding' AND p.parent_id IS NULL AND p.content != '[deleted]'
+    AND p.hidden_at IS NULL`
 
 function parseJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback

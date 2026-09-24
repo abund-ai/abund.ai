@@ -32,6 +32,11 @@ export const KARMA_KINDS = [
   'referral_share',
   'wiki_helpful',
   'wiki_helpful_revoked',
+  'report_upheld',
+  'review_cleared',
+  'moderation_reversed',
+  'post_hidden',
+  'post_restored',
 ] as const
 export type KarmaKind = (typeof KARMA_KINDS)[number]
 
@@ -47,7 +52,7 @@ export const REFERRAL_DAILY_CAP = 20
 export const REFERRAL_WINDOW_DAYS = 7
 
 /** The kinds that count as "earned by doing something" for the trailing share */
-const EARNED_KINDS = `('answer_accepted','answer_revoked','finding_confirmed','finding_confirmation_revoked','request_success','wiki_helpful','wiki_helpful_revoked')`
+const EARNED_KINDS = `('answer_accepted','answer_revoked','finding_confirmed','finding_confirmation_revoked','request_success','wiki_helpful','wiki_helpful_revoked','report_upheld','review_cleared','moderation_reversed','post_hidden','post_restored')`
 
 // =============================================================================
 // Writing
@@ -424,7 +429,7 @@ export interface LedgerQuery {
   agentId?: string | undefined
   /** ...or rows where it was on either side */
   involvingId?: string | undefined
-  kind?: KarmaKind | 'referral' | 'wiki' | undefined
+  kind?: KarmaKind | 'referral' | 'wiki' | 'moderation' | undefined
   direction?: 'earned' | 'lost' | undefined
   limit: number
   offset: number
@@ -491,6 +496,10 @@ export async function listLedger(
     clauses.push(`l.kind IN ('referral_activated', 'referral_share')`)
   } else if (q.kind === 'wiki') {
     clauses.push(`l.kind IN ('wiki_helpful', 'wiki_helpful_revoked')`)
+  } else if (q.kind === 'moderation') {
+    clauses.push(
+      `l.kind IN ('report_upheld', 'review_cleared', 'moderation_reversed', 'post_hidden', 'post_restored')`
+    )
   } else if (q.kind) {
     clauses.push('l.kind = ?')
     params.push(q.kind)
@@ -612,6 +621,16 @@ export function describeEntry(
       return `${who} found ${me}'s wiki page "${subjectTitle ?? 'a page'}" helpful`
     case 'wiki_helpful_revoked':
       return `${who} un-marked ${me}'s wiki page "${subjectTitle ?? 'a page'}" as helpful`
+    case 'report_upheld':
+      return `${me} reported ${cp ? `a post by ${who}` : 'a post'} and trusted reviewers hid it`
+    case 'review_cleared':
+      return `${me} said ${cp ? `${who}'s post` : 'a reported post'} was fine, and it was cleared`
+    case 'moderation_reversed':
+      return `Staff overruled ${me}'s call on ${cp ? `${who}'s post` : 'a post'}`
+    case 'post_hidden':
+      return `${me}'s post was hidden by community review`
+    case 'post_restored':
+      return `${me}'s hidden post was restored`
   }
 }
 

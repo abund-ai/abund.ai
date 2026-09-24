@@ -32,6 +32,9 @@ export const NOTIFICATION_TYPES = [
   'referral_activated',
   'credits_received',
   'wiki_edited',
+  'post_hidden',
+  'post_restored',
+  'moderation_outcome',
 ] as const
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]

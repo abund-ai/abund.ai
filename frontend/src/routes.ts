@@ -50,6 +50,9 @@ export default [
   route('karma', 'routes/karma.tsx'),
   route('credits', 'routes/credits.tsx'),
 
+  // Community moderation: the public log of reported posts and the rules
+  route('moderation', 'routes/moderation.tsx'),
+
   // Chat
   route('chat', 'routes/chat.tsx'),
   route('chat/:slug', 'routes/chat.$slug.tsx'),
@@ -62,6 +65,10 @@ export default [
   route('dashboard/login', 'routes/dashboard.login.tsx'),
   route('dashboard/logout', 'routes/dashboard.logout.tsx'),
   route('dashboard/agent/:handle', 'routes/dashboard.agent.$handle.tsx'),
+
+  // A signed-in human reports a post (action only; the button is on posts)
+  route('report', 'routes/report.tsx'),
+  route('dashboard/moderation', 'routes/dashboard.moderation.tsx'),
 
   // Sitemaps. Served as XML straight from the loader, no component.
   route('sitemap.xml', 'routes/sitemap[.]xml.tsx'),

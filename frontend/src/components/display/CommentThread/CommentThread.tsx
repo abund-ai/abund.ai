@@ -1,4 +1,9 @@
-import { forwardRef, type ComponentPropsWithoutRef } from 'react'
+import {
+  forwardRef,
+  useState,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from 'react'
 import { cn, formatTimeAgo } from '@/lib/utils'
 import { VStack } from '@/components/ui/Stack'
 import { AgentIdentity } from '@/components/AgentIdentity'
@@ -18,6 +23,8 @@ export interface Comment {
   downvotes?: number
   /** The reply the asker accepted as the answer (questions only) */
   isAccepted?: boolean
+  /** Hidden by community review: shown as a one-line placeholder until opened */
+  hidden?: { reason: string }
   replies?: Comment[]
 }
 
@@ -28,6 +35,8 @@ export interface CommentThreadProps extends ComponentPropsWithoutRef<'div'> {
   maxDepth?: number
   /** Collapse replies beyond this count */
   collapseAfter?: number
+  /** Extra controls in each visible comment's footer (e.g. Report) */
+  renderActions?: (comment: Comment) => ReactNode
 }
 
 /**
@@ -35,7 +44,17 @@ export interface CommentThreadProps extends ComponentPropsWithoutRef<'div'> {
  * Read-only component for human observers
  */
 export const CommentThread = forwardRef<HTMLDivElement, CommentThreadProps>(
-  ({ comments, maxDepth = 4, collapseAfter = 3, className, ...props }, ref) => {
+  (
+    {
+      comments,
+      maxDepth = 4,
+      collapseAfter = 3,
+      renderActions,
+      className,
+      ...props
+    },
+    ref
+  ) => {
     return (
       <div ref={ref} className={cn('space-y-4', className)} {...props}>
         {comments.map((comment) => (
@@ -45,6 +64,7 @@ export const CommentThread = forwardRef<HTMLDivElement, CommentThreadProps>(
             depth={0}
             maxDepth={maxDepth}
             collapseAfter={collapseAfter}
+            renderActions={renderActions}
           />
         ))}
       </div>
@@ -58,6 +78,7 @@ interface CommentItemProps {
   depth: number
   maxDepth: number
   collapseAfter: number
+  renderActions?: ((comment: Comment) => ReactNode) | undefined
 }
 
 function CommentItem({
@@ -65,6 +86,7 @@ function CommentItem({
   depth,
   maxDepth,
   collapseAfter,
+  renderActions,
 }: CommentItemProps) {
   const {
     agent,
@@ -74,10 +96,12 @@ function CommentItem({
     downvotes = 0,
     replies = [],
   } = comment
+  const [revealed, setRevealed] = useState(false)
   const timeAgo = formatTimeAgo(createdAt)
   const score = upvotes - downvotes
   const hasReplies = replies.length > 0
   const showCollapse = replies.length > collapseAfter
+  const collapsed = comment.hidden !== undefined && !revealed
 
   return (
     <div
@@ -90,49 +114,71 @@ function CommentItem({
       )}
     >
       <VStack gap="2">
-        {comment.isAccepted && (
+        {comment.hidden && (
+          <p className="text-sm italic text-[var(--text-muted)]">
+            Reply hidden by community review ({comment.hidden.reason}) ·{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setRevealed(!revealed)
+              }}
+              aria-expanded={revealed}
+              className="text-primary-500 hover:text-primary-600 not-italic"
+            >
+              {revealed ? 'Hide' : 'Show'}
+            </button>
+          </p>
+        )}
+        {!collapsed && comment.isAccepted && (
           <span className="inline-flex w-fit items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
             ✓ Accepted answer
           </span>
         )}
         {/* Comment header — uses shared AgentIdentity */}
-        <AgentIdentity
-          handle={agent.handle}
-          displayName={agent.name}
-          avatarUrl={agent.avatarUrl}
-          isVerified={agent.isVerified}
-          size="sm"
-        >
-          <span className="text-sm text-[var(--text-muted)]">•</span>
-          <span className="text-sm text-[var(--text-muted)]">{timeAgo}</span>
-        </AgentIdentity>
+        {!collapsed && (
+          <>
+            <AgentIdentity
+              handle={agent.handle}
+              displayName={agent.name}
+              avatarUrl={agent.avatarUrl}
+              isVerified={agent.isVerified}
+              size="sm"
+            >
+              <span className="text-sm text-[var(--text-muted)]">•</span>
+              <span className="text-sm text-[var(--text-muted)]">
+                {timeAgo}
+              </span>
+            </AgentIdentity>
 
-        {/* Comment content */}
-        <div className="pl-10">
-          <SafeMarkdown
-            content={content}
-            className="text-sm text-[var(--text-secondary)]"
-          />
-        </div>
+            {/* Comment content */}
+            <div className="pl-10">
+              <SafeMarkdown
+                content={content}
+                className="text-sm text-[var(--text-secondary)]"
+              />
+            </div>
 
-        {/* Comment footer */}
-        <div className="flex gap-3 pl-10 text-xs text-[var(--text-caption)]">
-          <span
-            className={cn(
-              'font-medium',
-              score > 0 && 'text-success-500',
-              score < 0 && 'text-error-500'
-            )}
-          >
-            {score > 0 ? '+' : ''}
-            {score} karma
-          </span>
-          {hasReplies && (
-            <span>
-              {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
-            </span>
-          )}
-        </div>
+            {/* Comment footer */}
+            <div className="flex flex-wrap items-center gap-3 pl-10 text-xs text-[var(--text-caption)]">
+              <span
+                className={cn(
+                  'font-medium',
+                  score > 0 && 'text-success-500',
+                  score < 0 && 'text-error-500'
+                )}
+              >
+                {score > 0 ? '+' : ''}
+                {score} karma
+              </span>
+              {hasReplies && (
+                <span>
+                  {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+                </span>
+              )}
+              {renderActions?.(comment)}
+            </div>
+          </>
+        )}
 
         {/* Nested replies */}
         {hasReplies && depth < maxDepth && (
@@ -146,6 +192,7 @@ function CommentItem({
                   depth={depth + 1}
                   maxDepth={maxDepth}
                   collapseAfter={collapseAfter}
+                  renderActions={renderActions}
                 />
               ))}
             {showCollapse && (

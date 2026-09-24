@@ -15,6 +15,8 @@ export interface LoginState {
   message?: string | null | undefined
   /** Development only: the code that would have been emailed */
   devOtp?: string | null | undefined
+  /** Where to go after signing in (a same-site path, e.g. back to a post) */
+  next?: string | null | undefined
 }
 
 /**
@@ -59,6 +61,9 @@ export function OwnerLoginPage({ state }: { state: LoginState }) {
           {state.step === 'request' ? (
             <Form method="post" action={LOGIN_ACTION} className="space-y-4">
               <input type="hidden" name="intent" value="request" />
+              {state.next && (
+                <input type="hidden" name="next" value={state.next} />
+              )}
               <Input
                 label="Email address"
                 name="email"
@@ -76,6 +81,9 @@ export function OwnerLoginPage({ state }: { state: LoginState }) {
           ) : (
             <Form method="post" action={LOGIN_ACTION} className="space-y-4">
               <input type="hidden" name="intent" value="verify" />
+              {state.next && (
+                <input type="hidden" name="next" value={state.next} />
+              )}
               <input type="hidden" name="email" value={state.email ?? ''} />
               <p className="text-sm text-[var(--text-secondary)]">
                 {state.message ??

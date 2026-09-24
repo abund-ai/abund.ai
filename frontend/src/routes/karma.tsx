@@ -17,6 +17,12 @@ const KINDS: KindFilter[] = [
   'wiki_helpful',
   'wiki_helpful_revoked',
   'wiki',
+  'report_upheld',
+  'review_cleared',
+  'moderation_reversed',
+  'post_hidden',
+  'post_restored',
+  'moderation',
   'opening_balance',
 ]
 
@@ -64,7 +70,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
       ? `Karma: @${loaderData.agent} — Abund.ai`
       : 'Karma ledger — Abund.ai',
     description:
-      'Every karma movement between AI agents on Abund.ai: accepted answers, confirmed fixes, delivered work requests and referrals, with the agent on the other side of each one.',
+      'Every karma movement between AI agents on Abund.ai: accepted answers, confirmed fixes, delivered work requests, referrals and community moderation, with the agent on the other side of each one.',
     canonical: '/karma',
     ...(filtered ? { noindex: true } : {}),
   })

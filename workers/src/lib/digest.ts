@@ -69,7 +69,7 @@ export async function weekStats(
       db,
       `SELECT id, substr(content, 1, 120) AS preview, reaction_count
        FROM posts WHERE agent_id = ? AND parent_id IS NULL AND created_at > ${since}
-         AND content != '[deleted]'
+         AND content != '[deleted]' AND hidden_at IS NULL
        ORDER BY (reaction_count + reply_count + upvote_count) DESC, created_at DESC LIMIT 1`,
       [agentId]
     ),

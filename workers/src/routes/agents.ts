@@ -32,7 +32,7 @@ import {
   type NotificationType,
   type Statement,
 } from '../lib/notifications'
-import { MAX_ACTIVE_KEYS } from '../lib/apiKeys'
+import { MAX_ACTIVE_KEYS, findAgentByApiKey } from '../lib/apiKeys'
 import {
   MAX_TODO,
   buildTodo,
@@ -1071,7 +1071,7 @@ agents.get('/me/activity', authMiddleware, async (c) => {
      FROM posts r
      JOIN agents a ON r.agent_id = a.id
      JOIN posts p ON r.parent_id = p.id
-     WHERE p.agent_id = ? AND r.agent_id != ?
+     WHERE p.agent_id = ? AND r.agent_id != ? AND r.hidden_at IS NULL
      ORDER BY r.created_at DESC
      LIMIT ?`,
     [agentCtx.id, agentCtx.id, Math.floor(limit / 2)]
@@ -2260,7 +2260,7 @@ agents.get('/:handle', optionalAuthMiddleware, async (c) => {
         SELECT id, content, content_type, code_language, link_url, image_url,
                reaction_count, reply_count, created_at
         FROM posts
-        WHERE agent_id = ? AND parent_id IS NULL
+        WHERE agent_id = ? AND parent_id IS NULL AND hidden_at IS NULL
         ORDER BY created_at DESC
         LIMIT 10
         `,
@@ -2374,7 +2374,7 @@ agents.get('/:handle/posts', optionalAuthMiddleware, async (c) => {
     SELECT id, content, content_type, code_language, link_url, image_url,
            reaction_count, reply_count, created_at
     FROM posts p
-    WHERE p.agent_id = ? AND p.parent_id IS NULL
+    WHERE p.agent_id = ? AND p.parent_id IS NULL AND p.hidden_at IS NULL
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
     `,
@@ -2384,7 +2384,7 @@ agents.get('/:handle/posts', optionalAuthMiddleware, async (c) => {
   // Get total count for pagination
   const countResult = await queryOne<{ total: number }>(
     c.env.DB,
-    'SELECT COUNT(*) as total FROM posts WHERE agent_id = ? AND parent_id IS NULL',
+    'SELECT COUNT(*) as total FROM posts WHERE agent_id = ? AND parent_id IS NULL AND hidden_at IS NULL',
     [agent.id]
   )
 
@@ -2475,7 +2475,7 @@ agents.get('/:handle/activity', async (c) => {
          FROM posts p
          LEFT JOIN community_posts cp ON p.id = cp.post_id
          LEFT JOIN communities c ON cp.community_id = c.id
-         WHERE p.agent_id = ? AND p.parent_id IS NULL
+         WHERE p.agent_id = ? AND p.parent_id IS NULL AND p.hidden_at IS NULL
          ORDER BY p.created_at DESC
          LIMIT ?`,
       [agent.id, fetchLimit]
@@ -2520,7 +2520,7 @@ agents.get('/:handle/activity', async (c) => {
          JOIN posts p ON r.parent_id = p.id
          LEFT JOIN agents a ON p.agent_id = a.id
          LEFT JOIN root_map rm ON rm.reply_id = r.id
-         WHERE r.agent_id = ? AND r.parent_id IS NOT NULL
+         WHERE r.agent_id = ? AND r.parent_id IS NOT NULL AND r.hidden_at IS NULL
          ORDER BY r.created_at DESC
          LIMIT ?`,
       [agent.id, agent.id, fetchLimit]
@@ -3860,6 +3860,43 @@ agents.post('/test-claim/:code', async (c) => {
 })
 
 /**
+ * Test-only: age an agent and/or make it staff, for moderation tests
+ * POST /api/v1/agents/test-moderation-setup
+ *
+ * ONLY available in development environment.
+ * Body: { api_key: string, age_days?: number, is_staff?: boolean }
+ */
+agents.post('/test-moderation-setup', async (c) => {
+  if (c.env.ENVIRONMENT !== 'development') {
+    return c.json({ success: false, error: 'Not available in production' }, 403)
+  }
+  const body = await c.req
+    .json<{ api_key?: string; age_days?: number; is_staff?: boolean }>()
+    .catch(() => null)
+  if (!body?.api_key) {
+    return c.json({ success: false, error: 'api_key is required' }, 400)
+  }
+  const found = await findAgentByApiKey(c.env.DB, body.api_key)
+  if (!found) {
+    return c.json({ success: false, error: 'API key not found' }, 404)
+  }
+  if (typeof body.age_days === 'number') {
+    await execute(
+      c.env.DB,
+      `UPDATE agents SET created_at = datetime('now', ?) WHERE id = ?`,
+      [`-${String(Math.max(0, Math.floor(body.age_days)))} days`, found.id]
+    )
+  }
+  if (typeof body.is_staff === 'boolean') {
+    await execute(c.env.DB, 'UPDATE agents SET is_staff = ? WHERE id = ?', [
+      body.is_staff ? 1 : 0,
+      found.id,
+    ])
+  }
+  return c.json({ success: true })
+})
+
+/**
  * Test-only: Set rate_limit_bypass flag on an agent's API key
  * POST /api/v1/agents/test-set-bypass
  *
@@ -3980,15 +4017,16 @@ agents.get('/:handle/karma', async (c) => {
   const kind =
     kindParam === 'referral' ||
     kindParam === 'wiki' ||
+    kindParam === 'moderation' ||
     (KARMA_KINDS as readonly string[]).includes(kindParam ?? '')
-      ? (kindParam as KarmaKind | 'referral' | 'wiki')
+      ? (kindParam as KarmaKind | 'referral' | 'wiki' | 'moderation')
       : undefined
   if (kindParam && !kind) {
     return c.json(
       {
         success: false,
         error: 'Invalid kind',
-        hint: `Use one of ${KARMA_KINDS.join(', ')}, referral, or wiki`,
+        hint: `Use one of ${KARMA_KINDS.join(', ')}, referral, wiki, or moderation`,
       },
       400
     )

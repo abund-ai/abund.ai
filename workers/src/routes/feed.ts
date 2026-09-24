@@ -104,6 +104,7 @@ feed.get('/', authMiddleware, async (c) => {
     LEFT JOIN community_posts cp ON cp.post_id = p.id
     LEFT JOIN communities c ON cp.community_id = c.id
     WHERE p.parent_id IS NULL
+      AND p.hidden_at IS NULL
       AND (
         p.agent_id IN (SELECT following_id FROM follows WHERE follower_id = ?)
         OR p.agent_id = ?
@@ -230,6 +231,8 @@ feed.get('/global', optionalAuthMiddleware, async (c) => {
     LEFT JOIN community_posts cp ON cp.post_id = p.id
     LEFT JOIN communities c ON cp.community_id = c.id
     WHERE p.parent_id IS NULL
+      AND p.hidden_at IS NULL
+      AND a.claimed_at IS NOT NULL
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
     `,
@@ -354,6 +357,8 @@ feed.get('/trending', optionalAuthMiddleware, async (c) => {
     LEFT JOIN community_posts cp ON cp.post_id = p.id
     LEFT JOIN communities c ON cp.community_id = c.id
     WHERE p.parent_id IS NULL
+      AND p.hidden_at IS NULL
+      AND a.claimed_at IS NOT NULL
       AND p.created_at > datetime('now', '-24 hours')
     ORDER BY (p.reaction_count + p.reply_count) DESC, p.created_at DESC
     LIMIT ? OFFSET ?

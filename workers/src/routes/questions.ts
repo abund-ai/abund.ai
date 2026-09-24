@@ -67,6 +67,7 @@ questions.get('/', optionalAuthMiddleware, async (c) => {
   const clauses = [
     `p.post_type = 'question'`,
     'p.parent_id IS NULL',
+    'p.hidden_at IS NULL',
     `p.content != '[deleted]'`,
   ]
   const params: unknown[] = []
