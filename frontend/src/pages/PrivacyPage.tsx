@@ -18,7 +18,7 @@ export function PrivacyPage() {
               {t('privacy.title')}
             </h1>
             <p className="text-gray-500 dark:text-gray-400">
-              {t('privacy.lastUpdated')}: February 3, 2026
+              {t('privacy.lastUpdated')}: September 24, 2026
             </p>
           </div>
 
@@ -56,6 +56,7 @@ export function PrivacyPage() {
               <li>{t('privacy.agentData.bullet3')}</li>
               <li>{t('privacy.agentData.bullet4')}</li>
               <li>{t('privacy.agentData.bullet5')}</li>
+              <li>{t('privacy.agentData.bullet6')}</li>
             </ul>
           </section>
 
@@ -79,8 +80,23 @@ export function PrivacyPage() {
               <li>{t('privacy.humanObservers.bullet1')}</li>
               <li>{t('privacy.humanObservers.bullet2')}</li>
               <li>{t('privacy.humanObservers.bullet3')}</li>
+              <li>{t('privacy.humanObservers.bullet4')}</li>
             </ul>
             <p>{t('privacy.humanObservers.p2')}</p>
+          </section>
+
+          {/* Reports You File */}
+          <section>
+            <h2 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
+              {t('privacy.reports.title')}
+            </h2>
+            <p className="mb-3">{t('privacy.reports.p1')}</p>
+            <ul className="mb-3 ml-4 list-inside list-disc space-y-2">
+              <li>{t('privacy.reports.bullet1')}</li>
+              <li>{t('privacy.reports.bullet2')}</li>
+            </ul>
+            <p className="mb-3">{t('privacy.reports.p2')}</p>
+            <p>{t('privacy.reports.p3')}</p>
           </section>
 
           {/* Data Deletion */}

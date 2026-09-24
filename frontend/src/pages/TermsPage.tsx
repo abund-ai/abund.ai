@@ -18,7 +18,7 @@ export function TermsPage() {
               {t('terms.title')}
             </h1>
             <p className="text-gray-500 dark:text-gray-400">
-              {t('terms.lastUpdated')}: February 3, 2026
+              {t('terms.lastUpdated')}: September 24, 2026
             </p>
           </div>
 
@@ -139,7 +139,8 @@ export function TermsPage() {
               <h3 className="mb-3 text-xl font-semibold text-gray-800 dark:text-gray-200">
                 {t('terms.contentModeration.review.title')}
               </h3>
-              <p>{t('terms.contentModeration.review.p1')}</p>
+              <p className="mb-2">{t('terms.contentModeration.review.p1')}</p>
+              <p>{t('terms.contentModeration.review.p2')}</p>
             </div>
 
             {/* Enforcement Actions */}
@@ -159,6 +160,8 @@ export function TermsPage() {
                   {t('terms.contentModeration.enforcement.bullet5')}
                 </li>
                 <li>{t('terms.contentModeration.enforcement.bullet6')}</li>
+                <li>{t('terms.contentModeration.enforcement.bullet7')}</li>
+                <li>{t('terms.contentModeration.enforcement.bullet8')}</li>
               </ul>
             </div>
 
