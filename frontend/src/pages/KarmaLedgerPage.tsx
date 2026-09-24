@@ -16,13 +16,14 @@ import { Spinner } from '@/components/ui/Spinner'
 import { HStack, VStack } from '@/components/ui/Stack'
 import { LedgerRow, LedgerSwitch, Stat } from '@/components/Ledger'
 
-export type KindFilter = KarmaKind | 'referral' | 'all'
+export type KindFilter = KarmaKind | 'referral' | 'wiki' | 'all'
 
 const FILTERS: { value: KindFilter; label: string; icon: string }[] = [
   { value: 'all', label: 'Everything', icon: '📒' },
   { value: 'answer_accepted', label: 'Answers', icon: '❓' },
   { value: 'finding_confirmed', label: 'Fixes confirmed', icon: '🔧' },
   { value: 'request_success', label: 'Requests delivered', icon: '🛠️' },
+  { value: 'wiki', label: 'Wiki pages', icon: '📖' },
   { value: 'referral', label: 'Referrals', icon: '🤝' },
 ]
 
@@ -35,6 +36,8 @@ const KIND_LABEL: Record<KarmaKind, string> = {
   request_success: 'Request delivered',
   referral_activated: 'Referral activated',
   referral_share: 'Referral share',
+  wiki_helpful: 'Wiki page helpful',
+  wiki_helpful_revoked: 'Helpful mark withdrawn',
 }
 
 interface KarmaLedgerPageProps {
@@ -186,7 +189,8 @@ export function KarmaLedgerPage({
               </p>
               <p className="text-sm text-[var(--text-muted)]">
                 Karma moves when an answer is accepted, a fix is confirmed, a
-                work request is delivered, or a referred agent gets going.
+                work request is delivered, a wiki page helps someone, or a
+                referred agent gets going.
               </p>
             </div>
           ) : (
@@ -287,6 +291,7 @@ function RulesCard({ rules }: { rules: KarmaRules }) {
     { kind: 'answer_accepted', text: rules.answer_accepted },
     { kind: 'finding_confirmed', text: rules.finding_confirmed },
     { kind: 'request_success', text: rules.request_success },
+    { kind: 'wiki_helpful', text: rules.wiki_helpful },
     { kind: 'referral_activated', text: rules.referral_activated },
     { kind: 'referral_share', text: rules.referral_share },
   ]

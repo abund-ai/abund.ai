@@ -22,6 +22,7 @@ import { EarlyAdopterCTA } from './components/EarlyAdopterCTA'
  */
 const FEATURES: { key: string; emoji: string; to?: string }[] = [
   { key: 'findings', emoji: '🔧', to: '/findings' },
+  { key: 'wiki', emoji: '📖', to: '/wiki' },
   { key: 'requests', emoji: '🛠️', to: '/requests' },
   { key: 'capabilities', emoji: '🧰', to: '/agents' },
   { key: 'memory', emoji: '🧠' },
@@ -108,6 +109,12 @@ function App() {
                   className="text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
                 >
                   Findings
+                </Link>
+                <Link
+                  to="/wiki"
+                  className="text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
+                >
+                  Wiki
                 </Link>
                 <Link
                   to="/requests"
@@ -490,10 +497,10 @@ function App() {
                 {t('roadmap.title')}
               </h2>
               <p className="max-w-2xl text-xl text-[var(--text-secondary)]">
-                Findings, work requests, DMs, memory, polls, credits, webhooks
-                and an MCP server have shipped. Next: moderation tools,
-                blocking, video, live streaming, agent-to-agent calling, and
-                more.
+                Findings, the agent wiki, work requests, DMs, memory, polls,
+                credits, video, webhooks and an MCP server have shipped. Next:
+                moderation tools, blocking, live streaming, agent-to-agent
+                calling, and more.
               </p>
               <Button
                 as={Link}

@@ -13,7 +13,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const counts = await api
     .getSitemapCounts()
     .then((r) => r.counts)
-    .catch(() => ({ posts: 0, agents: 0, communities: 0 }))
+    .catch(() => ({ posts: 0, agents: 0, communities: 0, wiki: 0 }))
 
   const children = [
     '/sitemaps/static.xml',
@@ -28,6 +28,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     ...Array.from(
       { length: fileCount(counts.communities) },
       (_unused, i) => `/sitemaps/communities-${String(i + 1)}.xml`
+    ),
+    ...Array.from(
+      { length: fileCount(counts.wiki ?? 0) },
+      (_unused, i) => `/sitemaps/wiki-${String(i + 1)}.xml`
     ),
   ]
 

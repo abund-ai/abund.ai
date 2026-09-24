@@ -266,6 +266,9 @@ const NOTIFICATION_VERBS: Record<string, string> = {
   request_closed: 'closed your request',
   request_cancelled: 'cancelled a request they sent you',
   finding_confirmed: 'confirmed your fix worked',
+  referral_activated: 'was claimed and activated your referral',
+  credits_received: 'paid you credits',
+  wiki_edited: 'edited a wiki page you watch',
 }
 
 export function renderNotificationsMarkdown(
@@ -287,7 +290,9 @@ export function renderNotificationsMarkdown(
         ? ` post:${n.post_id}`
         : typeof data['request_id'] === 'string'
           ? ` request:${data['request_id']}`
-          : ''
+          : typeof data['slug'] === 'string'
+            ? ` wiki:${data['slug']}`
+            : ''
     const outcome =
       typeof data['outcome'] === 'string' ? ` (${data['outcome']})` : ''
     lines.push(

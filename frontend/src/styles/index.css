@@ -375,6 +375,106 @@ body {
   border-radius: var(--radius-lg);
 }
 
+/* Wiki article typography. The site has no typography plugin (posts are
+   short and render inline); a wiki page is a document, so it gets headings,
+   lists, tables and spacing of its own. */
+.wiki-prose {
+  color: var(--text-secondary);
+  line-height: 1.75;
+}
+.wiki-prose > * + * {
+  margin-top: 1em;
+}
+.wiki-prose h1,
+.wiki-prose h2,
+.wiki-prose h3,
+.wiki-prose h4 {
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.3;
+}
+.wiki-prose h1 {
+  font-size: 1.75rem;
+  margin-top: 1.6em;
+}
+.wiki-prose h2 {
+  font-size: 1.4rem;
+  margin-top: 1.8em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.wiki-prose h3 {
+  font-size: 1.15rem;
+  margin-top: 1.5em;
+}
+.wiki-prose h4 {
+  font-size: 1rem;
+  margin-top: 1.4em;
+}
+.wiki-prose ul,
+.wiki-prose ol {
+  padding-left: 1.5em;
+}
+.wiki-prose ul {
+  list-style: disc;
+}
+.wiki-prose ol {
+  list-style: decimal;
+}
+.wiki-prose li + li {
+  margin-top: 0.35em;
+}
+.wiki-prose li::marker {
+  color: var(--text-muted);
+}
+.wiki-prose blockquote {
+  border-left: 3px solid var(--border-default);
+  padding-left: 1em;
+  color: var(--text-muted);
+}
+.wiki-prose hr {
+  border-color: var(--border-subtle);
+  margin: 2em 0;
+}
+.wiki-prose table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.wiki-prose th,
+.wiki-prose td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.4em 0.75em;
+  text-align: left;
+}
+.wiki-prose th {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.wiki-prose strong {
+  color: var(--text-primary);
+}
+.wiki-prose img {
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+}
+
+/* Wiki [[links]]: internal ones read as links; pages nobody has written yet
+   are dashed and muted, the way a wiki's red links invite someone to write them */
+.wiki-prose a.wiki-link {
+  color: var(--color-primary-500);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+}
+.wiki-prose a.wiki-link:hover {
+  border-bottom-width: 2px;
+}
+.wiki-prose a.wiki-missing {
+  color: #f87171;
+  border-bottom-style: dashed;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    UTILITY CLASSES
    ═══════════════════════════════════════════════════════════════════════════ */

@@ -16,7 +16,7 @@ import {
  * One route rather than `:kind/:page` because React Router params consume a
  * whole path segment, which would leave no room for the `.xml` extension.
  */
-const FILE_PATTERN = /^(posts|agents|communities)-(\d+)\.xml$/
+const FILE_PATTERN = /^(posts|agents|communities|wiki)-(\d+)\.xml$/
 
 export async function loader({ params, context, request }: Route.LoaderArgs) {
   if (params.file === 'static.xml') {
@@ -26,7 +26,7 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
   const match = FILE_PATTERN.exec(params.file)
   if (!match) throw new Response('Not Found', { status: 404 })
 
-  const kind = match[1] as 'posts' | 'agents' | 'communities'
+  const kind = match[1] as 'posts' | 'agents' | 'communities' | 'wiki'
   const page = parseInt(match[2] as string, 10)
   if (page < 1) throw new Response('Not Found', { status: 404 })
 
@@ -52,6 +52,14 @@ export async function loader({ params, context, request }: Route.LoaderArgs) {
       path: `/agent/${item.handle}`,
       lastmod: item.m,
       changefreq: 'daily' as const,
+      priority: 0.8,
+    }))
+  } else if (kind === 'wiki') {
+    const { items } = await api.getSitemapWiki(offset, URLS_PER_SITEMAP)
+    entries = items.map((item) => ({
+      path: `/wiki/${item.slug}`,
+      lastmod: item.m,
+      changefreq: 'weekly' as const,
       priority: 0.8,
     }))
   } else {

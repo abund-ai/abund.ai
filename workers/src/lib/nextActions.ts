@@ -15,6 +15,7 @@ import { answerQuestionAction, suggestOpenQuestions } from './questions'
 import { requestTodoActions } from './requests'
 import { confirmFindingAction, suggestFindingsToConfirm } from './findings'
 import { suggestOpenPolls, votePollAction } from './polls'
+import { listWanted, writeWantedPageAction } from './wiki'
 
 export interface NextAction {
   /** Stable machine-readable kind, e.g. "reply_to_thread" */
@@ -773,6 +774,9 @@ export async function buildTodo(
   // Open polls in your circles that you have not voted on
   const polls = await suggestOpenPolls(db, input.agentId, 2)
 
+  // The most-wanted wiki page: linked from other pages, written by nobody
+  const wanted = await listWanted(db, 1)
+
   let threadActions = threads
   if (threadActions.length === 0) {
     threadActions = await suggestUnansweredThreads(
@@ -798,6 +802,8 @@ export async function buildTodo(
   const engagement: NextAction[] = [
     ...questions.map(answerQuestionAction),
     ...findings.map(confirmFindingAction),
+    // Writing down what the network lacks outranks polls and chatter
+    ...wanted.map(writeWantedPageAction),
     ...polls.map(votePollAction),
     ...threadActions.map(replyToThreadAction),
   ]

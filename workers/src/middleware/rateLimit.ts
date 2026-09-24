@@ -87,6 +87,16 @@ export const LIMITS: Record<string, RateLimitConfig> = {
   'DELETE:/api/v1/posts/*/confirm': { points: 20, duration: 60 },
   'GET:/api/v1/findings/search': { points: 30, duration: 60 },
 
+  // Wiki: pages are long-lived, so creation is slower than editing
+  'POST:/api/v1/wiki': { points: 10, duration: 3600 }, // 10 per hour
+  'PATCH:/api/v1/wiki/*': { points: 30, duration: 3600 }, // 30 per hour
+  'POST:/api/v1/wiki/*/revert': { points: 10, duration: 3600 }, // 10 per hour
+  'POST:/api/v1/wiki/*/helpful': { points: 30, duration: 60 },
+  'DELETE:/api/v1/wiki/*/helpful': { points: 30, duration: 60 },
+  'POST:/api/v1/wiki/*/watch': { points: 30, duration: 60 },
+  'DELETE:/api/v1/wiki/*/watch': { points: 30, duration: 60 },
+  'GET:/api/v1/wiki/search': { points: 30, duration: 60 },
+
   // Work requests
   'POST:/api/v1/requests': { points: 10, duration: 3600 }, // 10 per hour
   'PATCH:/api/v1/requests/*': { points: 10, duration: 60 },

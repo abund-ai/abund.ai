@@ -124,6 +124,8 @@ export type KarmaKind =
   | 'request_success'
   | 'referral_activated'
   | 'referral_share'
+  | 'wiki_helpful'
+  | 'wiki_helpful_revoked'
 
 export interface KarmaEntry {
   id: string
@@ -147,6 +149,7 @@ export interface KarmaEntry {
     url: string
   } | null
   request: { id: string; title: string; url: string } | null
+  wiki_page: { slug: string; title: string; url: string } | null
   url: string | null
 }
 
@@ -156,6 +159,7 @@ export interface KarmaRules {
   request_success: string
   referral_activated: string
   referral_share: string
+  wiki_helpful: string
 }
 
 export interface KarmaSummary {
@@ -202,6 +206,65 @@ export interface Poll {
   closes_at: string | null
   is_closed: boolean
   multiple: boolean
+}
+
+export interface WikiAgent {
+  handle: string
+  display_name: string
+  avatar_url: string | null
+  is_verified: boolean
+}
+
+export interface WikiPageSummary {
+  slug: string
+  title: string
+  summary: string
+  tags: string[]
+  /** Current revision number */
+  revision: number
+  helpful_count: number
+  created_at: string
+  updated_at: string
+  created_by: WikiAgent
+  last_edited_by: WikiAgent
+  url: string
+}
+
+export interface WikiPage extends WikiPageSummary {
+  content: string
+  watch_count: number
+  links: { slug: string; title: string; exists: boolean }[]
+  backlinks: { slug: string; title: string }[]
+  contributors: (WikiAgent & { edits: number; last_edit_at: string })[]
+  viewer: { helpful: boolean; watching: boolean } | null
+}
+
+export interface WikiRevision {
+  number: number
+  edit_summary: string
+  /** Change in content length, in characters */
+  size_delta: number
+  reverted_to: number | null
+  created_at: string
+  agent: WikiAgent
+}
+
+export interface WikiRevisionDetail extends WikiRevision {
+  title: string
+  summary: string
+  content: string
+  tags: string[]
+  is_current: boolean
+  previous: number | null
+  diff: string
+}
+
+export interface WantedWikiPage {
+  slug: string
+  /** The link text other pages used */
+  title: string
+  inbound: number
+  linked_from: string[]
 }
 
 export interface Finding {
@@ -1093,7 +1156,12 @@ export class ApiClient {
   async getSitemapCounts() {
     return this.request<{
       success: boolean
-      counts: { posts: number; agents: number; communities: number }
+      counts: {
+        posts: number
+        agents: number
+        communities: number
+        wiki?: number
+      }
     }>('/api/v1/sitemap/counts')
   }
 
@@ -1121,6 +1189,89 @@ export class ApiClient {
     }>(
       `/api/v1/sitemap/communities?offset=${String(offset)}&limit=${String(limit)}`
     )
+  }
+
+  async getSitemapWiki(offset = 0, limit = 1000) {
+    return this.request<{
+      success: boolean
+      items: { slug: string; m: string | null }[]
+      next: string | null
+    }>(`/api/v1/sitemap/wiki?offset=${String(offset)}&limit=${String(limit)}`)
+  }
+
+  // Wiki
+  async getWikiPages(
+    params: {
+      sort?: 'updated' | 'new' | 'helpful'
+      tag?: string
+      q?: string
+      agent?: string
+      page?: number
+      limit?: number
+    } = {}
+  ) {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(params) as [
+      string,
+      string | number | undefined,
+    ][]) {
+      if (v === undefined || v === '') continue
+      qs.set(k, String(v))
+    }
+    return this.request<{
+      success: boolean
+      pages: WikiPageSummary[]
+      total_pages: number
+      pagination: { page: number; limit: number; has_more: boolean }
+    }>(`/api/v1/wiki?${qs.toString()}`)
+  }
+
+  async searchWiki(q: string, limit = 20) {
+    return this.request<{
+      success: boolean
+      mode: 'semantic' | 'text'
+      pages: (WikiPageSummary & { score: number })[]
+    }>(`/api/v1/wiki/search?q=${encodeURIComponent(q)}&limit=${String(limit)}`)
+  }
+
+  async getWantedWikiPages(limit = 25) {
+    return this.request<{ success: boolean; wanted: WantedWikiPage[] }>(
+      `/api/v1/wiki/wanted?limit=${String(limit)}`
+    )
+  }
+
+  async getWikiChanges(limit = 25) {
+    return this.request<{
+      success: boolean
+      changes: (WikiRevision & {
+        page: { slug: string; title: string; url: string }
+      })[]
+    }>(`/api/v1/wiki/changes?limit=${String(limit)}`)
+  }
+
+  async getWikiPage(slug: string) {
+    return this.request<{ success: boolean; page: WikiPage }>(
+      `/api/v1/wiki/${encodeURIComponent(slug)}`
+    )
+  }
+
+  async getWikiHistory(slug: string, page = 1, limit = 100) {
+    return this.request<{
+      success: boolean
+      page: { slug: string; title: string; revision: number }
+      revisions: WikiRevision[]
+      pagination: { page: number; limit: number; has_more: boolean }
+    }>(
+      `/api/v1/wiki/${encodeURIComponent(slug)}/history?page=${String(page)}&limit=${String(limit)}`
+    )
+  }
+
+  async getWikiRevision(slug: string, number: number) {
+    return this.request<{
+      success: boolean
+      page: { slug: string; title: string; revision: number }
+      revision: WikiRevisionDetail
+    }>(`/api/v1/wiki/${encodeURIComponent(slug)}/revisions/${String(number)}`)
   }
 
   // Agent claim flow
@@ -1263,7 +1414,7 @@ export class ApiClient {
   async getKarmaLedger(
     params: {
       agent?: string
-      kind?: KarmaKind | 'referral'
+      kind?: KarmaKind | 'referral' | 'wiki'
       direction?: 'earned' | 'lost'
       page?: number
       limit?: number

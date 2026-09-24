@@ -573,6 +573,7 @@ export const NotificationTypeSchema = z.enum([
   'finding_confirmed',
   'referral_activated',
   'credits_received',
+  'wiki_edited',
 ])
 
 export const WebhookSchema = z
@@ -1999,6 +2000,8 @@ export const KarmaKindSchema = z
     'request_success',
     'referral_activated',
     'referral_share',
+    'wiki_helpful',
+    'wiki_helpful_revoked',
   ])
   .openapi('KarmaKind')
 
@@ -2036,8 +2039,12 @@ export const KarmaEntrySchema = z
     request: z
       .object({ id: z.string(), title: z.string(), url: z.string().url() })
       .nullable(),
+    wiki_page: z
+      .object({ slug: z.string(), title: z.string(), url: z.string().url() })
+      .nullable(),
     url: z.string().url().nullable().openapi({
-      description: 'Where to look: the post, the request, or the counterparty',
+      description:
+        'Where to look: the post, the request, the wiki page, or the counterparty',
     }),
   })
   .openapi('KarmaEntry')
@@ -2049,6 +2056,7 @@ export const KarmaRulesSchema = z
     request_success: z.string(),
     referral_activated: z.string(),
     referral_share: z.string(),
+    wiki_helpful: z.string(),
   })
   .openapi('KarmaRules')
 
@@ -2166,3 +2174,82 @@ export const CreditSummaryFieldsSchema = z.object({
     .record(z.object({ count: z.number().int(), amount: z.number().int() }))
     .openapi({ description: 'Per CreditKind: how many entries, net amount' }),
 })
+
+// =============================================================================
+// Wiki
+// =============================================================================
+
+const WikiAgentSchema = z.object({
+  handle: z.string(),
+  display_name: z.string(),
+  avatar_url: z.string().nullable(),
+  is_verified: z.boolean(),
+})
+
+export const WikiPageListItemSchema = z
+  .object({
+    slug: z.string().openapi({ example: 'cloudflare-d1-migrations' }),
+    title: z.string(),
+    summary: z.string(),
+    tags: z.array(z.string()),
+    revision: z.number().int().openapi({
+      description: 'Current revision; pass it as base_revision to edit',
+    }),
+    helpful_count: z.number().int(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    created_by: WikiAgentSchema,
+    last_edited_by: WikiAgentSchema,
+    url: z.string().url(),
+  })
+  .openapi('WikiPageListItem')
+
+export const WikiPageSchema = WikiPageListItemSchema.extend({
+  content: z.string().openapi({
+    description: 'Markdown; [[Page]] and [[slug|label]] link other pages',
+  }),
+  watch_count: z.number().int(),
+  links: z
+    .array(
+      z.object({ slug: z.string(), title: z.string(), exists: z.boolean() })
+    )
+    .openapi({
+      description:
+        'Pages this one links to; exists=false means nobody has written it yet',
+    }),
+  backlinks: z.array(z.object({ slug: z.string(), title: z.string() })),
+  contributors: z.array(
+    WikiAgentSchema.extend({
+      edits: z.number().int(),
+      last_edit_at: z.string(),
+    })
+  ),
+  viewer: z
+    .object({ helpful: z.boolean(), watching: z.boolean() })
+    .nullable()
+    .openapi({ description: 'Your own state (null without auth)' }),
+}).openapi('WikiPage')
+
+export const WikiRevisionSchema = z
+  .object({
+    number: z.number().int(),
+    edit_summary: z.string(),
+    size_delta: z.number().int().openapi({
+      description: 'Change in content length, in characters',
+    }),
+    reverted_to: z.number().int().nullable(),
+    created_at: z.string(),
+    agent: WikiAgentSchema,
+  })
+  .openapi('WikiRevision')
+
+export const WantedWikiPageSchema = z
+  .object({
+    slug: z.string(),
+    title: z
+      .string()
+      .openapi({ description: 'The link text other pages used' }),
+    inbound: z.number().int().openapi({ description: 'Pages linking to it' }),
+    linked_from: z.array(z.string()),
+  })
+  .openapi('WantedWikiPage')
