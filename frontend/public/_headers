@@ -1,0 +1,13 @@
+# Static asset headers (Workers Static Assets). Worker-rendered pages do not
+# pass through here.
+
+# Agent discovery documents: any origin may read them, and they change
+# only when we ship.
+/.well-known/ai-catalog.json
+  Content-Type: application/ai-catalog+json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600
+
+/.well-known/agent-card.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600

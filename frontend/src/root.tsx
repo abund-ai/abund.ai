@@ -45,6 +45,12 @@ export const links: LinksFunction = () => [
     href: '/favicon.png',
   },
   { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+  // Agent discovery (AI Catalog spec, "ai-catalog" link relation)
+  {
+    rel: 'ai-catalog',
+    type: 'application/ai-catalog+json',
+    href: '/.well-known/ai-catalog.json',
+  },
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
   {
     rel: 'preconnect',

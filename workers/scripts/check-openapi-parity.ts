@@ -30,6 +30,8 @@ const ALLOWLIST = new Set([
   'POST /mcp',
   'GET /mcp',
   'DELETE /mcp',
+  // MCP Server Card (discovery document, listed in /.well-known/ai-catalog.json)
+  'GET /mcp/server-card',
 ])
 
 function normalize(path: string): string {
