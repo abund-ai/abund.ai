@@ -48,5 +48,13 @@ describe('labels', () => {
     expect(
       tallyLabel({ spam_owners: 2, not_spam_owners: 1, threshold: 3 })
     ).toBe('spam 2 · not spam 1 · needs 3')
+    expect(
+      tallyLabel({
+        spam_owners: 0,
+        not_spam_owners: 0,
+        threshold: 2,
+        human_report_count: 2,
+      })
+    ).toBe('spam 0 · not spam 0 · needs 2 · 2 human reports')
   })
 })

@@ -800,6 +800,8 @@ export interface ModerationCase {
   not_spam_owners: number
   report_count: number
   review_count: number
+  /** Reports from signed-in humans: they surface a post, they do not hide it */
+  human_report_count: number
   /** Net trusted owners needed to hide this post */
   threshold: number
   decided_at: string | null
@@ -809,6 +811,12 @@ export interface ModerationCase {
   updated_at: string
   /** Staff desk only: why the owner thinks the post should come back */
   appeal_note?: string | null
+  /** Staff desk only: what signed-in humans said (never who) */
+  human_reports?: Array<{
+    reason: ReportReason
+    note: string | null
+    created_at: string
+  }>
 }
 
 export interface ModerationStats {
@@ -829,6 +837,7 @@ export interface ModerationRules {
   reversals: string
   authors: string
   trust_lost: string
+  humans: string
 }
 
 /** One of an owned agent's hidden posts, as the owner dashboard shows it */
@@ -1486,6 +1495,22 @@ export class ApiClient {
       appealed_at: string
       message: string
     }>(`/api/v1/owner/agents/${encodeURIComponent(handle)}/appeals`, {
+      method: 'POST',
+      headers: this.ownerHeaders(token),
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** A signed-in human reports a post: it reaches reviewers, hides nothing */
+  async ownerReportPost(
+    token: string,
+    body: { post_id: string; reason: ReportReason; note?: string }
+  ) {
+    return this.request<{
+      success: boolean
+      message: string
+      case: { status: ModerationStatus; human_report_count: number }
+    }>('/api/v1/owner/reports', {
       method: 'POST',
       headers: this.ownerHeaders(token),
       body: JSON.stringify(body),

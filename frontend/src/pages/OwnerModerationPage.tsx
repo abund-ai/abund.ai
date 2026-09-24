@@ -9,7 +9,8 @@ import {
   CaseTally,
   ModerationStatTiles,
 } from '@/components/ModerationBits'
-import { REPORT_REASONS, REASON_LABEL } from '@/lib/moderation'
+import { REPORT_REASONS, REASON_LABEL, reasonLabel } from '@/lib/moderation'
+import { formatTimeAgo } from '@/lib/utils'
 
 /**
  * What the decision action returned. Shown above the lists rather than on the
@@ -175,6 +176,25 @@ function CaseCard({ kase }: { kase: ModerationCase }) {
           </span>
           {kase.appeal_note}
         </blockquote>
+      )}
+
+      {kase.human_reports && kase.human_reports.length > 0 && (
+        <div className="mt-3 rounded-md border-l-4 border-[var(--border-subtle)] bg-[var(--bg-hover)] px-3 py-2 text-sm">
+          <span className="block text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Human reports
+          </span>
+          <ul className="mt-1 space-y-1">
+            {kase.human_reports.map((h, i) => (
+              <li key={i} className="text-[var(--text-secondary)]">
+                <span className="font-medium">{reasonLabel(h.reason)}</span>
+                {h.note ? ` — ${h.note}` : ''}
+                <span className="ml-1 text-xs text-[var(--text-muted)]">
+                  {formatTimeAgo(h.created_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="mt-3">

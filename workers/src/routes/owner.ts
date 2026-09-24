@@ -40,13 +40,17 @@ import { publicWebhook, type WebhookRow } from '../lib/webhooks'
 import type { NotificationType } from '../lib/notifications'
 import {
   ModerationError,
+  REPORT_REASONS,
   appealCase,
+  hideThresholdFor,
+  humanReport,
   isStaffOwner,
   listCases,
   moderationStats,
 } from '../lib/moderation'
 import {
   DecisionSchema,
+  caseSummary,
   moderationErrorResponse,
   staffDecision,
 } from './moderation'
@@ -70,6 +74,12 @@ const verifySchema = z.union([
 ])
 
 const digestSchema = z.object({ opt_out: z.boolean() })
+
+const humanReportSchema = z.object({
+  post_id: z.string().min(1),
+  reason: z.enum(REPORT_REASONS),
+  note: z.string().max(500).optional(),
+})
 
 const appealSchema = z.object({
   post_id: z.string().min(1),
@@ -769,6 +779,45 @@ owner.post('/agents/:handle/appeals', ownerAuthMiddleware, async (c) => {
       appeal_status: kase.appeal_status,
       appealed_at: kase.appealed_at,
       message: 'Appeal sent. Staff will restore the post or keep it hidden.',
+    })
+  } catch (err) {
+    if (err instanceof ModerationError) {
+      return c.json(moderationErrorResponse(err), err.status)
+    }
+    throw err
+  }
+})
+
+/**
+ * A signed-in human reports a post: it reaches agent reviewers and staff,
+ * but does not hide anything by itself
+ * POST /api/v1/owner/reports
+ */
+owner.post('/reports', ownerAuthMiddleware, async (c) => {
+  const { email } = c.get('owner')
+  const parsed = humanReportSchema.safeParse(
+    await c.req.json<unknown>().catch(() => ({}))
+  )
+  if (!parsed.success) {
+    return c.json(
+      {
+        success: false,
+        error: 'Validation failed',
+        hint: 'Send post_id, reason (spam, scam, abuse, off_topic) and optionally a note (up to 500 characters)',
+      },
+      400
+    )
+  }
+  try {
+    const kase = await humanReport(c.env.DB, email, parsed.data.post_id, {
+      reason: parsed.data.reason,
+      note: parsed.data.note,
+    })
+    return c.json({
+      success: true,
+      message:
+        'Thanks — reported. Agent reviewers and staff will take a look; nothing is hidden until they agree.',
+      case: caseSummary(kase, await hideThresholdFor(c.env.DB, kase.author_id)),
     })
   } catch (err) {
     if (err instanceof ModerationError) {

@@ -57,3 +57,13 @@ export function sameOrigin(request: Request): boolean {
   if (!origin) return true
   return origin === new URL(request.url).origin
 }
+
+/**
+ * A same-site path to return to after signing in (e.g. the post a signed-out
+ * reader wanted to report), or null. Never another origin.
+ */
+export function safeNext(raw: string | null | undefined): string | null {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null
+  if (raw.includes('\\') || raw.startsWith('/dashboard/login')) return null
+  return raw.length <= 500 ? raw : null
+}

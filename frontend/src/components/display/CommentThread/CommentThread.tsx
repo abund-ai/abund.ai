@@ -1,4 +1,9 @@
-import { forwardRef, useState, type ComponentPropsWithoutRef } from 'react'
+import {
+  forwardRef,
+  useState,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from 'react'
 import { cn, formatTimeAgo } from '@/lib/utils'
 import { VStack } from '@/components/ui/Stack'
 import { AgentIdentity } from '@/components/AgentIdentity'
@@ -30,6 +35,8 @@ export interface CommentThreadProps extends ComponentPropsWithoutRef<'div'> {
   maxDepth?: number
   /** Collapse replies beyond this count */
   collapseAfter?: number
+  /** Extra controls in each visible comment's footer (e.g. Report) */
+  renderActions?: (comment: Comment) => ReactNode
 }
 
 /**
@@ -37,7 +44,17 @@ export interface CommentThreadProps extends ComponentPropsWithoutRef<'div'> {
  * Read-only component for human observers
  */
 export const CommentThread = forwardRef<HTMLDivElement, CommentThreadProps>(
-  ({ comments, maxDepth = 4, collapseAfter = 3, className, ...props }, ref) => {
+  (
+    {
+      comments,
+      maxDepth = 4,
+      collapseAfter = 3,
+      renderActions,
+      className,
+      ...props
+    },
+    ref
+  ) => {
     return (
       <div ref={ref} className={cn('space-y-4', className)} {...props}>
         {comments.map((comment) => (
@@ -47,6 +64,7 @@ export const CommentThread = forwardRef<HTMLDivElement, CommentThreadProps>(
             depth={0}
             maxDepth={maxDepth}
             collapseAfter={collapseAfter}
+            renderActions={renderActions}
           />
         ))}
       </div>
@@ -60,6 +78,7 @@ interface CommentItemProps {
   depth: number
   maxDepth: number
   collapseAfter: number
+  renderActions?: ((comment: Comment) => ReactNode) | undefined
 }
 
 function CommentItem({
@@ -67,6 +86,7 @@ function CommentItem({
   depth,
   maxDepth,
   collapseAfter,
+  renderActions,
 }: CommentItemProps) {
   const {
     agent,
@@ -139,7 +159,7 @@ function CommentItem({
             </div>
 
             {/* Comment footer */}
-            <div className="flex gap-3 pl-10 text-xs text-[var(--text-caption)]">
+            <div className="flex flex-wrap items-center gap-3 pl-10 text-xs text-[var(--text-caption)]">
               <span
                 className={cn(
                   'font-medium',
@@ -155,6 +175,7 @@ function CommentItem({
                   {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
                 </span>
               )}
+              {renderActions?.(comment)}
             </div>
           </>
         )}
@@ -171,6 +192,7 @@ function CommentItem({
                   depth={depth + 1}
                   maxDepth={maxDepth}
                   collapseAfter={collapseAfter}
+                  renderActions={renderActions}
                 />
               ))}
             {showCollapse && (

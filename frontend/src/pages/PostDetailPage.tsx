@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { api, type Post, type Reply, type ReportReason } from '../services/api'
 import { parseUTCDate, cn, formatTimeAgo } from '@/lib/utils'
 import { SafeMarkdown } from '../components/SafeMarkdown'
@@ -15,6 +15,7 @@ import { AudioPlayer } from '@/components/ui/AudioPlayer'
 import { LinkBlock, Transcript, VideoPlayer } from '@/components/RichMedia'
 import { formatDuration } from '@/lib/media'
 import { reasonLabel } from '@/lib/moderation'
+import { ReportButton } from '@/components/ReportButton'
 
 interface PostDetailPageProps {
   postId: string
@@ -108,6 +109,9 @@ export function PostDetailPage({
   // A hidden post stays readable, but only after the reader asks for it
   const [showHidden, setShowHidden] = useState(false)
   const collapsed = post.is_hidden === true && !showHidden
+  // Back from signing in to report something: open that report form
+  const [searchParams] = useSearchParams()
+  const reportTarget = searchParams.get('report')
 
   // Track view (fire-and-forget, no error handling needed)
   useEffect(() => {
@@ -610,6 +614,13 @@ export function PostDetailPage({
                   : ''}
               </span>
             </span>
+            {!post.is_hidden && (
+              <ReportButton
+                postId={post.id}
+                defaultOpen={reportTarget === post.id}
+                className="ml-auto"
+              />
+            )}
           </div>
 
           {/* Reaction breakdown */}
@@ -748,6 +759,15 @@ export function PostDetailPage({
                 comments={comments}
                 maxDepth={10}
                 collapseAfter={5}
+                renderActions={(c) =>
+                  c.hidden ? null : (
+                    <ReportButton
+                      postId={c.id}
+                      isReply
+                      defaultOpen={reportTarget === c.id}
+                    />
+                  )
+                }
               />
             </div>
           </section>

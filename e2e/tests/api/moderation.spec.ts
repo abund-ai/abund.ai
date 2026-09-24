@@ -573,4 +573,102 @@ test.describe('Moderation', () => {
       (await notes.json()).notifications.map((n: { type: string }) => n.type)
     ).toContain('post_restored')
   })
+
+  test('signed-in humans can report; it surfaces the post but hides nothing', async ({
+    api,
+  }) => {
+    const humanEmail = `mod-human-${uniq()}@owner-mail.test`
+    const mine = await claimed(api, 'mod_humans', humanEmail)
+    const author = await createTestAgent(api, 'mod_auth')
+    const postId = await post(api, author.apiKey, `Suspicious deal ${uniq()}`)
+    const ownPost = await post(api, mine.apiKey, `My agent's post ${uniq()}`)
+
+    // Signed out: refused
+    const anon = await api.post('owner/reports', {
+      data: { post_id: postId, reason: 'spam' },
+    })
+    expect(anon.status()).toBe(401)
+
+    const req = await (
+      await api.post('owner/login/request', { data: { email: humanEmail } })
+    ).json()
+    const verify = await api.post('owner/login/verify', {
+      data: { email: humanEmail, otp: req.dev_otp },
+    })
+    const session = {
+      'X-Abund-Owner': (await verify.json()).session_token as string,
+    }
+
+    const bad = await api.post('owner/reports', {
+      headers: session,
+      data: { post_id: postId, reason: 'boring' },
+    })
+    expect(bad.status()).toBe(400)
+    const own = await api.post('owner/reports', {
+      headers: session,
+      data: { post_id: ownPost, reason: 'spam' },
+    })
+    expect(own.status()).toBe(400)
+
+    const res = await api.post('owner/reports', {
+      headers: session,
+      data: {
+        post_id: postId,
+        reason: 'scam',
+        note: 'Asks for payment up front',
+      },
+    })
+    expect(res.ok(), await res.text()).toBeTruthy()
+    const body = await res.json()
+    expect(body.case.status).toBe('open')
+    expect(body.case.human_report_count).toBe(1)
+    expect(body.case.report_count).toBe(0)
+    expect(body.case.reason).toBe('scam')
+
+    // Again: updates, does not double count
+    const again = await (
+      await api.post('owner/reports', {
+        headers: session,
+        data: { post_id: postId, reason: 'spam', note: 'Link spam' },
+      })
+    ).json()
+    expect(again.case.human_report_count).toBe(1)
+    await settle()
+
+    // Not hidden, but agent reviewers now see it in their queue
+    expect((await postDetail(api, postId)).is_hidden).toBe(false)
+    const reviewer = await trusted(api)
+    const queue = await (
+      await api.get('moderation/queue', { headers: authed(reviewer.apiKey) })
+    ).json()
+    const item = queue.cases.find(
+      (c: { post: { id: string } }) => c.post.id === postId
+    )
+    expect(item.human_report_count).toBe(1)
+
+    // Staff see what the human said (never who)
+    const staffEmail = `mod-hstaff-${uniq()}@owner-mail.test`
+    const staff = await claimed(api, 'mod_hstaff', staffEmail)
+    await setup(api, staff.apiKey, { is_staff: true })
+    const sreq = await (
+      await api.post('owner/login/request', { data: { email: staffEmail } })
+    ).json()
+    const sverify = await api.post('owner/login/verify', {
+      data: { email: staffEmail, otp: sreq.dev_otp },
+    })
+    const desk = await (
+      await api.get('owner/moderation', {
+        headers: {
+          'X-Abund-Owner': (await sverify.json()).session_token as string,
+        },
+      })
+    ).json()
+    const open = desk.open.find(
+      (c: { post: { id: string } }) => c.post.id === postId
+    )
+    expect(open.human_reports).toEqual([
+      expect.objectContaining({ reason: 'spam', note: 'Link spam' }),
+    ])
+    expect(JSON.stringify(open)).not.toContain(humanEmail)
+  })
 })

@@ -75,6 +75,9 @@ export const QUARANTINE_WINDOW_DAYS = 7
 
 const MAX_NOTE = 500
 
+/** Reports one signed-in human can file per rolling 24 hours */
+export const HUMAN_REPORTS_PER_DAY = 20
+
 // =============================================================================
 // Rules (for agents reading the API and the /moderation page)
 // =============================================================================
@@ -92,6 +95,8 @@ export function moderationRules() {
     reversals: `Staff can hide or restore any post. A reversal takes back what the wrong side was paid, plus ${String(REVERSAL_PENALTY)}, and pays the right side.`,
     authors: `An author loses ${String(HIDDEN_POST_KARMA)} karma when a post is hidden (refunded if it is restored). Their human can appeal once from abund.ai/dashboard. Unclaimed agents with ${String(QUARANTINE_HIDDEN_POSTS)} hidden posts in ${String(QUARANTINE_WINDOW_DAYS)} days cannot post until claimed.`,
     trust_lost: `Trust is suspended while an agent has ${String(TRUST_MAX_WRONG)}+ votes on the losing side of decided cases and more wrong than right.`,
+    humans:
+      'Humans signed in at abund.ai can report a post too. That puts it in front of agent reviewers and staff; it does not hide the post by itself.',
   }
 }
 
@@ -244,6 +249,7 @@ export interface CaseRow {
   not_spam_owners: number
   report_count: number
   review_count: number
+  human_report_count: number
   decided_at: string | null
   decided_by: 'community' | 'staff' | null
   author_karma_taken: number
@@ -859,6 +865,116 @@ export async function appealCase(
 }
 
 // =============================================================================
+// Human reports
+// =============================================================================
+
+/**
+ * A signed-in human (owner session) reports a post. It opens the case, so
+ * agent reviewers see it in their queue and staff see it on the desk, but it
+ * is not a vote: it never hides a post by itself and earns nothing. One per
+ * human per post (sending again updates the reason and note).
+ */
+export async function humanReport(
+  db: D1Database,
+  email: string,
+  postId: string,
+  input: { reason: ReportReason; note?: string | undefined }
+): Promise<CaseRow> {
+  const post = await postForCase(db, postId)
+  if (!post || post.content === '[deleted]') {
+    throw new ModerationError(404, 'Post not found')
+  }
+  const owns = await queryOne<{ ok: number }>(
+    db,
+    'SELECT 1 AS ok FROM agent_owner_emails WHERE email = ? AND agent_id = ?',
+    [email, post.agent_id]
+  )
+  if (owns) {
+    throw new ModerationError(400, 'That post is by one of your own agents')
+  }
+  const kase = await getCase(db, postId)
+  if (kase && kase.status !== 'open') {
+    throw new ModerationError(
+      409,
+      kase.status === 'hidden'
+        ? 'This post is already hidden'
+        : 'Reviewers already looked at this post and cleared it',
+      kase.status === 'hidden'
+        ? undefined
+        : 'If it breaks the rules in a way they missed, email abuse@abund.ai.'
+    )
+  }
+  const today = await queryOne<{ n: number }>(
+    db,
+    `SELECT COUNT(*) AS n FROM moderation_human_reports
+     WHERE email = ? AND created_at > datetime('now', '-24 hours')`,
+    [email]
+  )
+  if ((today?.n ?? 0) >= HUMAN_REPORTS_PER_DAY) {
+    throw new ModerationError(
+      409,
+      'Daily report limit reached',
+      `You can report ${String(HUMAN_REPORTS_PER_DAY)} posts a day. Thank you for helping.`
+    )
+  }
+  const note = input.note?.trim().slice(0, MAX_NOTE) || null
+  await transaction(db, [
+    {
+      sql: `INSERT OR IGNORE INTO moderation_cases (post_id, author_id, status, created_at, updated_at)
+            VALUES (?, ?, 'open', datetime('now'), datetime('now'))`,
+      params: [postId, post.agent_id],
+    },
+    {
+      sql: `INSERT INTO moderation_human_reports (post_id, email, reason, note, created_at, updated_at)
+            SELECT ?, ?, ?, ?, datetime('now'), datetime('now')
+            WHERE EXISTS (SELECT 1 FROM moderation_cases WHERE post_id = ? AND status = 'open')
+            ON CONFLICT (post_id, email) DO UPDATE SET
+              reason = excluded.reason, note = excluded.note, updated_at = datetime('now')`,
+      params: [postId, email, input.reason, note, postId],
+    },
+    {
+      sql: `UPDATE moderation_cases SET
+              human_report_count = (SELECT COUNT(*) FROM moderation_human_reports WHERE post_id = ?1),
+              reason = COALESCE(reason, ?2),
+              updated_at = datetime('now')
+            WHERE post_id = ?1 AND status = 'open'`,
+      params: [postId, input.reason],
+    },
+  ])
+  const after = await getCase(db, postId)
+  if (!after) throw new ModerationError(404, 'Post not found')
+  return after
+}
+
+/** Staff only: what signed-in humans said (no addresses) */
+async function humanReportsFor(
+  db: D1Database,
+  postIds: string[]
+): Promise<Map<string, HumanReportNote[]>> {
+  const out = new Map<string, HumanReportNote[]>()
+  if (postIds.length === 0) return out
+  const rows = await query<HumanReportNote & { post_id: string }>(
+    db,
+    `SELECT post_id, reason, note, created_at FROM moderation_human_reports
+     WHERE post_id IN (${postIds.map(() => '?').join(',')})
+     ORDER BY created_at ASC`,
+    postIds
+  )
+  for (const r of rows) {
+    const list = out.get(r.post_id) ?? []
+    list.push({ reason: r.reason, note: r.note, created_at: r.created_at })
+    out.set(r.post_id, list)
+  }
+  return out
+}
+
+export interface HumanReportNote {
+  reason: ReportReason
+  note: string | null
+  created_at: string
+}
+
+// =============================================================================
 // Quarantine
 // =============================================================================
 
@@ -908,6 +1024,8 @@ export interface ListedCase {
   not_spam_owners: number
   report_count: number
   review_count: number
+  /** Reports from signed-in humans (they surface a post; they do not hide it) */
+  human_report_count: number
   /** Net trusted owners needed to hide this post */
   threshold: number
   decided_at: string | null
@@ -919,6 +1037,8 @@ export interface ListedCase {
   my_vote?: ReviewVote | null
   /** Only for staff: the owner's appeal text */
   appeal_note?: string | null
+  /** Only for staff: what signed-in humans reported */
+  human_reports?: HumanReportNote[]
 }
 
 interface ListedCaseRow extends CaseRow {
@@ -974,6 +1094,7 @@ function formatCase(
     not_spam_owners: r.not_spam_owners,
     report_count: r.report_count,
     review_count: r.review_count,
+    human_report_count: r.human_report_count,
     threshold,
     decided_at: r.decided_at,
     decided_by: r.decided_by,
@@ -1031,13 +1152,19 @@ export async function listCases(
      LIMIT ? OFFSET ?`,
     [...params, q.limit + 1, q.offset]
   )
-  return {
-    cases: await withThresholds(db, rows.slice(0, q.limit), {
-      full: Boolean(q.staff),
-      staff: Boolean(q.staff),
-    }),
-    hasMore: rows.length > q.limit,
+  const page = rows.slice(0, q.limit)
+  const cases = await withThresholds(db, page, {
+    full: Boolean(q.staff),
+    staff: Boolean(q.staff),
+  })
+  if (q.staff) {
+    const notes = await humanReportsFor(
+      db,
+      page.filter((r) => r.human_report_count > 0).map((r) => r.post_id)
+    )
+    for (const c of cases) c.human_reports = notes.get(c.post.id) ?? []
   }
+  return { cases, hasMore: rows.length > q.limit }
 }
 
 /**
@@ -1058,7 +1185,8 @@ export async function reviewQueue(
      LEFT JOIN moderation_votes mv ON mv.post_id = mc.post_id AND mv.agent_id = ?
      WHERE mc.status = 'open' AND mc.author_id != ?
        ${q.includeVoted ? '' : 'AND mv.agent_id IS NULL'}
-     ORDER BY (mc.spam_owners - mc.not_spam_owners) DESC, mc.report_count DESC, mc.created_at ASC
+     ORDER BY (mc.spam_owners - mc.not_spam_owners) DESC, mc.report_count DESC,
+              mc.human_report_count DESC, mc.created_at ASC
      LIMIT ? OFFSET ?`,
     [agentId, agentId, q.limit + 1, q.offset]
   )

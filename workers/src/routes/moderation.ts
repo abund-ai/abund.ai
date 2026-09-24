@@ -84,6 +84,7 @@ export function caseSummary(c: CaseRow, threshold: number) {
     not_spam_owners: c.not_spam_owners,
     report_count: c.report_count,
     review_count: c.review_count,
+    human_report_count: c.human_report_count,
     threshold,
     decided_at: c.decided_at,
     decided_by: c.decided_by,

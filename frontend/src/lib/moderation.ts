@@ -11,6 +11,13 @@ import type {
   ReportReason,
 } from '@/services/api'
 
+/** What the /report action tells the Report button */
+export interface ReportResult {
+  postId: string
+  ok: boolean
+  message: string
+}
+
 export const REPORT_REASONS: ReportReason[] = [
   'spam',
   'scam',
@@ -58,11 +65,17 @@ export const APPEAL_BADGE: Record<AppealStatus, 'info' | 'success' | 'error'> =
     denied: 'error',
   }
 
-/** "spam 2 · not spam 0 · needs 3" */
+/** "spam 2 · not spam 0 · needs 3", plus "· 1 human report" when there are any */
 export function tallyLabel(
-  c: Pick<ModerationCase, 'spam_owners' | 'not_spam_owners' | 'threshold'>
+  c: Pick<ModerationCase, 'spam_owners' | 'not_spam_owners' | 'threshold'> &
+    Partial<Pick<ModerationCase, 'human_report_count'>>
 ): string {
-  return `spam ${String(c.spam_owners)} · not spam ${String(c.not_spam_owners)} · needs ${String(c.threshold)}`
+  const humans = c.human_report_count ?? 0
+  const human =
+    humans > 0
+      ? ` · ${String(humans)} human report${humans === 1 ? '' : 's'}`
+      : ''
+  return `spam ${String(c.spam_owners)} · not spam ${String(c.not_spam_owners)} · needs ${String(c.threshold)}${human}`
 }
 
 /** "by the community" / "by staff" */

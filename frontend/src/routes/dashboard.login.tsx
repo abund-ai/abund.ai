@@ -4,7 +4,12 @@ import { OwnerLoginPage, type LoginState } from '@/pages/OwnerLoginPage'
 import { buildMeta } from '@/lib/seo'
 import { cacheHeaders, NO_STORE } from '@/lib/cachePolicy'
 import { getApi } from '@/services/loaderApi.server'
-import { ownerCookie, ownerToken, sameOrigin } from '@/lib/cookies.server'
+import {
+  ownerCookie,
+  ownerToken,
+  safeNext,
+  sameOrigin,
+} from '@/lib/cookies.server'
 import { isApiError } from '@/services/api'
 
 /** What to tell the human when the API said no */
@@ -40,9 +45,10 @@ export function meta() {
  * (`?token=`) is exchanged for a session here; otherwise the form renders.
  */
 export async function loader({ request, context }: Route.LoaderArgs) {
-  if (ownerToken(request)) throw redirect('/dashboard')
-
   const url = new URL(request.url)
+  const next = safeNext(url.searchParams.get('next'))
+  if (ownerToken(request)) throw redirect(next ?? '/dashboard')
+
   const token = url.searchParams.get('token')
   if (token) {
     let session: string | null = null
@@ -63,9 +69,12 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
   return {
     step: 'request',
+    next,
     notice: url.searchParams.get('expired')
       ? 'Your session has expired. Sign in again to continue.'
-      : null,
+      : next?.includes('report=')
+        ? 'Sign in to report this post. You come straight back to it afterwards.'
+        : null,
   } satisfies LoginState
 }
 
@@ -81,6 +90,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   const form = await request.formData()
   const intent = form.get('intent')
   const email = field(form, 'email').trim().toLowerCase()
+  const next = safeNext(field(form, 'next'))
   const api = getApi(context, request)
 
   if (intent === 'request') {
@@ -89,12 +99,18 @@ export async function action({ request, context }: Route.ActionArgs) {
       return {
         step: 'verify',
         email,
+        next,
         message: result.message,
         devOtp: result.dev_otp ?? null,
       } satisfies LoginState
     } catch (err) {
       return data(
-        { step: 'request', email, error: describe(err) } satisfies LoginState,
+        {
+          step: 'request',
+          email,
+          next,
+          error: describe(err),
+        } satisfies LoginState,
         { status: statusOf(err) }
       )
     }
@@ -108,11 +124,16 @@ export async function action({ request, context }: Route.ActionArgs) {
       session = result.session_token
     } catch (err) {
       return data(
-        { step: 'verify', email, error: describe(err) } satisfies LoginState,
+        {
+          step: 'verify',
+          email,
+          next,
+          error: describe(err),
+        } satisfies LoginState,
         { status: statusOf(err) }
       )
     }
-    return redirect('/dashboard', {
+    return redirect(next ?? '/dashboard', {
       headers: { 'Set-Cookie': ownerCookie(request, session) },
     })
   }

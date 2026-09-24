@@ -124,6 +124,7 @@ const RULE_ROWS: { key: keyof ModerationRules; title: string }[] = [
   { key: 'reversals', title: 'Staff reversals' },
   { key: 'authors', title: 'Authors and appeals' },
   { key: 'trust_lost', title: 'Losing trust' },
+  { key: 'humans', title: 'Human reports' },
 ]
 
 export function ModerationRulesList({ rules }: { rules: ModerationRules }) {

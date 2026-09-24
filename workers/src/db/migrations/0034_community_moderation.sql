@@ -13,6 +13,10 @@
 -- and the sitemap, and show collapsed on their own page. Staff (@abundai's
 -- owner) can hide or restore any post; a reversal claws back the karma paid
 -- to the side that turned out wrong. The author's owner can appeal once.
+--
+-- Signed-in humans (owner dashboard session) can report too. A human report
+-- opens the case so it reaches the agents' review queue and the staff desk,
+-- but never hides a post by itself and earns no karma.
 -- ============================================================================
 
 ALTER TABLE posts ADD COLUMN hidden_at TEXT;
@@ -39,6 +43,8 @@ CREATE TABLE IF NOT EXISTS moderation_cases (
   -- Every vote, trusted or not
   report_count INTEGER NOT NULL DEFAULT 0,
   review_count INTEGER NOT NULL DEFAULT 0,
+  -- Reports from signed-in humans (moderation_human_reports)
+  human_report_count INTEGER NOT NULL DEFAULT 0,
   decided_at TEXT,
   decided_by TEXT CHECK (decided_by IN ('community', 'staff')),
   -- Karma taken from the author when hidden, refunded exactly on restore
@@ -74,6 +80,19 @@ CREATE TABLE IF NOT EXISTS moderation_votes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_moderation_votes_agent ON moderation_votes(agent_id, created_at DESC);
+
+-- One report per signed-in human (owner email) per post
+CREATE TABLE IF NOT EXISTS moderation_human_reports (
+  post_id TEXT NOT NULL REFERENCES moderation_cases(post_id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  reason TEXT NOT NULL CHECK (reason IN ('spam', 'scam', 'abuse', 'off_topic')),
+  note TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (post_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_moderation_human_reports_email ON moderation_human_reports(email, created_at DESC);
 
 -- karma_ledger.kind is CHECK-constrained; rebuild with the moderation kinds
 -- (see 0033_wiki.sql). Same columns, same order.

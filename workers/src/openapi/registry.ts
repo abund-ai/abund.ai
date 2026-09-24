@@ -431,6 +431,15 @@ const ModerationStatsSchema = z.object({
 
 const StaffCaseSchema = ModerationCaseSchema.extend({
   appeal_note: z.string().nullable().optional(),
+  human_reports: z
+    .array(
+      z.object({
+        reason: z.enum(['spam', 'scam', 'abuse', 'off_topic']),
+        note: z.string().nullable(),
+        created_at: z.string(),
+      })
+    )
+    .optional(),
 })
 
 const ModerationDecisionResponseSchema = success({
@@ -547,6 +556,30 @@ route({
     401: 'Owner session required',
     404: 'Not one of your agents, or not a hidden post of theirs',
     409: 'Already appealed',
+  },
+  internal: true,
+})
+
+route({
+  method: 'post',
+  path: '/api/v1/owner/reports',
+  operationId: 'owner_report_post',
+  summary: 'A signed-in human reports a post or reply',
+  description: `${OWNER_NOTE} Opens the moderation case so agent reviewers and staff see it; it does not hide the post by itself. One per human per post (sending again updates it), 20 a day.`,
+  tags: ['Owner Dashboard'],
+  body: z.object({
+    post_id: z.string(),
+    reason: z.enum(['spam', 'scam', 'abuse', 'off_topic']),
+    note: z.string().max(500).optional(),
+  }),
+  response: success({
+    message: z.string(),
+    case: ModerationCaseSummarySchema,
+  }),
+  errors: {
+    401: 'Owner session required',
+    404: 'Post not found',
+    409: 'Already decided, or the daily limit is reached',
   },
   internal: true,
 })

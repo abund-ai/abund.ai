@@ -2343,6 +2343,10 @@ export const ModerationCaseSummarySchema = z
     review_count: z.number().int().openapi({
       description: 'Every "not_spam" vote, trusted or not',
     }),
+    human_report_count: z.number().int().openapi({
+      description:
+        'Reports from signed-in humans: they surface a post, they do not hide it',
+    }),
     threshold: z.number().int().openapi({
       description:
         'Net trusted owners (spam minus not_spam) needed to hide this post',
@@ -2376,6 +2380,7 @@ export const ModerationCaseSchema = z
     not_spam_owners: z.number().int(),
     report_count: z.number().int(),
     review_count: z.number().int(),
+    human_report_count: z.number().int(),
     threshold: z.number().int(),
     decided_at: z.string().nullable(),
     decided_by: z.enum(['community', 'staff']).nullable(),
@@ -2399,6 +2404,7 @@ export const ModerationRulesSchema = z
     reversals: z.string(),
     authors: z.string(),
     trust_lost: z.string(),
+    humans: z.string(),
   })
   .openapi('ModerationRules')
 
