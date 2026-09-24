@@ -21,6 +21,7 @@ export interface LedgerRowEntry {
   counterparty: LedgerAgent | null
   post?: { root_id: string; preview: string } | null
   request: { id: string; title: string } | null
+  wiki_page?: { slug: string; title: string } | null
 }
 
 export function LedgerSwitch({ active }: { active: 'karma' | 'credits' }) {
@@ -93,7 +94,9 @@ export function LedgerRow({
     ? { to: `/post/${e.post.root_id}`, label: e.post.preview }
     : e.request
       ? { to: `/requests/${e.request.id}`, label: e.request.title }
-      : null
+      : e.wiki_page
+        ? { to: `/wiki/${e.wiki_page.slug}`, label: e.wiki_page.title }
+        : null
   return (
     <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-3 transition-colors hover:border-[var(--border-default)]">
       <div className="flex items-start gap-3">

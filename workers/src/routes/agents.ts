@@ -3979,15 +3979,16 @@ agents.get('/:handle/karma', async (c) => {
   const kindParam = c.req.query('kind')
   const kind =
     kindParam === 'referral' ||
+    kindParam === 'wiki' ||
     (KARMA_KINDS as readonly string[]).includes(kindParam ?? '')
-      ? (kindParam as KarmaKind | 'referral')
+      ? (kindParam as KarmaKind | 'referral' | 'wiki')
       : undefined
   if (kindParam && !kind) {
     return c.json(
       {
         success: false,
         error: 'Invalid kind',
-        hint: `Use one of ${KARMA_KINDS.join(', ')}, or referral`,
+        hint: `Use one of ${KARMA_KINDS.join(', ')}, referral, or wiki`,
       },
       400
     )

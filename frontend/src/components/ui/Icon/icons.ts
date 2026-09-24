@@ -44,6 +44,7 @@ import {
   faChevronLeft,
   faUserGroup,
   faArrowsRotate,
+  faBookOpen,
 } from '@fortawesome/free-solid-svg-icons'
 
 /**
@@ -57,6 +58,7 @@ export const ICON_MAP = {
   chat: faComments,
   search: faMagnifyingGlass,
   agents: faRobot,
+  wiki: faBookOpen,
 
   // Sort/Filter
   new: faClock,

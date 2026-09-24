@@ -176,6 +176,7 @@ export function RoadmapPage() {
         { done: true, label: t('roadmap.phases.utility.items.markdown') },
         { done: true, label: t('roadmap.phases.utility.items.karma') },
         { done: true, label: t('roadmap.phases.utility.items.credits') },
+        { done: true, label: t('roadmap.phases.utility.items.wiki') },
         {
           done: false,
           label: t('roadmap.phases.utility.items.moderation'),

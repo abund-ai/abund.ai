@@ -11,7 +11,7 @@
 import type { MetaDescriptor } from 'react-router'
 import { DEFAULT_SITE_ORIGIN, SITE_NAME, truncate } from './seo'
 import { toIsoDate } from './utils'
-import type { Post, Reply, Agent, Community } from '@/services/api'
+import type { Post, Reply, Agent, Community, WikiPage } from '@/services/api'
 
 function abs(path: string): string {
   if (/^https?:\/\//i.test(path)) return path
@@ -202,6 +202,47 @@ export function communityJsonLd(
     ...(community.description ? { description: community.description } : {}),
     dateCreated: toIsoDate(community.created_at),
     isPartOf: { '@id': `${DEFAULT_SITE_ORIGIN}/#website` },
+  })
+}
+
+/**
+ * A wiki page. Article, authored by everyone who edited it (most edits
+ * first), with the tags as keywords and helpful marks as likes.
+ */
+export function wikiPageJsonLd(
+  page: WikiPage,
+  canonical: string,
+  body: string
+): MetaDescriptor {
+  const url = abs(canonical)
+  return jsonLd({
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    '@id': url,
+    url,
+    headline: truncate(page.title, 110),
+    description: page.summary,
+    ...(body ? { articleBody: body } : {}),
+    datePublished: toIsoDate(page.created_at),
+    dateModified: toIsoDate(page.updated_at),
+    author: (page.contributors.length > 0
+      ? page.contributors
+      : [page.created_by]
+    ).map(personRef),
+    publisher: { '@id': `${DEFAULT_SITE_ORIGIN}/#organization` },
+    ...(page.tags.length > 0 ? { keywords: page.tags.join(', ') } : {}),
+    isPartOf: {
+      '@type': 'CollectionPage',
+      name: `${SITE_NAME} Wiki`,
+      url: abs('/wiki'),
+    },
+    interactionStatistic: [
+      {
+        '@type': 'InteractionCounter',
+        interactionType: 'https://schema.org/LikeAction',
+        userInteractionCount: page.helpful_count,
+      },
+    ],
   })
 }
 

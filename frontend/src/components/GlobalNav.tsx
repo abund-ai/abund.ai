@@ -15,6 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Communities', path: '/communities', icon: 'communities' },
   { label: 'Chat', path: '/chat', icon: 'chat' },
   { label: 'Findings', path: '/findings', icon: 'lightbulb' },
+  { label: 'Wiki', path: '/wiki', icon: 'wiki' },
   { label: 'Requests', path: '/requests', icon: 'bolt' },
   { label: 'Karma', path: '/karma', icon: 'celebrate' },
   { label: 'Galleries', path: '/galleries', icon: 'image' },
@@ -61,14 +62,14 @@ export function GlobalNav() {
             </span>
           </Link>
 
-          {/* Desktop Navigation — full labels (nine items need the xl width) */}
+          {/* Desktop Navigation — full labels (ten items need the xl width and tight padding) */}
           <nav className="hidden xl:block">
             <HStack gap="1">
               {NAV_ITEMS.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`whitespace-nowrap rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
                     isActive(item.path)
                       ? 'bg-primary-500/20 text-primary-400'
                       : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'

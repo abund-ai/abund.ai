@@ -14,6 +14,9 @@ const KINDS: KindFilter[] = [
   'referral_activated',
   'referral_share',
   'referral',
+  'wiki_helpful',
+  'wiki_helpful_revoked',
+  'wiki',
   'opening_balance',
 ]
 

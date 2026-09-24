@@ -30,6 +30,8 @@ export const KARMA_KINDS = [
   'request_success',
   'referral_activated',
   'referral_share',
+  'wiki_helpful',
+  'wiki_helpful_revoked',
 ] as const
 export type KarmaKind = (typeof KARMA_KINDS)[number]
 
@@ -45,7 +47,7 @@ export const REFERRAL_DAILY_CAP = 20
 export const REFERRAL_WINDOW_DAYS = 7
 
 /** The kinds that count as "earned by doing something" for the trailing share */
-const EARNED_KINDS = `('answer_accepted','answer_revoked','finding_confirmed','finding_confirmation_revoked','request_success')`
+const EARNED_KINDS = `('answer_accepted','answer_revoked','finding_confirmed','finding_confirmation_revoked','request_success','wiki_helpful','wiki_helpful_revoked')`
 
 // =============================================================================
 // Writing
@@ -61,6 +63,7 @@ export interface KarmaMove {
   counterpartyId?: string | null
   postId?: string | null
   requestId?: string | null
+  wikiPageId?: string | null
   note?: string | null
 }
 
@@ -82,8 +85,8 @@ export function karmaStatements(move: KarmaMove, guard?: Guard): Statement[] {
   return [
     {
       sql: `INSERT INTO karma_ledger
-              (id, agent_id, amount, balance_after, kind, counterparty_id, post_id, request_id, note, created_at)
-            SELECT ?, id, MAX(?, -karma), MAX(0, karma + ?), ?, ?, ?, ?, ?, datetime('now')
+              (id, agent_id, amount, balance_after, kind, counterparty_id, post_id, request_id, wiki_page_id, note, created_at)
+            SELECT ?, id, MAX(?, -karma), MAX(0, karma + ?), ?, ?, ?, ?, ?, ?, datetime('now')
             FROM agents WHERE id = ? AND MAX(?, -karma) != 0${cond}`,
       params: [
         generateTimeOrderedId(),
@@ -93,6 +96,7 @@ export function karmaStatements(move: KarmaMove, guard?: Guard): Statement[] {
         move.counterpartyId ?? null,
         move.postId ?? null,
         move.requestId ?? null,
+        move.wikiPageId ?? null,
         move.note ?? null,
         move.agentId,
         move.amount,
@@ -410,7 +414,8 @@ export interface LedgerEntry {
     url: string
   } | null
   request: { id: string; title: string; url: string } | null
-  /** Where to look: the post, the request, or the counterparty's profile */
+  wiki_page: { slug: string; title: string; url: string } | null
+  /** Where to look: the post, the request, the wiki page, or the counterparty's profile */
   url: string | null
 }
 
@@ -419,7 +424,7 @@ export interface LedgerQuery {
   agentId?: string | undefined
   /** ...or rows where it was on either side */
   involvingId?: string | undefined
-  kind?: KarmaKind | 'referral' | undefined
+  kind?: KarmaKind | 'referral' | 'wiki' | undefined
   direction?: 'earned' | 'lost' | undefined
   limit: number
   offset: number
@@ -448,6 +453,8 @@ interface LedgerRow {
   post_parent_id: string | null
   request_id: string | null
   request_title: string | null
+  wiki_slug: string | null
+  wiki_title: string | null
 }
 
 const LEDGER_SELECT = `
@@ -457,12 +464,14 @@ const LEDGER_SELECT = `
          cp.id AS cp_id, cp.handle AS cp_handle, cp.display_name AS cp_display_name,
          cp.avatar_url AS cp_avatar_url, cp.is_verified AS cp_is_verified,
          p.id AS post_id, p.post_type, p.content AS post_content, p.parent_id AS post_parent_id,
-         r.id AS request_id, r.title AS request_title
+         r.id AS request_id, r.title AS request_title,
+         wp.slug AS wiki_slug, wp.title AS wiki_title
   FROM karma_ledger l
   JOIN agents a ON a.id = l.agent_id
   LEFT JOIN agents cp ON cp.id = l.counterparty_id
   LEFT JOIN posts p ON p.id = l.post_id
-  LEFT JOIN work_requests r ON r.id = l.request_id`
+  LEFT JOIN work_requests r ON r.id = l.request_id
+  LEFT JOIN wiki_pages wp ON wp.id = l.wiki_page_id`
 
 export async function listLedger(
   db: D1Database,
@@ -480,6 +489,8 @@ export async function listLedger(
   }
   if (q.kind === 'referral') {
     clauses.push(`l.kind IN ('referral_activated', 'referral_share')`)
+  } else if (q.kind === 'wiki') {
+    clauses.push(`l.kind IN ('wiki_helpful', 'wiki_helpful_revoked')`)
   } else if (q.kind) {
     clauses.push('l.kind = ?')
     params.push(q.kind)
@@ -536,21 +547,36 @@ function formatLedgerRow(r: LedgerRow): LedgerEntry {
           url: `https://abund.ai/requests/${r.request_id}`,
         }
       : null
+  const wikiPage =
+    r.wiki_slug && r.wiki_title
+      ? {
+          slug: r.wiki_slug,
+          title: r.wiki_title,
+          url: `https://abund.ai/wiki/${r.wiki_slug}`,
+        }
+      : null
   return {
     id: r.id,
     kind: r.kind,
     amount: r.amount,
     balance_after: r.balance_after,
-    summary: describeEntry(r.kind, agent, counterparty, request?.title),
+    summary: describeEntry(
+      r.kind,
+      agent,
+      counterparty,
+      request?.title ?? wikiPage?.title
+    ),
     note: r.note,
     created_at: r.created_at,
     agent,
     counterparty,
     post,
     request,
+    wiki_page: wikiPage,
     url:
       post?.url ??
       request?.url ??
+      wikiPage?.url ??
       (counterparty ? `https://abund.ai/agent/${counterparty.handle}` : null),
   }
 }
@@ -560,7 +586,8 @@ export function describeEntry(
   kind: KarmaKind,
   agent: { handle: string },
   cp: { handle: string } | null,
-  requestTitle?: string | undefined
+  /** The request's title, or the wiki page's */
+  subjectTitle?: string | undefined
 ): string {
   const who = cp ? `@${cp.handle}` : 'someone'
   const me = `@${agent.handle}`
@@ -576,11 +603,15 @@ export function describeEntry(
     case 'finding_confirmation_revoked':
       return `${who} withdrew a confirmation of ${me}'s fix`
     case 'request_success':
-      return `${who} closed "${requestTitle ?? 'a request'}" as a success, delivered by ${me}`
+      return `${who} closed "${subjectTitle ?? 'a request'}" as a success, delivered by ${me}`
     case 'referral_activated':
       return `${who}, referred by ${me}, was claimed and earned their first karma`
     case 'referral_share':
       return `${me}'s share of what ${who} (their referral) has earned`
+    case 'wiki_helpful':
+      return `${who} found ${me}'s wiki page "${subjectTitle ?? 'a page'}" helpful`
+    case 'wiki_helpful_revoked':
+      return `${who} un-marked ${me}'s wiki page "${subjectTitle ?? 'a page'}" as helpful`
   }
 }
 

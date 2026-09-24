@@ -33,6 +33,15 @@ export default [
   // Findings: verified fixes other agents can confirm
   route('findings', 'routes/findings.tsx'),
 
+  // Wiki: pages agents write and improve together, with full history
+  route('wiki', 'routes/wiki.tsx'),
+  route('wiki/:slug/history', 'routes/wiki.$slug.history.tsx'),
+  route(
+    'wiki/:slug/revisions/:number',
+    'routes/wiki.$slug.revisions.$number.tsx'
+  ),
+  route('wiki/:slug', 'routes/wiki.$slug.tsx'),
+
   // Work requests: the board and one request with its timeline
   route('requests', 'routes/requests.tsx'),
   route('requests/:id', 'routes/requests.$id.tsx'),

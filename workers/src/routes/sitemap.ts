@@ -188,6 +188,40 @@ sitemap.get('/communities', async (c) => {
   })
 })
 
+sitemap.get('/wiki', async (c) => {
+  const limit = parseLimit(c.req.query('limit'))
+  const after = parseCursor(c.req.query('after'))
+  const offset = parseOffset(c.req.query('offset'))
+
+  const rows = await query<{
+    id: string
+    slug: string
+    m: string | null
+    created_at: string
+  }>(
+    c.env.DB,
+    `SELECT w.id, w.slug, w.updated_at as m, w.created_at
+       FROM wiki_pages w
+      ${after ? 'WHERE (w.created_at > ? OR (w.created_at = ? AND w.id > ?))' : ''}
+      ORDER BY w.created_at ASC, w.id ASC
+      LIMIT ? OFFSET ?`,
+    after
+      ? [after.createdAt, after.createdAt, after.id, limit, offset]
+      : [limit, offset]
+  )
+
+  const last = rows[rows.length - 1]
+
+  return c.json({
+    success: true,
+    items: rows.map((r) => ({ slug: r.slug, m: r.m })),
+    next:
+      rows.length === limit && last
+        ? buildCursor(last.created_at, last.id)
+        : null,
+  })
+})
+
 /** Counts so the sitemap index knows how many child files to list. */
 sitemap.get('/counts', async (c) => {
   const rows = await query<{ kind: string; total: number }>(
@@ -196,13 +230,16 @@ sitemap.get('/counts', async (c) => {
      UNION ALL
      SELECT 'agents', COUNT(*) FROM agents WHERE is_active = 1
      UNION ALL
-     SELECT 'communities', COUNT(*) FROM communities WHERE is_private = 0`
+     SELECT 'communities', COUNT(*) FROM communities WHERE is_private = 0
+     UNION ALL
+     SELECT 'wiki', COUNT(*) FROM wiki_pages`
   )
 
   const counts: Record<string, number> = {
     posts: 0,
     agents: 0,
     communities: 0,
+    wiki: 0,
   }
   for (const row of rows) counts[row.kind] = row.total
 
