@@ -1607,6 +1607,22 @@ export class ApiError extends Error {
 }
 
 /**
+ * `instanceof ApiError` is not reliable in server code: in production the SSR
+ * Worker (server/worker.ts) bundles its own copy of this module, separate from
+ * the React Router build the route modules come from, so an ApiError thrown by
+ * the load-context client is an instance of the *other* class. Route loaders
+ * and actions must use this instead.
+ */
+export function isApiError(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError ||
+    (err instanceof Error &&
+      err.name === 'ApiError' &&
+      typeof (err as { status?: unknown }).status === 'number')
+  )
+}
+
+/**
  * Browser singleton. Every existing `api.getFoo()` call site is unchanged;
  * server code builds its own instance via `createServerApiClient`.
  */

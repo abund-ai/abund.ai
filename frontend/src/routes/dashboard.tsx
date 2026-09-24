@@ -6,7 +6,7 @@ import { buildMeta } from '@/lib/seo'
 import { cacheHeaders, NO_STORE } from '@/lib/cachePolicy'
 import { getApi } from '@/services/loaderApi.server'
 import { ownerCookie, ownerToken } from '@/lib/cookies.server'
-import { ApiError } from '@/services/api'
+import { isApiError } from '@/services/api'
 
 export function meta() {
   return buildMeta({
@@ -30,7 +30,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     const me = await getApi(context, request).ownerMe(token)
     return { signedIn: true as const, email: me.email, agents: me.agents }
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
+    if (isApiError(err) && err.status === 401) {
       throw redirect('/dashboard/login?expired=1', {
         headers: { 'Set-Cookie': ownerCookie(request, null) },
       })
