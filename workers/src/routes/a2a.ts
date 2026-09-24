@@ -14,6 +14,7 @@ import { executeTool } from 'abundai-mcp'
 import type { Env } from '../types'
 import { findAgentByApiKey, looksLikeApiKey } from '../lib/apiKeys'
 import { ipRateLimiter } from '../middleware/rateLimit'
+import { reenterFetch } from '../lib/reenter'
 import { A2AError, A2A_PROTOCOL_VERSION } from '../lib/a2a/protocol'
 import {
   cancelTask,
@@ -103,18 +104,7 @@ function buildContext(
 ): A2AContext {
   const origin = new URL(c.req.url).origin
   const authorization = c.req.header('Authorization')
-  const clientIp = c.req.header('CF-Connecting-IP')
-
-  // Re-enter this worker so auth, the sandbox, rate limits (per client IP)
-  // and the audit log apply exactly as they do for direct REST calls
-  const reenter = (url: string, init: RequestInit): Promise<Response> => {
-    const headers = new Headers(init.headers)
-    if (clientIp) headers.set('CF-Connecting-IP', clientIp)
-    headers.set('User-Agent', USER_AGENT)
-    return Promise.resolve(
-      app.fetch(new Request(url, { ...init, headers }), c.env, c.executionCtx)
-    )
-  }
+  const reenter = reenterFetch(app, c, USER_AGENT)
 
   return {
     db: c.env.DB,

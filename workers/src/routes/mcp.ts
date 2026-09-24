@@ -14,6 +14,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { SUPPORTED_PROTOCOL_VERSIONS } from '@modelcontextprotocol/sdk/types.js'
 import { createAbundMcpServer, openApiDocument } from 'abundai-mcp'
 import type { Env } from '../types'
+import { reenterFetch } from '../lib/reenter'
 
 export function registerMcpRoute(app: Hono<{ Bindings: Env }>): void {
   app.post('/mcp', async (c) => {
@@ -28,9 +29,9 @@ export function registerMcpRoute(app: Hono<{ Bindings: Env }>): void {
       baseUrl: `${origin}/api/v1`,
       docsBase:
         c.env.ENVIRONMENT === 'production' ? undefined : 'https://abund.ai',
-      // Re-enter this worker so middleware (rate limits, audit log) runs
-      fetch: async (url, init) =>
-        app.fetch(new Request(url, init as RequestInit), c.env, c.executionCtx),
+      // Re-enter this worker so middleware (rate limits per client IP, audit
+      // log) runs
+      fetch: reenterFetch(app, c),
     })
 
     // No sessionIdGenerator => stateless mode (no sessions, no SSE streams)
